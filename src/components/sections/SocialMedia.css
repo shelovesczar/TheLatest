@@ -1,0 +1,251 @@
+/* Social Media Section */
+.social-media .see-more-btn {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: fit-content;
+}
+
+.social-slider-container {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  margin-left: clamp(1.5rem, 5vw, 4rem);
+  margin-right: clamp(1.5rem, 5vw, 4rem);
+}
+
+.social-slider {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  overflow: hidden;
+}
+
+.social-slider-btn {
+  font-size: 22px;
+  height: 60px;
+  width: 60px;
+  flex-shrink: 0;
+}
+
+.social-slider-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.social-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 280px));
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  justify-content: center;
+  margin-left: clamp(1.5rem, 5vw, 4rem);
+  margin-right: clamp(1.5rem, 5vw, 4rem);
+}
+
+.social-card {
+  background-color: var(--bg-secondary);
+  padding: 1.75rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  transition: all 0.3s;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+}
+
+.social-card:focus {
+  outline: 3px solid var(--accent-color);
+  outline-offset: 2px;
+  border-color: var(--accent-color);
+}
+
+.social-card:hover {
+  border-color: #ff4757;
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(255, 71, 87, 0.2);
+}
+
+.social-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.social-logo {
+  font-size: 2rem;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-tertiary);
+  border-radius: 50%;
+  color: var(--accent-color);
+}
+
+.social-platform {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #ff4757;
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.social-author {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  display: block;
+}
+
+.social-media-image {
+  width: 100%;
+  max-height: 200px;
+  overflow: hidden;
+  margin: 1rem 0;
+  border-radius: 8px;
+}
+
+.social-media-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.social-embed {
+  padding: 0 !important;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.social-embed iframe {
+  width: 100%;
+  min-height: 400px;
+  border: none;
+  border-radius: 12px;
+}
+
+.social-embed blockquote {
+  margin: 0 !important;
+  width: 100%;
+}
+
+.social-content {
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin-bottom: 1.5rem;
+  font-size: 1.05rem;
+  text-align: center;
+  flex: 1;
+  font-weight: bold;
+}
+
+.social-engagement {
+  color: var(--accent-color);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.social-footer {
+  margin-top: auto;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+}
+
+/* Small Window Optimization - 1200px and below */
+@media (max-width: 1200px) {
+  .social-content {
+    font-size: 1rem;
+  }
+}
+
+/* Tablet and Mobile Responsive - 900px breakpoint */
+@media (max-width: 900px) {
+  .social-slider-container {
+    margin-left: clamp(1rem, 4vw, 2rem);
+    margin-right: clamp(1rem, 4vw, 2rem);
+  }
+
+  .social-content {
+    font-size: 0.95rem;
+  }
+  
+  .social-engagement {
+    font-size: 0.85rem;
+  }
+  
+  .social-slider {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+  }
+
+  .social-slider-btn {
+    font-size: 20px;
+    height: 55px;
+    width: 55px;
+  }
+}
+
+/* Mobile Responsive - 600px breakpoint */
+@media (max-width: 600px) {
+  .social-slider-container {
+    gap: 0.75rem;
+    margin-left: clamp(0.75rem, 3vw, 1.5rem);
+    margin-right: clamp(0.75rem, 3vw, 1.5rem);
+  }
+
+  .social-slider-btn {
+    display: none;
+  }
+
+  .social-content {
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  
+  .social-engagement {
+    font-size: 0.8rem;
+  }
+  
+  .social-card {
+    padding: 1.3rem;
+    min-height: 380px;
+  }
+  
+  .social-slider {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+/* Mobile Navigation - 768px and below */
+@media (max-width: 768px) {
+  .social-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tablet - 769px to 1024px */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .social-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Desktop - 1025px and above */
+@media (min-width: 1025px) {
+  .social-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
