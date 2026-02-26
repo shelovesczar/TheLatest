@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { useParams } from 'react-router-dom'
 import { fetchVideos } from '../newsService'
+import { getImageProps } from '../utils/imageUtils'
 import './AllVideosPage.css'
 
 function AllVideosPage({ category = null }) {
@@ -71,7 +72,7 @@ function AllVideosPage({ category = null }) {
               <article key={index} className="video-card">
                 <div className="video-thumbnail">
                   {item.thumbnail && (
-                    <img src={item.thumbnail} alt={item.title} />
+                    <img {...getImageProps(item.thumbnail, item.title, 'videos')} />
                   )}
                   <div className="play-button">
                     <i className="fas fa-play"></i>

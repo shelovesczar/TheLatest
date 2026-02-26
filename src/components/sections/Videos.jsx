@@ -2,6 +2,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPlay, faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { getImageProps } from '../../utils/imageUtils'
 import './Videos.css'
 
 function Videos({ loadingVideos, videos, categoryPath }) {
@@ -76,7 +77,7 @@ function Videos({ loadingVideos, videos, categoryPath }) {
               style={{ textDecoration: 'none', color: 'inherit' }}
             >
               <div className="video-thumbnail">
-                <img src={video.image} alt={video.title} />
+                <img {...getImageProps(video.image, video.title, 'videos')} />
                 <div className="play-button" aria-hidden="true"><FontAwesomeIcon icon={faPlay} /></div>
                 <span className="video-duration">{video.duration}</span>
               </div>

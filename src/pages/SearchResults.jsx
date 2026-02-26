@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { searchRSSContent } from '../rssService'
+import { getImageProps } from '../utils/imageUtils'
 import './SearchResults.css'
 
 function SearchResults() {
@@ -58,7 +59,7 @@ function SearchResults() {
               >
                 {article.image && (
                   <div className="result-image">
-                    <img src={article.image} alt={article.title} loading="lazy" />
+                    <img {...getImageProps(article.image, article.title, 'news')} />
                   </div>
                 )}
                 <div className="result-content">

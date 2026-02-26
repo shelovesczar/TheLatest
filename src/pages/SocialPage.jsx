@@ -5,6 +5,7 @@ import { getRandomTrendingPosts } from '../socialMediaService'
 import { getRandomCategoryPosts } from '../socialMediaPosts'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faXTwitter, faInstagram, faTiktok, faReddit } from '@fortawesome/free-brands-svg-icons'
+import { getImageProps } from '../utils/imageUtils'
 import Subscribe from '../components/sections/Subscribe'
 import './CategoryPage.css'
 import '../components/sections/SocialMedia.css'
@@ -94,7 +95,7 @@ function SocialPage() {
                         </div>
                       </div>
                       {post.image && (
-                        <img src={post.image} alt={post.content} className="social-post-image" />
+                        <img {...getImageProps(post.image, post.content, 'general')} className="social-post-image" />
                       )}
                       <p className="social-post-content">{post.content}</p>
                       <div className="social-post-stats">

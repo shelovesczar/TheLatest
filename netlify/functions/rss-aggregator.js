@@ -193,10 +193,78 @@ const RSS_FEEDS = {
     { url: 'https://rss.app/feeds/_iIjbt3XTnFFpU0Cv.xml', source: 'The Latest' }
   ],
   podcasts: [
+    // News & Politics Podcasts
     { url: 'https://feeds.npr.org/500005/podcast.xml', source: 'NPR Politics' },
     { url: 'https://feeds.megaphone.fm/NYT8938532588', source: 'The Daily (NYT)' },
     { url: 'https://feeds.megaphone.fm/WWO3519750118', source: 'Pod Save America' },
     { url: 'https://feeds.simplecast.com/54nAGcIl', source: 'The Ezra Klein Show' },
+    { url: 'https://feeds.npr.org/510318/podcast.xml', source: 'NPR Up First' },
+    { url: 'https://feeds.megaphone.fm/WAPO5439518155', source: 'Washington Post' },
+    { url: 'https://feeds.megaphone.fm/WSJ9463786025', source: 'WSJ What\'s News' },
+    { url: 'https://feeds.megaphone.fm/ADL9452555852', source: 'The Ben Shapiro Show' },
+    { url: 'https://feeds.megaphone.fm/newshour', source: 'PBS NewsHour' },
+    { url: 'https://www.omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/a91018a4-ea4f-4130-bf55-ae270180c327/44710ecc-10bb-48d1-93c7-ae270180c33e/podcast.rss', source: 'Morning Joe' },
+    { url: 'https://feeds.megaphone.fm/VMP7924054000', source: 'Pod Save the World' },
+    { url: 'https://feeds.megaphone.fm/FOXN2895050347', source: 'Fox News' },
+    
+    // Technology & Business Podcasts
+    { url: 'https://feeds.megaphone.fm/HSW8935723597', source: 'TED Tech' },
+    { url: 'https://feeds.simplecast.com/XA_851k3', source: 'Reply All' },
+    { url: 'https://lexfridman.com/feed/podcast/', source: 'Lex Fridman' },
+    { url: 'https://feeds.megaphone.fm/recodedecode', source: 'Recode Decode' },
+    { url: 'https://feeds.simplecast.com/qm_9xx0g', source: 'Acquired' },
+    { url: 'https://feeds.megaphone.fm/ROOSTER7199250968', source: 'a16z Podcast' },
+    { url: 'https://feeds.simplecast.com/4T39_jAj', source: 'Invest Like the Best' },
+    { url: 'https://feeds.simplecast.com/wgl4xEgL', source: 'Masters of Scale' },
+    { url: 'https://rss.art19.com/freakonomics-radio', source: 'Freakonomics' },
+    { url: 'https://feeds.megaphone.fm/marketsnacks-daily', source: 'The Best One Yet' },
+    { url: 'https://feeds.megaphone.fm/BINGE9775291795', source: 'How I Built This' },
+    { url: 'https://feeds.pacific-content.com/mogul', source: 'Business Wars' },
+    
+    // Culture & Entertainment Podcasts
+    { url: 'https://feeds.simplecast.com/rpXNNhRZ', source: 'Fresh Air' },
+    { url: 'https://feeds.npr.org/510298/podcast.xml', source: 'TED Radio Hour' },
+    { url: 'https://feeds.megaphone.fm/ROOSTER2072428631', source: 'WTF Marc Maron' },
+    { url: 'https://feeds.simplecast.com/l2i9YnTd', source: 'Conan O\'Brien' },
+    { url: 'https://www.omnycontent.com/d/playlist/aaea4e69-af51-495e-afc9-a9760146922b/14a43378-edb2-49be-8511-ab0d000a7030/d1b9612f-bb1b-4b85-9c0e-ab0d000a7038/podcast.rss', source: 'Armchair Expert' },
+    { url: 'https://feeds.simplecast.com/wjQvV1gf', source: 'Smartless' },
+    { url: 'https://rss.art19.com/stuff-you-should-know', source: 'Stuff You Should Know' },
+    { url: 'https://feeds.simplecast.com/Nn6fjnB0', source: 'Radiolab' },
+    { url: 'https://www.omnycontent.com/d/playlist/aaea4e69-af51-495e-afc9-a9760146922b/edc76a46-3151-4d67-b489-ab0500afc990/f51f3e9b-9488-4b6e-8f2b-ab0500afcb98/podcast.rss', source: 'The Bill Simmons' },
+    { url: 'https://feeds.acast.com/public/shows/the-joe-rogan-experience', source: 'Joe Rogan Experience' },
+    
+    // Science & Education Podcasts
+    { url: 'https://feeds.megaphone.fm/sciencevs', source: 'Science Vs' },
+    { url: 'https://www.omnycontent.com/d/playlist/6c78df20-eafc-40a8-beeb-a82f00f2f97f/abac18c5-df1a-4e2e-9980-aead01005895/1aee9784-87c3-4a18-88bd-aead0100589e/podcast.rss', source: 'Hidden Brain' },
+    { url: 'https://feeds.megaphone.fm/INFOROCKET4046796097', source: 'Stuff To Blow Your Mind' },
+    { url: 'https://feeds.simplecast.com/Y2Y_sofX', source: 'Short Wave' },
+    { url: 'https://feeds.megaphone.fm/sciencefriday', source: 'Science Friday' },
+    { url: 'https://www.omnycontent.com/d/playlist/aaea4e69-af51-495e-afc9-a9760146922b/0dc6ed37-fbc7-4b36-9d7f-ab810177c2bb/dbcf2494-9783-4a10-850a-ab810177c2c6/podcast.rss', source: 'Ologies' },
+    
+    // True Crime & History Podcasts
+    { url: 'https://feeds.simplecast.com/tOjJ6yCZ', source: 'Criminal' },
+    { url: 'https://feeds.megaphone.fm/EMPN6330802945', source: 'My Favorite Murder' },
+    { url: 'https://feeds.megaphone.fm/SU6174937661', source: 'Serial' },
+    { url: 'https://www.omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/a91018a4-ea4f-4130-bf55-ae270180c327/44710ecc-10bb-48d1-93c7-ae270180c33e/podcast.rss', source: 'Hardcore History' },
+    { url: 'https://rss.art19.com/revisionist-history', source: 'Revisionist History' },
+    
+    // Sports Podcasts
+    { url: 'https://feeds.megaphone.fm/ESP5765452710', source: 'ESPN Daily' },
+    { url: 'https://feeds.megaphone.fm/ESP4816647903', source: 'Pardon My Take' },
+    { url: 'https://omnycontent.com/d/playlist/885bb800-15a4-4e4c-9cf6-a73c00f01729/3c127de2-bb99-43d8-9e14-aa3f0031bb0c/2edb23a4-67e9-4838-9aaa-aa3f0031bb0f/podcast.rss', source: 'The Ringer NBA' },
+    { url: 'https://feeds.megaphone.fm/ESP6891740883', source: 'Fantasy Football' },
+    
+    // Health & Wellness Podcasts
+    { url: 'https://feeds.megaphone.fm/HSW5985171007', source: 'The doctor\'s Farmacy' },
+    { url: 'https://feeds.simplecast.com/_AqM7d43', source: 'Feel Better, Live More' },
+    { url: 'https://rss.art19.com/huberman-lab', source: 'Huberman Lab' },
+    { url: 'https://www.omnycontent.com/d/playlist/ccfe4372-0257-426c-8c45-aa8e01826bb2/a40daac5-7c4d-4fa1-96f2-aae900f4ad5d/17a5ba5b-46e0-40c8-a7e8-aae900f5126c/podcast.rss', source: 'On Purpose' },
+    
+    // Comedy Podcasts
+    { url: 'https://feeds.simplecast.com/XOlG2ZQl', source: 'Smartless' },
+    { url: 'https://rss.art19.com/my-dad-wrote-a-porno', source: 'My Dad Wrote A Porno' },
+    { url: 'https://feeds.megaphone.fm/comedybangbang', source: 'Comedy Bang Bang' },
+    
     // RSS APP feeds
     { url: 'https://rss.app/feeds/wGtHhwQaOwup8JQs.xml', source: 'New York Post' },
     { url: 'https://rss.app/feeds/_iIjbt3XTnFFpU0Cv.xml', source: 'The Latest' }
@@ -336,6 +404,8 @@ const RSS_FEEDS = {
 
 // Helper to extract image from RSS item
 function extractImage(item) {
+  let imageUrl = null;
+  
   // Special handling for YouTube videos - extract video ID and construct thumbnail URL
   if (item.link && item.link.includes('youtube.com/watch')) {
     const videoIdMatch = item.link.match(/[?&]v=([^&]+)/);
@@ -366,27 +436,41 @@ function extractImage(item) {
       if (sortedMedia.length > 0) {
         const bestImage = sortedMedia[0];
         const width = parseInt(bestImage.$.width) || 0;
-        // Only use if width is reasonable (avoid thumbnails < 300px)
-        if (width >= 300 || width === 0) return bestImage.$.url;
+        // Only use if width is reasonable (prefer images >= 400px, but accept unknowns)
+        if (width >= 400 || width === 0) {
+          imageUrl = bestImage.$.url;
+          if (isValidImageUrl(imageUrl)) return imageUrl;
+        }
       }
       
       // Fallback to first media:content
       if (item['media:content'][0] && item['media:content'][0].$.url) {
-        return item['media:content'][0].$.url;
+        imageUrl = item['media:content'][0].$.url;
+        if (isValidImageUrl(imageUrl)) return imageUrl;
       }
     } else if (item['media:content'].$ && item['media:content'].$.url) {
-      return item['media:content'].$.url;
+      imageUrl = item['media:content'].$.url;
+      if (isValidImageUrl(imageUrl)) return imageUrl;
     }
   }
   
   // Priority 2: enclosure (common for high quality images)
   if (item.enclosure) {
-    if (item.enclosure.url) return item.enclosure.url;
+    if (item.enclosure.url) {
+      imageUrl = item.enclosure.url;
+      if (isValidImageUrl(imageUrl)) return imageUrl;
+    }
     if (Array.isArray(item.enclosure)) {
       const imageEnclosure = item.enclosure.find(e => e.type && e.type.startsWith('image/'));
-      if (imageEnclosure && imageEnclosure.url) return imageEnclosure.url;
+      if (imageEnclosure && imageEnclosure.url) {
+        imageUrl = imageEnclosure.url;
+        if (isValidImageUrl(imageUrl)) return imageUrl;
+      }
       // If no image type, use first enclosure
-      if (item.enclosure[0] && item.enclosure[0].url) return item.enclosure[0].url;
+      if (item.enclosure[0] && item.enclosure[0].url) {
+        imageUrl = item.enclosure[0].url;
+        if (isValidImageUrl(imageUrl)) return imageUrl;
+      }
     }
   }
   
@@ -406,10 +490,14 @@ function extractImage(item) {
         const bestThumb = sortedThumbs[0];
         const width = parseInt(bestThumb.$.width) || 0;
         // Prefer thumbnails >= 400px wide
-        if (width >= 400 || width === 0) return bestThumb.$.url;
+        if (width >= 400 || width === 0) {
+          imageUrl = bestThumb.$.url;
+          if (isValidImageUrl(imageUrl)) return imageUrl;
+        }
       }
     } else if (item['media:thumbnail'].$ && item['media:thumbnail'].$.url) {
-      return item['media:thumbnail'].$.url;
+      imageUrl = item['media:thumbnail'].$.url;
+      if (isValidImageUrl(imageUrl)) return imageUrl;
     }
   }
   
@@ -417,36 +505,69 @@ function extractImage(item) {
   if (item['media:group']) {
     if (item['media:group']['media:content']) {
       const content = item['media:group']['media:content'];
-      if (content.$ && content.$.url) return content.$.url;
-      if (Array.isArray(content) && content[0] && content[0].$.url) return content[0].$.url;
+      if (content.$ && content.$.url) {
+        imageUrl = content.$.url;
+        if (isValidImageUrl(imageUrl)) return imageUrl;
+      }
+      if (Array.isArray(content) && content[0] && content[0].$.url) {
+        imageUrl = content[0].$.url;
+        if (isValidImageUrl(imageUrl)) return imageUrl;
+      }
     }
     if (item['media:group']['media:thumbnail']) {
       const thumbnail = item['media:group']['media:thumbnail'];
-      if (thumbnail.$ && thumbnail.$.url) return thumbnail.$.url;
-      if (Array.isArray(thumbnail) && thumbnail[0] && thumbnail[0].$.url) return thumbnail[0].$.url;
-    }
-  }
-  
-  // Legacy fields
-  if (item.media && item.media.$) return item.media.$.url;
-  if (item.thumbnail && item.thumbnail.$) return item.thumbnail.$.url;
-  
-  // Try to extract from content/description HTML
-  const content = item.contentEncoded || item.content || item.description || '';
-  if (content) {
-    // Look for img tags
-    const imgMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
-    if (imgMatch && imgMatch[1]) {
-      // Filter out tracking pixels and small images
-      const imgUrl = imgMatch[1];
-      if (!imgUrl.includes('1x1') && !imgUrl.includes('pixel') && !imgUrl.includes('tracker')) {
-        return imgMatch[1];
+      if (thumbnail.$ && thumbnail.$.url) {
+        imageUrl = thumbnail.$.url;
+        if (isValidImageUrl(imageUrl)) return imageUrl;
+      }
+      if (Array.isArray(thumbnail) && thumbnail[0] && thumbnail[0].$.url) {
+        imageUrl = thumbnail[0].$.url;
+        if (isValidImageUrl(imageUrl)) return imageUrl;
       }
     }
   }
   
-  // Try og:image from link metadata (if link has queryable metadata)
-  // This is a future enhancement - would require fetching the link
+  // Legacy fields
+  if (item.media && item.media.$) {
+    imageUrl = item.media.$.url;
+    if (isValidImageUrl(imageUrl)) return imageUrl;
+  }
+  if (item.thumbnail && item.thumbnail.$) {
+    imageUrl = item.thumbnail.$.url;
+    if (isValidImageUrl(imageUrl)) return imageUrl;
+  }
+  
+  // Try to extract from content/description HTML
+  const content = item.contentEncoded || item.content || item.description || '';
+  if (content) {
+    // Look for img tags - prefer larger images
+    const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+    let match;
+    const imgUrls = [];
+    
+    while ((match = imgRegex.exec(content)) !== null) {
+      const url = match[1];
+      // Filter out tracking pixels and small images
+      if (!url.includes('1x1') && !url.includes('pixel') && !url.includes('tracker') && 
+          !url.includes('tracking') && !url.includes('icon') && !url.includes('logo')) {
+        // Check for size hints in URL or attributes
+        const imgTag = match[0];
+        const widthMatch = imgTag.match(/width=["']?(\d+)/i);
+        const width = widthMatch ? parseInt(widthMatch[1]) : 0;
+        
+        if (width >= 300 || width === 0) {
+          imgUrls.push({ url, width });
+        }
+      }
+    }
+    
+    // Sort by width and return largest
+    if (imgUrls.length > 0) {
+      imgUrls.sort((a, b) => b.width - a.width);
+      imageUrl = imgUrls[0].url;
+      if (isValidImageUrl(imageUrl)) return imageUrl;
+    }
+  }
   
   // Category-specific fallback images for better UX
   const title = (item.title || '').toLowerCase();
@@ -460,8 +581,29 @@ function extractImage(item) {
     return 'https://images.unsplash.com/photo-1586339949216-35c2747e98f8?w=800&q=80'; // Opinion/writing
   }
   
+  if (title.includes('video') || description.includes('video')) {
+    return 'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=800&q=80'; // Video
+  }
+  
   // Default fallback image
   return 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&q=80';
+}
+
+// Helper function to validate image URLs
+function isValidImageUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  
+  // Filter out obviously invalid URLs
+  if (url.length < 10) return false;
+  if (url.includes('1x1')) return false;
+  if (url.includes('pixel') && !url.includes('pixels')) return false;
+  if (url.includes('tracker')) return false;
+  if (url.includes('tracking')) return false;
+  
+  // Check for valid protocols
+  if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
+  
+  return true;
 }
 
 // Helper to extract the actual source from RSS item (for bundled feeds)

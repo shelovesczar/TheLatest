@@ -3,6 +3,7 @@ import { faMagnifyingGlass, faLightbulb, faChevronLeft, faChevronRight } from '@
 import { faGoogle, faWikipediaW, faOpenai, faXTwitter } from '@fortawesome/free-brands-svg-icons'
 import { useState } from 'react'
 import { useSearch } from '../../context/SearchContext'
+import { handleImageError } from '../../utils/imageUtils'
 import './Search.css'
 
 function Search() {
@@ -138,7 +139,7 @@ function Search() {
                 {engine.icon ? (
                   <FontAwesomeIcon icon={engine.icon} style={{ fontSize: '2rem', color: engine.color }} />
                 ) : (
-                  <img src={engine.logo} alt={`${engine.name} logo`} />
+                  <img src={engine.logo} alt={`${engine.name} logo`} onError={(e) => handleImageError(e, 'general')} loading="lazy" />
                 )}
               </div>
               <h3 className="search-engine-name">{engine.name}</h3>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { useParams } from 'react-router-dom'
 import { fetchTrendingContent } from '../newsService'
+import { getImageProps } from '../utils/imageUtils'
 import './AllPodcastsPage.css'
 
 function AllPodcastsPage({ category = null }) {
@@ -71,7 +72,7 @@ function AllPodcastsPage({ category = null }) {
               <article key={index} className="podcast-card">
                 <div className="podcast-image">
                   {item.thumbnail && (
-                    <img src={item.thumbnail} alt={item.title} className="podcast-thumbnail" />
+                    <img {...getImageProps(item.thumbnail, item.title, 'podcasts')} className="podcast-thumbnail" />
                   )}
                 </div>
                 <div className="podcast-card-content">

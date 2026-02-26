@@ -2,6 +2,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import { useRef, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { getImageProps } from '../../utils/imageUtils'
 import './TopStories.css'
 
 function TopStories({ loading, topStories, activeStory, setActiveStory, categoryTitle, categorySources, categoryPath }) {
@@ -135,8 +136,7 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
             <article className="story-card-large">
               <div className="story-card-image" ref={imageRef}>
                 <img 
-                  src={topStories[activeStory].image} 
-                  alt={topStories[activeStory].title}
+                  {...getImageProps(topStories[activeStory].image, topStories[activeStory].title, 'news')}
                 />
               </div>
               <div className="story-card-content">

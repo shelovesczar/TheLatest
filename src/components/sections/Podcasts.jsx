@@ -2,6 +2,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { getImageProps } from '../../utils/imageUtils'
 import './Podcasts.css'
 
 function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
@@ -83,8 +84,7 @@ function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
             >
               <div className="podcast-video-wrapper">
                 <img 
-                  src={podcast.image} 
-                  alt={podcast.title}
+                  {...getImageProps(podcast.image, podcast.title, 'podcasts')}
                   className="podcast-thumbnail"
                 />
               </div>

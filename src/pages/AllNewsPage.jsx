@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { useParams } from 'react-router-dom'
 import { fetchRSSNews } from '../newsService'
+import { getImageProps } from '../utils/imageUtils'
 import './AllNewsPage.css'
 
 function AllNewsPage({ category = null }) {
@@ -119,7 +120,7 @@ function AllNewsPage({ category = null }) {
               <article key={index} className="news-card">
                 {item.image && (
                   <div className="news-card-image">
-                    <img src={item.image} alt={item.title} />
+                    <img {...getImageProps(item.image, item.title, 'news')} />
                   </div>
                 )}
                 <div className="news-card-content">

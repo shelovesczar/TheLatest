@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSearch } from '../../context/SearchContext'
 import { generateAISummary, getCachedSummary, cacheSummary } from '../../services/aiService'
 import { getTopicImage } from '../../utils/topicImages'
+import { getImageProps } from '../../utils/imageUtils'
 import './AISummary.css'
 
 function AISummary({ category = 'general', description, categoryImage, categoryTitle, ignoreTopic = false }) {
@@ -125,8 +126,7 @@ function AISummary({ category = 'general', description, categoryImage, categoryT
         <article className="story-card-large">
           <div className="story-card-image">
             <img 
-              src={getDisplayImage()} 
-              alt={getHeadline()}
+              {...getImageProps(getDisplayImage(), getHeadline(), 'news')}
             />
           </div>
           <div className="story-card-content">

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { useParams } from 'react-router-dom'
 import { fetchOpinions } from '../newsService'
+import { getImageProps } from '../utils/imageUtils'
 import './AllOpinionsPage.css'
 
 function AllOpinionsPage({ category = null }) {
@@ -72,7 +73,7 @@ function AllOpinionsPage({ category = null }) {
               <article key={index} className="opinion-card">
                 {item.image && (
                   <div className="opinion-card-image">
-                    <img src={item.image} alt={item.title} />
+                    <img {...getImageProps(item.image, item.title, 'opinions')} />
                   </div>
                 )}
                 <div className="opinion-card-content">

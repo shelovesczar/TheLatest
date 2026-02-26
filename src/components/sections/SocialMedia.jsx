@@ -1,3 +1,4 @@
+import { getImageProps } from '../../utils/imageUtils'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faXTwitter, faInstagram, faTiktok } from '@fortawesome/free-brands-svg-icons'
 import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
@@ -104,7 +105,7 @@ function SocialMedia({ socialPosts, loadingSocial }) {
                 </div>
                 {post.image && (
                   <div className="social-media-image">
-                    <img src={post.image} alt={post.author} />
+                    <img {...getImageProps(post.image, post.author, 'general')} />
                   </div>
                 )}
                 <div className="social-body">

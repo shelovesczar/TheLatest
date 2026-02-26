@@ -2,6 +2,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { getImageProps } from '../../utils/imageUtils'
 import './Opinions.css'
 
 function Opinions({ loadingOpinions, opinions, categoryPath }) {
@@ -82,7 +83,7 @@ function Opinions({ loadingOpinions, opinions, categoryPath }) {
               aria-label={`Opinion by ${opinion.author} from ${opinion.source}`}
               style={{ textDecoration: 'none', color: 'inherit' }}
             >
-              <img src={opinion.image} alt={opinion.author} className="opinion-image" />
+              <img {...getImageProps(opinion.image, opinion.author, 'opinions')} className="opinion-image" />
               <div className="opinion-content">
                 <h3 className="opinion-headline">{truncateText(opinion.title, 80)}</h3>
                 <p className="opinion-excerpt">{truncateText(opinion.description, 120)}</p>
