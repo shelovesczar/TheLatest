@@ -774,39 +774,53 @@ exports.handler = async (event, context) => {
         const categoryNames = Object.keys(RSS_FEEDS);
         console.log(`[SEARCH] Found ${categoryNames.length} categories:`, categoryNames.join(', '));
         
-        // Define how many sources to fetch per category (balanced for performance)
+        // OPTIMIZED: Reduced sources per category to prevent timeout (Netlify limit: 10s)
         const sourcesPerCategory = {
-          news: 20,          // Most important for search
-          sports: 15,        // High priority (team names, players, etc.)
-          tech: 12,          // High priority (products, companies, innovations)
-          business: 10,      // Companies, stocks, economy
-          entertainment: 12, // Celebrities, movies, TV shows
-          lifestyle: 10,     // Health, wellness, fashion
-          culture: 10,       // Arts, books, events
-          opinions: 8,       // Editorial content
-          videos: 8,         // Video content
-          podcasts: 10       // Podcast episodes
+          news: 12,          // Reduced from 20
+          sports: 10,        // Reduced from 15
+          tech: 8,           // Reduced from 12
+          business: 6,       // Reduced from 10
+          entertainment: 8,  // Reduced from 12
+          lifestyle: 6,      // Reduced from 10
+          culture: 6,        // Reduced from 10
+          opinions: 5,       // Reduced from 8
+          videos: 5,         // Reduced from 8
+          podcasts: 6        // Reduced from 10
         };
         
-        // Fetch from all categories in parallel
-        const fetchPromises = categoryNames.map(category => {
-          const feedList = RSS_FEEDS[category] || [];
-          const limit = sourcesPerCategory[category] || 10; // Default to 10 if not specified
-          const sourcesToFetch = feedList.slice(0, Math.min(limit, feedList.length));
-          console.log(`[SEARCH] ${category}: fetching ${sourcesToFetch.length} sources`);
-          return fetchFeeds(sourcesToFetch);
-        });
+        // Fetch from all categories in parallel with timeout protection
+        const fetchWithTimeout = async (category) => {
+          try {
+            const feedList = RSS_FEEDS[category] || [];
+            const limit = sourcesPerCategory[category] || 6; // Default to 6 if not specified
+            const sourcesToFetch = feedList.slice(0, Math.min(limit, feedList.length));
+            console.log(`[SEARCH] ${category}: fetching ${sourcesToFetch.length} sources`);
+            
+            // Add timeout per category (3 seconds max)
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error(`Timeout fetching ${category}`)), 3000)
+            );
+            
+            const fetchPromise = fetchFeeds(sourcesToFetch);
+            return await Promise.race([fetchPromise, timeoutPromise]);
+          } catch (error) {
+            console.error(`[SEARCH] Error fetching ${category}:`, error.message);
+            return []; // Return empty array on error, don't fail entire search
+          }
+        };
         
+        const fetchPromises = categoryNames.map(category => fetchWithTimeout(category));
         const allFetchedData = await Promise.all(fetchPromises);
         
         // Combine all fetched data from all categories
         const freshData = allFetchedData.flat();
+        console.log(`[SEARCH] Fetched ${freshData.length} fresh articles`);
         
         // Merge with cached data, removing duplicates by URL
         const mergedDataMap = new Map();
         [...allData, ...freshData].forEach(item => {
           const key = item.url || item.link || item.title;
-          if (!mergedDataMap.has(key)) {
+          if (key && !mergedDataMap.has(key)) {
             mergedDataMap.set(key, item);
           }
         });
@@ -822,6 +836,8 @@ exports.handler = async (event, context) => {
       
       // Enhanced search with fuzzy matching and variations
       const searchResults = allData.filter(item => {
+        if (!item || !item.title) return false; // Skip invalid items
+        
         const title = (item.title || '').toLowerCase();
         const description = (item.description || '').toLowerCase();
         const content = (item.content || '').toLowerCase();
@@ -868,13 +884,24 @@ exports.handler = async (event, context) => {
         // Calculate relevance score
         let score = 0;
         
-        // Title matches are worth more
-        const titleMatches = (titleText.match(new RegExp(searchTerm, 'g')) || []).length;
-        score += titleMatches * 5;
+        // Escape special regex characters in search term
+        const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         
-        // Description matches
-        const descMatches = (descText.match(new RegExp(searchTerm, 'g')) || []).length;
-        score += descMatches * 2;
+        try {
+          // Title matches are worth more
+          const titleMatches = (titleText.match(new RegExp(escapedSearchTerm, 'g')) || []).length;
+          score += titleMatches * 5;
+          
+          // Description matches
+          const descMatches = (descText.match(new RegExp(escapedSearchTerm, 'g')) || []).length;
+          score += descMatches * 2;
+        } catch (regexError) {
+          // Fallback to simple string counting if regex fails
+          console.warn('[SEARCH] Regex error, using fallback counting:', regexError.message);
+          const titleMatches = (titleText.split(searchTerm).length - 1);
+          const descMatches = (descText.split(searchTerm).length - 1);
+          score += titleMatches * 5 + descMatches * 2;
+        }
         
         // Exact title match gets bonus
         if (titleText.includes(searchTerm)) {
@@ -977,12 +1004,21 @@ exports.handler = async (event, context) => {
 
   } catch (error) {
     console.error('RSS Aggregator Error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', {
+      message: error.message,
+      name: error.name,
+      type: event.queryStringParameters?.type,
+      search: event.queryStringParameters?.search
+    });
+    
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
         error: 'Failed to fetch RSS feeds',
-        message: error.message
+        message: error.message,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       })
     };
   }
