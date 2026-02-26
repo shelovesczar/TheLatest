@@ -767,22 +767,40 @@ exports.handler = async (event, context) => {
       console.log(`[SEARCH] Found ${allData.length} items in cache`);
       
       // ALWAYS fetch fresh data from ALL categories for comprehensive search results
-      // This ensures we get the latest content for any search query
+      // This is FUTURE-PROOF: automatically includes any new categories added to RSS_FEEDS
       console.log('[SEARCH] Fetching fresh content from ALL categories for comprehensive results...');
       try {
-        // Fetch from ALL major categories in parallel (more sources per category)
-        const [newsData, sportsData, techData, businessData, entertainmentData, lifestyleData, cultureData] = await Promise.all([
-          fetchFeeds(RSS_FEEDS.news.slice(0, 15)), // Top 15 sources from each category
-          fetchFeeds(RSS_FEEDS.sports.slice(0, 12)),
-          fetchFeeds(RSS_FEEDS.tech.slice(0, 10)),
-          fetchFeeds(RSS_FEEDS.business.slice(0, 8)),
-          fetchFeeds(RSS_FEEDS.entertainment.slice(0, 10)),
-          fetchFeeds(RSS_FEEDS.lifestyle.slice(0, 8)),
-          fetchFeeds(RSS_FEEDS.culture.slice(0, 8))
-        ]);
+        // Dynamically fetch from ALL categories in RSS_FEEDS
+        const categoryNames = Object.keys(RSS_FEEDS);
+        console.log(`[SEARCH] Found ${categoryNames.length} categories:`, categoryNames.join(', '));
         
-        // Combine all fetched data
-        const freshData = [...newsData, ...sportsData, ...techData, ...businessData, ...entertainmentData, ...lifestyleData, ...cultureData];
+        // Define how many sources to fetch per category (balanced for performance)
+        const sourcesPerCategory = {
+          news: 20,          // Most important for search
+          sports: 15,        // High priority (team names, players, etc.)
+          tech: 12,          // High priority (products, companies, innovations)
+          business: 10,      // Companies, stocks, economy
+          entertainment: 12, // Celebrities, movies, TV shows
+          lifestyle: 10,     // Health, wellness, fashion
+          culture: 10,       // Arts, books, events
+          opinions: 8,       // Editorial content
+          videos: 8,         // Video content
+          podcasts: 10       // Podcast episodes
+        };
+        
+        // Fetch from all categories in parallel
+        const fetchPromises = categoryNames.map(category => {
+          const feedList = RSS_FEEDS[category] || [];
+          const limit = sourcesPerCategory[category] || 10; // Default to 10 if not specified
+          const sourcesToFetch = feedList.slice(0, Math.min(limit, feedList.length));
+          console.log(`[SEARCH] ${category}: fetching ${sourcesToFetch.length} sources`);
+          return fetchFeeds(sourcesToFetch);
+        });
+        
+        const allFetchedData = await Promise.all(fetchPromises);
+        
+        // Combine all fetched data from all categories
+        const freshData = allFetchedData.flat();
         
         // Merge with cached data, removing duplicates by URL
         const mergedDataMap = new Map();
