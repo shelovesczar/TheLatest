@@ -751,12 +751,12 @@ exports.handler = async (event, context) => {
     let data;
     const cacheKey = category ? `${type}_${category}` : type;
 
-    // SEARCH FUNCTIONALITY - Search across all cached content
+    // SEARCH FUNCTIONALITY - Comprehensive search across ALL RSS feeds
     if (search && search.trim().length > 0) {
       const searchTerm = search.toLowerCase().trim();
       console.log(`[SEARCH] Searching for: "${searchTerm}"`);
       
-      // Collect all cached data
+      // Start with cached data for speed
       const allData = [];
       Object.keys(cache).forEach(key => {
         if (cache[key].data && Array.isArray(cache[key].data)) {
@@ -764,24 +764,115 @@ exports.handler = async (event, context) => {
         }
       });
       
-      // If cache is empty, fetch fresh news data
-      if (allData.length === 0) {
-        console.log('[SEARCH] Cache empty, fetching fresh news...');
-        const freshData = await fetchFeeds(RSS_FEEDS.news);
-        allData.push(...freshData);
+      console.log(`[SEARCH] Found ${allData.length} items in cache`);
+      
+      // ALWAYS fetch fresh data from ALL categories for comprehensive search results
+      // This ensures we get the latest content for any search query
+      console.log('[SEARCH] Fetching fresh content from ALL categories for comprehensive results...');
+      try {
+        // Fetch from ALL major categories in parallel (more sources per category)
+        const [newsData, sportsData, techData, businessData, entertainmentData, lifestyleData, cultureData] = await Promise.all([
+          fetchFeeds(RSS_FEEDS.news.slice(0, 15)), // Top 15 sources from each category
+          fetchFeeds(RSS_FEEDS.sports.slice(0, 12)),
+          fetchFeeds(RSS_FEEDS.tech.slice(0, 10)),
+          fetchFeeds(RSS_FEEDS.business.slice(0, 8)),
+          fetchFeeds(RSS_FEEDS.entertainment.slice(0, 10)),
+          fetchFeeds(RSS_FEEDS.lifestyle.slice(0, 8)),
+          fetchFeeds(RSS_FEEDS.culture.slice(0, 8))
+        ]);
+        
+        // Combine all fetched data
+        const freshData = [...newsData, ...sportsData, ...techData, ...businessData, ...entertainmentData, ...lifestyleData, ...cultureData];
+        
+        // Merge with cached data, removing duplicates by URL
+        const mergedDataMap = new Map();
+        [...allData, ...freshData].forEach(item => {
+          const key = item.url || item.link || item.title;
+          if (!mergedDataMap.has(key)) {
+            mergedDataMap.set(key, item);
+          }
+        });
+        
+        allData.length = 0; // Clear array
+        allData.push(...Array.from(mergedDataMap.values()));
+        
+        console.log(`[SEARCH] Total ${allData.length} unique items available for search`);
+      } catch (error) {
+        console.error('[SEARCH] Error fetching fresh data:', error.message);
+        console.log('[SEARCH] Continuing with cached data only');
       }
       
-      // Search across title, description, content, source
+      // Enhanced search with fuzzy matching and variations
       const searchResults = allData.filter(item => {
-        const searchableText = `${item.title} ${item.description} ${item.content} ${item.source}`.toLowerCase();
-        return searchableText.includes(searchTerm);
+        const title = (item.title || '').toLowerCase();
+        const description = (item.description || '').toLowerCase();
+        const content = (item.content || '').toLowerCase();
+        const source = (item.source || '').toLowerCase();
+        const category = (item.category || '').toLowerCase();
+        const searchableText = `${title} ${description} ${content} ${source} ${category}`;
+        
+        // Exact phrase match (highest priority)
+        if (searchableText.includes(searchTerm)) {
+          return true;
+        }
+        
+        // Word-based matching with variations (handles plural/singular)
+        const searchWords = searchTerm.split(/\s+/);
+        return searchWords.every(word => {
+          if (word.length < 2) return true; // Skip single characters
+          
+          // Check multiple variations of the word
+          const variations = [
+            word,                                 // Original (e.g., "dodger")
+            word + 's',                          // Plural (e.g., "dodgers")
+            word + 'es',                         // Alt plural (e.g., "beaches")
+            word.endsWith('s') ? word.slice(0, -1) : null,  // Singular from plural (e.g., "dodger" from "dodgers")
+            word.endsWith('es') ? word.slice(0, -2) : null, // Singular from es plural
+            word.endsWith('ies') ? word.slice(0, -3) + 'y' : null, // cities -> city
+            word.endsWith('y') ? word.slice(0, -1) + 'ies' : null  // city -> cities
+          ].filter(v => v !== null);
+          
+          // Check if any variation appears in the searchable text
+          return variations.some(variant => searchableText.includes(variant));
+        });
       });
       
-      // Sort by relevance (count keyword matches)
-      const scoredResults = searchResults.map(item => {
-        const text = `${item.title} ${item.description}`.toLowerCase();
-        const matches = (text.match(new RegExp(searchTerm, 'g')) || []).length;
-        return { ...item, relevanceScore: matches };
+      // Remove duplicates based on URL
+      const uniqueResults = Array.from(
+        new Map(searchResults.map(item => [item.url || item.link, item])).values()
+      );
+      
+      // Sort by relevance (count keyword matches and title relevance)
+      const scoredResults = uniqueResults.map(item => {
+        const titleText = (item.title || '').toLowerCase();
+        const descText = (item.description || '').toLowerCase();
+        
+        // Calculate relevance score
+        let score = 0;
+        
+        // Title matches are worth more
+        const titleMatches = (titleText.match(new RegExp(searchTerm, 'g')) || []).length;
+        score += titleMatches * 5;
+        
+        // Description matches
+        const descMatches = (descText.match(new RegExp(searchTerm, 'g')) || []).length;
+        score += descMatches * 2;
+        
+        // Exact title match gets bonus
+        if (titleText.includes(searchTerm)) {
+          score += 10;
+        }
+        
+        // Word matches for multi-word searches
+        const searchWords = searchTerm.split(/\s+/);
+        searchWords.forEach(word => {
+          if (word.length >= 3) {
+            if (titleText.includes(word)) score += 3;
+            if (descText.includes(word)) score += 1;
+          }
+        });
+        
+        return { ...item, relevanceScore: score };
       }).sort((a, b) => b.relevanceScore - a.relevanceScore);
       
       console.log(`[SEARCH] Found ${scoredResults.length} results for "${searchTerm}"`);
