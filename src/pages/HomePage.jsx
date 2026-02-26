@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
+import { searchRSSContent } from '../rssService'
 import { getRandomTrendingPosts } from '../socialMediaService'
 import { getRandomCategoryPosts } from '../socialMediaPosts'
 import { findClosestMatch, COMMON_KEYWORDS } from '../utils/fuzzySearch'
@@ -61,71 +62,91 @@ function HomePage({
       try {
         console.log('Loading content, hasActiveTopic:', hasActiveTopic, 'topic:', topic)
         
-        // Fetch all content in parallel
-        const [newsData, opinionsData, videosData, podcastsData, socialData] = await Promise.all([
-          fetchRSSNews(),
-          fetchOpinions(),
-          fetchVideos(),
-          fetchTrendingContent(),
-          getRandomTrendingPosts(12)
-        ])
-
-        console.log('Fetched data:', { 
-          news: newsData?.length, 
-          opinions: opinionsData?.length, 
-          videos: videosData?.length,
-          podcasts: podcastsData?.length,
-          social: socialData?.length 
-        })
-
-        // Filter by topic if active
-        const filterByTopic = (items) => {
-          if (!hasActiveTopic || !items || !Array.isArray(items)) {
-            console.log('No filtering needed, returning all items')
-            setSuggestedTopic(null)
-            return items || []
+        // If user has searched for a topic, use comprehensive search across all RSS feeds
+        if (hasActiveTopic && topic && topic.trim().length > 0) {
+          console.log(`[HomePage] Using comprehensive search for: "${topic}"`)
+          
+          // Search across ALL categories using the enhanced backend search
+          const searchResults = await searchRSSContent(topic)
+          console.log(`[HomePage] Search returned ${searchResults.length} results`)
+          
+          // Categorize search results by type
+          const categorizedResults = {
+            news: [],
+            opinions: [],
+            videos: [],
+            podcasts: [],
+            other: []
           }
           
-          const filtered = items.filter(item => {
-            const content = `${item.title || ''} ${item.description || ''} ${item.content || ''} ${item.source || ''} ${item.category || ''}`.toLowerCase()
-            return content.includes(topic.toLowerCase())
+          searchResults.forEach(item => {
+            const type = (item.type || '').toLowerCase()
+            const category = (item.category || '').toLowerCase()
+            const source = (item.source || '').toLowerCase()
+            
+            // Categorize based on type, category, or source
+            if (type === 'video' || source.includes('youtube') || category.includes('video')) {
+              categorizedResults.videos.push(item)
+            } else if (type === 'podcast' || category.includes('podcast') || source.includes('podcast')) {
+              categorizedResults.podcasts.push(item)
+            } else if (type === 'opinion' || category.includes('opinion') || category.includes('commentary')) {
+              categorizedResults.opinions.push(item)
+            } else {
+              // Everything else goes to news
+              categorizedResults.news.push(item)
+            }
           })
           
-          console.log(`Filtered ${items.length} items to ${filtered.length} for topic "${topic}"`)
+          console.log('[HomePage] Categorized results:', {
+            news: categorizedResults.news.length,
+            opinions: categorizedResults.opinions.length,
+            videos: categorizedResults.videos.length,
+            podcasts: categorizedResults.podcasts.length
+          })
           
-          // If no results found, try fuzzy matching
-          if (filtered.length === 0 && hasActiveTopic) {
-            const suggestion = findClosestMatch(topic, COMMON_KEYWORDS)
-            if (suggestion) {
-              console.log(`No results for "${topic}", suggesting "${suggestion}"`)
-              setSuggestedTopic(suggestion)
-              
-              // Return results for the suggested topic
-              const suggestedFiltered = items.filter(item => {
-                const content = `${item.title || ''} ${item.description || ''} ${item.content || ''} ${item.source || ''} ${item.category || ''}`.toLowerCase()
-                return content.includes(suggestion.toLowerCase())
-              })
-              return suggestedFiltered
-            }
-          } else {
-            setSuggestedTopic(null)
-          }
+          // Set all content from search results
+          setTopStories(categorizedResults.news)
+          setOpinions(categorizedResults.opinions)
+          setVideos(categorizedResults.videos)
+          setPodcasts(categorizedResults.podcasts)
           
-          return filtered
+          // Get social media posts related to topic
+          const socialData = await getRandomTrendingPosts(12)
+          const filteredSocial = socialData.filter(post => {
+            const content = `${post.title || ''} ${post.description || ''} ${post.content || ''}`.toLowerCase()
+            return content.includes(topic.toLowerCase())
+          })
+          setSocialPosts(filteredSocial.length > 0 ? filteredSocial : getRandomCategoryPosts(12))
+          
+          setSuggestedTopic(null)
+          
+        } else {
+          // No active topic - fetch normal content
+          console.log('[HomePage] Fetching default content (no topic)')
+          
+          const [newsData, opinionsData, videosData, podcastsData, socialData] = await Promise.all([
+            fetchRSSNews(),
+            fetchOpinions(),
+            fetchVideos(),
+            fetchTrendingContent(),
+            getRandomTrendingPosts(12)
+          ])
+
+          console.log('Fetched data:', { 
+            news: newsData?.length, 
+            opinions: opinionsData?.length, 
+            videos: videosData?.length,
+            podcasts: podcastsData?.length,
+            social: socialData?.length 
+          })
+
+          setTopStories(newsData || [])
+          setOpinions(opinionsData || [])
+          setVideos(videosData || [])
+          setPodcasts(podcastsData || [])
+          setSocialPosts(socialData.length > 0 ? socialData : getRandomCategoryPosts(12))
+          setSuggestedTopic(null)
         }
-
-        const filteredNews = filterByTopic(newsData)
-        const filteredOpinions = filterByTopic(opinionsData)
-        const filteredVideos = filterByTopic(videosData)
-        const filteredPodcasts = filterByTopic(podcastsData)
-        const filteredSocial = filterByTopic(socialData)
-
-        setTopStories(filteredNews)
-        setOpinions(filteredOpinions)
-        setVideos(filteredVideos)
-        setPodcasts(filteredPodcasts)
-        // Use fetched social or fallback to category posts
-        setSocialPosts(filteredSocial.length > 0 ? filteredSocial : getRandomCategoryPosts(12))
       } catch (error) {
         console.error('Error loading content:', error)
         // Use fallback content on error
