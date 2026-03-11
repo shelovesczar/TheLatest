@@ -157,6 +157,27 @@
   margin-left: 1rem;
 }
 
+/* LOGIN Button in Header */
+.login-button-header {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: clamp(0.85rem, 1.2vw, 1rem);
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.3s ease;
+  font-family: 'Arial', sans-serif;
+  padding: 0;
+}
+
+.login-button-header:hover {
+  color: var(--accent-color);
+}
+
+.login-button-header:active {
+  color: var(--accent-color);
+}
+
 .nav-item-dropdown {
   position: relative;
   display: inline-block;
@@ -294,6 +315,10 @@
   .nav-link-button {
     justify-content: center;
     width: 100%;
+    font-size: 1.3rem;
+  }
+
+  .login-button-header {
     font-size: 1.3rem;
   }
 
