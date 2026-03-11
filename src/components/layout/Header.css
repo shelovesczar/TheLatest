@@ -159,29 +159,23 @@
 
 /* LOGIN Button in Header */
 .login-button-header {
-  padding: 8px 16px;
-  background-color: transparent;
+  background: none;
+  border: none;
   color: var(--text-primary);
-  border: 2px solid var(--accent-color);
-  border-radius: 6px;
-  font-size: 0.9rem;
+  font-size: clamp(0.85rem, 1.2vw, 1rem);
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
+  transition: color 0.3s ease;
   font-family: 'Arial', sans-serif;
+  padding: 0;
 }
 
 .login-button-header:hover {
-  background-color: var(--accent-color);
-  color: white;
-  transform: scale(1.05);
+  color: var(--accent-color);
 }
 
 .login-button-header:active {
-  transform: scale(0.98);
+  color: var(--accent-color);
 }
 
 .nav-item-dropdown {
@@ -324,6 +318,10 @@
     font-size: 1.3rem;
   }
 
+  .login-button-header {
+    font-size: 1.3rem;
+  }
+
   .dropdown-arrow.active {
     transform: rotate(180deg);
   }
@@ -332,12 +330,6 @@
     position: static;
     width: 100%;
     margin-top: 0.5rem;
-  }
-
-  .login-button-header {
-    padding: 10px 20px;
-    font-size: 1.1rem;
-    width: auto;
   }
 
   .header {
