@@ -157,6 +157,33 @@
   margin-left: 1rem;
 }
 
+/* LOGIN Button in Header */
+.login-button-header {
+  padding: 8px 16px;
+  background-color: transparent;
+  color: var(--text-primary);
+  border: 2px solid var(--accent-color);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  font-family: 'Arial', sans-serif;
+}
+
+.login-button-header:hover {
+  background-color: var(--accent-color);
+  color: white;
+  transform: scale(1.05);
+}
+
+.login-button-header:active {
+  transform: scale(0.98);
+}
+
 .nav-item-dropdown {
   position: relative;
   display: inline-block;
@@ -305,6 +332,12 @@
     position: static;
     width: 100%;
     margin-top: 0.5rem;
+  }
+
+  .login-button-header {
+    padding: 10px 20px;
+    font-size: 1.1rem;
+    width: auto;
   }
 
   .header {
