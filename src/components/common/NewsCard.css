@@ -1,0 +1,235 @@
+.news-card {
+  display: block;
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  overflow: hidden;
+  text-decoration: none;
+  transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.news-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.news-card:active {
+  transform: translateY(-2px);
+}
+
+.news-card-image-container {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  overflow: hidden;
+}
+
+.news-card.featured .news-card-image-container {
+  height: 300px;
+}
+
+.news-card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.news-card:hover .news-card-image {
+  transform: scale(1.05);
+}
+
+.news-card-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 40%,
+    rgba(0, 0, 0, 0.4) 70%,
+    rgba(0, 0, 0, 0.8) 100%
+  );
+  pointer-events: none;
+}
+
+.news-card-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(255, 214, 10, 0.95);
+  color: #000000;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 6px var(--spacing-sm);
+  border-radius: 6px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.news-card-content {
+  padding: var(--spacing-sm);
+  position: relative;
+}
+
+.news-card-title {
+  font-size: 20px; /* Increased from 18px */
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+  margin: 0 0 12px 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.news-card.featured .news-card-title {
+  font-size: 26px; /* Increased from 22px */
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+}
+
+.news-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px; /* Increased from 12px */
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.news-card-source {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.news-card-time::before {
+  content: '•';
+  margin-right: 8px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.news-card-more {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 18px;
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.news-card-more:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.news-card-more:active {
+  transform: scale(0.95);
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+  .news-card-image-container {
+    height: 180px;
+  }
+  
+  .news-card.featured .news-card-image-container {
+    height: 250px;
+  }
+  
+  .news-card-title {
+    font-size: 16px;
+  }
+  
+  .news-card.featured .news-card-title {
+    font-size: 20px;
+  }
+  
+  .news-card-content {
+    padding: 14px;
+  }
+}
+
+/* Light theme adjustments */
+[data-theme="light"] .news-card {
+  background: var(--bg-secondary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .news-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .news-card-title {
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .news-card-meta {
+  color: var(--text-secondary);
+}
+  
+  .news-card-source {
+    color: rgba(0, 0, 0, 0.8);
+  }
+  
+  .news-card-more {
+    background: rgba(0, 0, 0, 0.05);
+    color: rgba(0, 0, 0, 0.6);
+  }
+  
+  .news-card-more:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.9);
+  }
+}
+
+/* Grid Layout Helper */
+.news-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+  padding: 20px;
+}
+
+@media (max-width: 768px) {
+  .news-card-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 12px;
+  }
+}
+
+/* Entrance animation */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.news-card {
+  animation: fadeInScale 0.4s cubic-bezier(0.4, 0.0, 0.2, 1) backwards;
+}

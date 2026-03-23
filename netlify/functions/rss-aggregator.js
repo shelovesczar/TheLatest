@@ -5,6 +5,9 @@ const parser = new Parser({
     item: [
       ['media:content', 'media'],
       ['media:thumbnail', 'thumbnail'],
+      ['media:group', 'mediaGroup'],
+      ['itunes:image', 'itunesImage'],
+      ['image', 'imageField'],
       ['description', 'description'],
       ['content:encoded', 'contentEncoded']
     ]
@@ -19,7 +22,321 @@ let cache = {
   podcasts: { data: null, timestamp: 0 }
 };
 
+let articleImageCache = new Map();
+
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const MAX_ITEMS_PER_FEED = 80;
+const ARTICLE_IMAGE_CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
+const MAX_IMAGE_ENRICH_ITEMS = 60;
+const IMAGE_ENRICH_CONCURRENCY = 6;
+
+const FALLBACK_IMAGE_URLS = new Set([
+  'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=800&q=80',
+  'https://images.unsplash.com/photo-1586339949216-35c2747e98f8?w=800&q=80',
+  'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=800&q=80',
+  'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&q=80'
+]);
+
+function toPlainText(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+
+  if (Array.isArray(value)) {
+    return value.map(toPlainText).filter(Boolean).join(' ');
+  }
+
+  if (typeof value === 'object') {
+    const preferredKeys = ['_', 'name', 'term', 'label', 'title', 'text', 'value'];
+    for (const key of preferredKeys) {
+      if (key in value) {
+        const textValue = toPlainText(value[key]);
+        if (textValue) return textValue;
+      }
+    }
+
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '';
+    }
+  }
+
+  return '';
+}
+
+function toLowerSearchText(value) {
+  return toPlainText(value).toLowerCase();
+}
+
+function normalizeTitle(value) {
+  return toLowerSearchText(value)
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeUrl(value) {
+  const raw = toPlainText(value).trim();
+  if (!raw) return '';
+
+  try {
+    const parsed = new URL(raw);
+    parsed.hash = '';
+
+    const trackingParams = [
+      'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+      'fbclid', 'gclid', 'mc_cid', 'mc_eid', 'guccounter', 'cmpid', 'ocid',
+      'ref', 'ref_src', 'ref_url', 'source', 'spm', 'igshid'
+    ];
+
+    trackingParams.forEach((param) => parsed.searchParams.delete(param));
+
+    const normalizedPath = parsed.pathname.replace(/\/+$/, '');
+    const normalizedSearch = parsed.searchParams.toString();
+    const searchSuffix = normalizedSearch ? `?${normalizedSearch}` : '';
+
+    return `${parsed.origin}${normalizedPath}${searchSuffix}`;
+  } catch {
+    return raw.split('#')[0];
+  }
+}
+
+function isFallbackImage(imageUrl) {
+  return FALLBACK_IMAGE_URLS.has(toPlainText(imageUrl));
+}
+
+function getArticlePreviewImage(articleUrl) {
+  const normalizedUrl = normalizeUrl(articleUrl);
+  if (!normalizedUrl || !/^https?:\/\//i.test(normalizedUrl)) return null;
+  return `https://image.thum.io/get/width/1200/noanimate/${encodeURIComponent(normalizedUrl)}`;
+}
+
+function getDedupKey(item = {}) {
+  const normalizedUrl = normalizeUrl(item.url || item.link);
+  if (normalizedUrl) return `url:${normalizedUrl}`;
+
+  const normalizedHeadline = normalizeTitle(item.title);
+  const normalizedSource = normalizeTitle(item.source);
+  return `title:${normalizedSource}|${normalizedHeadline}`;
+}
+
+function scoreItemQuality(item = {}) {
+  let score = 0;
+
+  if (normalizeUrl(item.url || item.link)) score += 6;
+  if (toPlainText(item.description).length >= 80) score += 4;
+  if (toPlainText(item.content).length >= 150) score += 4;
+
+  const image = toPlainText(item.image);
+  if (image) {
+    score += isFallbackImage(image) ? 1 : 8;
+  }
+
+  const publishedAt = Date.parse(toPlainText(item.publishedAt));
+  if (!Number.isNaN(publishedAt)) {
+    score += 2;
+  }
+
+  return score;
+}
+
+function mergeItems(primary = {}, secondary = {}) {
+  const primaryScore = scoreItemQuality(primary);
+  const secondaryScore = scoreItemQuality(secondary);
+  const best = primaryScore >= secondaryScore ? primary : secondary;
+  const other = best === primary ? secondary : primary;
+
+  return {
+    ...other,
+    ...best,
+    url: normalizeUrl(best.url || best.link || other.url || other.link),
+    link: normalizeUrl(best.link || best.url || other.link || other.url),
+    title: toPlainText(best.title || other.title),
+    description: toPlainText(best.description || other.description),
+    content: toPlainText(best.content || other.content),
+    source: toPlainText(best.source || other.source),
+    category: toPlainText(best.category || other.category) || 'News',
+    image: toPlainText(best.image || other.image),
+    publishedAt: toPlainText(best.publishedAt || other.publishedAt) || 'Recently'
+  };
+}
+
+function dedupeItems(items = []) {
+  const dedupeMap = new Map();
+
+  items.forEach((item) => {
+    if (!item) return;
+
+    const normalizedItem = {
+      ...item,
+      url: normalizeUrl(item.url || item.link),
+      link: normalizeUrl(item.link || item.url),
+      title: toPlainText(item.title),
+      description: toPlainText(item.description),
+      content: toPlainText(item.content),
+      source: toPlainText(item.source),
+      category: toPlainText(item.category) || 'News',
+      image: toPlainText(item.image),
+      publishedAt: toPlainText(item.publishedAt) || 'Recently'
+    };
+
+    const dedupeKey = getDedupKey(normalizedItem);
+    if (!dedupeMap.has(dedupeKey)) {
+      dedupeMap.set(dedupeKey, normalizedItem);
+      return;
+    }
+
+    const merged = mergeItems(dedupeMap.get(dedupeKey), normalizedItem);
+    dedupeMap.set(dedupeKey, merged);
+  });
+
+  return Array.from(dedupeMap.values());
+}
+
+function pruneArticleImageCache() {
+  const now = Date.now();
+  for (const [key, value] of articleImageCache.entries()) {
+    if (!value || now - value.timestamp > ARTICLE_IMAGE_CACHE_DURATION) {
+      articleImageCache.delete(key);
+    }
+  }
+}
+
+function readCachedArticleImage(url) {
+  const cached = articleImageCache.get(url);
+  if (!cached) return undefined;
+
+  if (Date.now() - cached.timestamp > ARTICLE_IMAGE_CACHE_DURATION) {
+    articleImageCache.delete(url);
+    return undefined;
+  }
+
+  return cached.image;
+}
+
+function cacheArticleImage(url, image) {
+  articleImageCache.set(url, { image: image || '', timestamp: Date.now() });
+}
+
+function extractMetaImageCandidates(html = '') {
+  const candidates = [];
+  const add = (value) => {
+    const normalized = toPlainText(value).trim();
+    if (!normalized) return;
+    if (!candidates.includes(normalized)) candidates.push(normalized);
+  };
+
+  const patterns = [
+    /<meta[^>]+property=["']og:image(?::secure_url)?["'][^>]+content=["']([^"']+)["'][^>]*>/gi,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image(?::secure_url)?["'][^>]*>/gi,
+    /<meta[^>]+name=["']twitter:image(?::src)?["'][^>]+content=["']([^"']+)["'][^>]*>/gi,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image(?::src)?["'][^>]*>/gi,
+    /<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["'][^>]*>/gi,
+    /<link[^>]+href=["']([^"']+)["'][^>]+rel=["']image_src["'][^>]*>/gi
+  ];
+
+  patterns.forEach((pattern) => {
+    let match;
+    while ((match = pattern.exec(html)) !== null) {
+      add(match[1]);
+    }
+  });
+
+  return candidates;
+}
+
+async function fetchArticleImage(articleUrl) {
+  const normalizedUrl = normalizeUrl(articleUrl);
+  if (!normalizedUrl || !/^https?:\/\//i.test(normalizedUrl)) return null;
+
+  const cachedImage = readCachedArticleImage(normalizedUrl);
+  if (cachedImage !== undefined) return cachedImage || null;
+
+  try {
+    const response = await axios.get(normalizedUrl, {
+      timeout: 3500,
+      maxRedirects: 5,
+      responseType: 'text',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      }
+    });
+
+    const html = toPlainText(response.data);
+    const metaCandidates = extractMetaImageCandidates(html)
+      .map((candidate) => {
+        try {
+          return new URL(candidate, normalizedUrl).toString();
+        } catch {
+          return candidate;
+        }
+      });
+
+    const bestImage = metaCandidates.find((candidate) => isValidImageUrl(candidate));
+    const resolvedImage = bestImage || getArticlePreviewImage(normalizedUrl);
+    cacheArticleImage(normalizedUrl, resolvedImage || null);
+    return resolvedImage || null;
+  } catch {
+    const previewImage = getArticlePreviewImage(normalizedUrl);
+    cacheArticleImage(normalizedUrl, previewImage || null);
+    return previewImage || null;
+  }
+}
+
+function shouldEnrichImage(item = {}) {
+  const image = toPlainText(item.image);
+  if (!image) return true;
+  if (!isValidImageUrl(image)) return true;
+  if (isFallbackImage(image)) return true;
+  return false;
+}
+
+async function enrichItemsWithArticleImages(items = []) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  pruneArticleImageCache();
+
+  const enriched = [...items];
+  const indicesToEnrich = [];
+
+  for (let index = 0; index < enriched.length; index += 1) {
+    if (indicesToEnrich.length >= MAX_IMAGE_ENRICH_ITEMS) break;
+
+    const item = enriched[index];
+    if (!item || !shouldEnrichImage(item)) continue;
+
+    const articleUrl = normalizeUrl(item.url || item.link);
+    if (!articleUrl) continue;
+
+    indicesToEnrich.push(index);
+  }
+
+  if (indicesToEnrich.length === 0) {
+    return enriched;
+  }
+
+  for (let start = 0; start < indicesToEnrich.length; start += IMAGE_ENRICH_CONCURRENCY) {
+    const chunk = indicesToEnrich.slice(start, start + IMAGE_ENRICH_CONCURRENCY);
+    await Promise.all(chunk.map(async (index) => {
+      const item = enriched[index];
+      const articleUrl = normalizeUrl(item.url || item.link);
+      if (!articleUrl) return;
+
+      const articleImage = await fetchArticleImage(articleUrl);
+      if (articleImage && isValidImageUrl(articleImage)) {
+        enriched[index] = {
+          ...item,
+          image: articleImage
+        };
+      }
+    }));
+  }
+
+  return enriched;
+}
 
 // Filter Configuration - Add domains or keywords to exclude
 const FILTER_CONFIG = {
@@ -52,10 +369,11 @@ const FILTER_CONFIG = {
 
 // Helper to strip HTML tags and decode entities
 function stripHtml(html) {
-  if (!html) return '';
+  const normalizedHtml = toPlainText(html);
+  if (!normalizedHtml) return '';
   
   // Remove HTML tags
-  let text = html.replace(/<[^>]*>/g, ' ');
+  let text = normalizedHtml.replace(/<[^>]*>/g, ' ');
   
   // Decode common HTML entities
   const entities = {
@@ -93,9 +411,9 @@ function stripHtml(html) {
 
 // Filter function to exclude unwanted articles
 function shouldFilterOut(item) {
-  const title = (item.title || '').toLowerCase();
-  const description = (item.description || '').toLowerCase();
-  const link = (item.link || '').toLowerCase();
+  const title = toLowerSearchText(item.title);
+  const description = toLowerSearchText(item.description);
+  const link = toLowerSearchText(item.link);
   
   // Check title length
   if (title.length < FILTER_CONFIG.minTitleLength) {
@@ -176,6 +494,10 @@ const RSS_FEEDS = {
     { url: 'https://www.theguardian.com/uk/commentisfree/rss', source: 'The Guardian Opinion' },
     { url: 'https://www.theguardian.com/us/commentisfree/rss', source: 'The Guardian US Opinion' },
     { url: 'https://www.latimes.com/opinion/rss2.0.xml', source: 'LA Times Opinion' },
+    { url: 'https://feeds.washingtonpost.com/rss/opinions', source: 'Washington Post Opinion' },
+    { url: 'https://thehill.com/opinion/feed/', source: 'The Hill Opinion' },
+    { url: 'https://www.nationalreview.com/feed/', source: 'National Review' },
+    { url: 'https://www.wsj.com/xml/rss/3_7041.xml', source: 'WSJ Opinion' },
     // RSS APP feeds (for more niche topics)
     { url: 'https://rss.app/feeds/wGtHhwQaOwup8JQs.xml', source: 'New York Post' },
     { url: 'https://rss.app/feeds/_iIjbt3XTnFFpU0Cv.xml', source: 'The Latest' }
@@ -188,6 +510,11 @@ const RSS_FEEDS = {
     { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCBi2mrWuNuyYy4gbM6fU18Q', source: 'ABC News' },
     { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UC16niRr50-MSBwiO3YDb3RA', source: 'BBC News' },
     { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCaXkIU1QidjPwiAYu6GcHjg', source: 'MSNBC' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UC52X5wxOL_s5yw0dQk7NtgA', source: 'Associated Press Video' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UChqUTb7kYRX8-EiaN3XFrSQ', source: 'Reuters Video' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCIRYBXDze5krPDzAEOxFGVA', source: 'The Guardian Video' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCrp_UI8XtuYfpiqluWLD7Lw', source: 'CNBC Television' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCIALMKvObZNtJ6AmdCLP7Lg', source: 'Bloomberg Television' },
     // RSS APP feeds
     { url: 'https://rss.app/feeds/wGtHhwQaOwup8JQs.xml', source: 'New York Post' },
     { url: 'https://rss.app/feeds/_iIjbt3XTnFFpU0Cv.xml', source: 'The Latest' }
@@ -206,6 +533,10 @@ const RSS_FEEDS = {
     { url: 'https://www.omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/a91018a4-ea4f-4130-bf55-ae270180c327/44710ecc-10bb-48d1-93c7-ae270180c33e/podcast.rss', source: 'Morning Joe' },
     { url: 'https://feeds.megaphone.fm/VMP7924054000', source: 'Pod Save the World' },
     { url: 'https://feeds.megaphone.fm/FOXN2895050347', source: 'Fox News' },
+    { url: 'https://podcasts.files.bbci.co.uk/p02nq0gn.rss', source: 'BBC Global News Podcast' },
+    { url: 'https://feeds.npr.org/510355/podcast.xml', source: 'NPR Consider This' },
+    { url: 'https://feeds.npr.org/510289/podcast.xml', source: 'NPR Planet Money' },
+    { url: 'https://feeds.megaphone.fm/VMP5705694065', source: 'Today, Explained' },
     
     // Technology & Business Podcasts
     { url: 'https://feeds.megaphone.fm/HSW8935723597', source: 'TED Tech' },
@@ -405,6 +736,37 @@ const RSS_FEEDS = {
 // Helper to extract image from RSS item
 function extractImage(item) {
   let imageUrl = null;
+
+  const candidateUrls = [];
+  const addCandidate = (value) => {
+    const normalized = toPlainText(value).trim();
+    if (!normalized) return;
+    if (!candidateUrls.includes(normalized)) {
+      candidateUrls.push(normalized);
+    }
+  };
+
+  const addFromObject = (obj) => {
+    if (!obj) return;
+    if (Array.isArray(obj)) {
+      obj.forEach(addFromObject);
+      return;
+    }
+    if (typeof obj === 'string') {
+      addCandidate(obj);
+      return;
+    }
+    if (typeof obj !== 'object') return;
+
+    addCandidate(obj.url);
+    addCandidate(obj.href);
+    addCandidate(obj.src);
+    if (obj.$ && typeof obj.$ === 'object') {
+      addCandidate(obj.$.url);
+      addCandidate(obj.$.href);
+      addCandidate(obj.$.src);
+    }
+  };
   
   // Special handling for YouTube videos - extract video ID and construct thumbnail URL
   if (item.link && item.link.includes('youtube.com/watch')) {
@@ -419,6 +781,34 @@ function extractImage(item) {
   if (item.itunes && item.itunes.image) {
     if (typeof item.itunes.image === 'string') return item.itunes.image;
     if (item.itunes.image.$ && item.itunes.image.$.href) return item.itunes.image.$.href;
+  }
+
+  if (item.itunesImage) {
+    addFromObject(item.itunesImage);
+  }
+
+  if (item.imageField) {
+    addFromObject(item.imageField);
+  }
+
+  if (item.image) {
+    addFromObject(item.image);
+  }
+
+  if (item.media) {
+    addFromObject(item.media);
+  }
+
+  if (item.thumbnail) {
+    addFromObject(item.thumbnail);
+  }
+
+  if (item.enclosures) {
+    addFromObject(item.enclosures);
+  }
+
+  if (item['im:image']) {
+    addFromObject(item['im:image']);
   }
   
   // Priority 1: media:content with high resolution (usually best quality for news articles)
@@ -526,6 +916,10 @@ function extractImage(item) {
       }
     }
   }
+
+  if (item.mediaGroup) {
+    addFromObject(item.mediaGroup);
+  }
   
   // Legacy fields
   if (item.media && item.media.$) {
@@ -535,6 +929,10 @@ function extractImage(item) {
   if (item.thumbnail && item.thumbnail.$) {
     imageUrl = item.thumbnail.$.url;
     if (isValidImageUrl(imageUrl)) return imageUrl;
+  }
+
+  for (const candidateUrl of candidateUrls) {
+    if (isValidImageUrl(candidateUrl)) return candidateUrl;
   }
   
   // Try to extract from content/description HTML
@@ -560,6 +958,16 @@ function extractImage(item) {
         }
       }
     }
+
+    const srcsetRegex = /srcset=["']([^"']+)["']/gi;
+    while ((match = srcsetRegex.exec(content)) !== null) {
+      const srcset = match[1];
+      srcset
+        .split(',')
+        .map((part) => part.trim().split(/\s+/)[0])
+        .filter(Boolean)
+        .forEach((url) => imgUrls.push({ url, width: 0 }));
+    }
     
     // Sort by width and return largest
     if (imgUrls.length > 0) {
@@ -570,8 +978,13 @@ function extractImage(item) {
   }
   
   // Category-specific fallback images for better UX
-  const title = (item.title || '').toLowerCase();
-  const description = (item.description || '').toLowerCase();
+  const title = toLowerSearchText(item.title);
+  const description = toLowerSearchText(item.description);
+
+  const articlePreviewImage = getArticlePreviewImage(item.link || item.url);
+  if (articlePreviewImage) {
+    return articlePreviewImage;
+  }
   
   if (title.includes('podcast') || description.includes('podcast')) {
     return 'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=800&q=80'; // Podcast microphone
@@ -684,21 +1097,22 @@ function extractSource(item, defaultSource) {
 async function parseFeed(feedConfig) {
   try {
     const feed = await parser.parseURL(feedConfig.url);
-    const filteredItems = feed.items
+    const rawItems = Array.isArray(feed.items) ? feed.items.slice(0, MAX_ITEMS_PER_FEED) : [];
+    const filteredItems = rawItems
       .filter(item => !shouldFilterOut(item)) // Apply filtering
       .map(item => ({
         title: stripHtml(item.title || 'Untitled'), // Strip HTML from title
         description: stripHtml(item.contentSnippet || item.description || ''), // Strip HTML from description
         content: stripHtml(item.content || item.contentEncoded || item.description || ''), // Strip HTML from content
-        url: item.link || '', // Use 'url' instead of 'link' for consistency with components
-        link: item.link || '', // Keep 'link' for backward compatibility
+        url: toPlainText(item.link), // Use 'url' instead of 'link' for consistency with components
+        link: toPlainText(item.link), // Keep 'link' for backward compatibility
         image: extractImage(item),
         source: extractSource(item, feedConfig.source), // Dynamic source extraction
         publishedAt: item.pubDate ? new Date(item.pubDate).toLocaleString() : 'Recently',
-        category: item.categories ? item.categories[0] : 'News'
+        category: toPlainText(item.categories ? item.categories[0] : 'News') || 'News'
       }));
     
-    console.log(`${feedConfig.source}: ${feed.items.length} total, ${filteredItems.length} after filtering`);
+    console.log(`${feedConfig.source}: ${rawItems.length} sampled, ${filteredItems.length} after filtering`);
     return filteredItems;
   } catch (error) {
     console.error(`Error parsing feed ${feedConfig.source}:`, error.message);
@@ -718,10 +1132,17 @@ async function fetchFeeds(feedList) {
   console.log(`RSS Fetch complete: ${successful} successful, ${failed} failed/empty`);
   
   // Flatten and filter out failed requests
-  return results
+  const allItems = results
     .filter(result => result.status === 'fulfilled')
     .flatMap(result => result.value)
+  
+  const deduped = dedupeItems(allItems)
     .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+
+  const enriched = await enrichItemsWithArticleImages(deduped);
+
+  console.log(`Deduped ${allItems.length} items down to ${deduped.length}; enriched images for ${Math.min(deduped.length, MAX_IMAGE_ENRICH_ITEMS)} candidates`);
+  return enriched;
 }
 
 // Check if cache is valid
@@ -751,98 +1172,87 @@ exports.handler = async (event, context) => {
     let data;
     const cacheKey = category ? `${type}_${category}` : type;
 
-    // SEARCH FUNCTIONALITY - Comprehensive search across ALL RSS feeds
+    // SEARCH FUNCTIONALITY - Cache-first, future-proof search across ALL RSS feeds
+    // Automatically includes any new categories/feeds added to RSS_FEEDS
     if (search && search.trim().length > 0) {
-      const searchTerm = search.toLowerCase().trim();
+      const searchTerm = toLowerSearchText(search).trim();
       console.log(`[SEARCH] Searching for: "${searchTerm}"`);
-      
-      // Start with cached data for speed
+
+      // ── Step 1: Collect all cached data (instant, no network) ──────────────
       const allData = [];
+      const staleCacheKeys = [];
       Object.keys(cache).forEach(key => {
         if (cache[key].data && Array.isArray(cache[key].data)) {
           allData.push(...cache[key].data);
+          if (!isCacheValid(key)) staleCacheKeys.push(key);  // stale but still usable
+        } else {
+          staleCacheKeys.push(key); // empty
         }
       });
-      
-      console.log(`[SEARCH] Found ${allData.length} items in cache`);
-      
-      // ALWAYS fetch fresh data from ALL categories for comprehensive search results
-      // This is FUTURE-PROOF: automatically includes any new categories added to RSS_FEEDS
-      console.log('[SEARCH] Fetching fresh content from ALL categories for comprehensive results...');
-      try {
-        // Dynamically fetch from ALL categories in RSS_FEEDS
-        const categoryNames = Object.keys(RSS_FEEDS);
-        console.log(`[SEARCH] Found ${categoryNames.length} categories:`, categoryNames.join(', '));
-        
-        // OPTIMIZED: Reduced sources per category to prevent timeout (Netlify limit: 10s)
-        const sourcesPerCategory = {
-          news: 12,          // Reduced from 20
-          sports: 10,        // Reduced from 15
-          tech: 8,           // Reduced from 12
-          business: 6,       // Reduced from 10
-          entertainment: 8,  // Reduced from 12
-          lifestyle: 6,      // Reduced from 10
-          culture: 6,        // Reduced from 10
-          opinions: 5,       // Reduced from 8
-          videos: 5,         // Reduced from 8
-          podcasts: 6        // Reduced from 10
-        };
-        
-        // Fetch from all categories in parallel with timeout protection
-        const fetchWithTimeout = async (category) => {
+      console.log(`[SEARCH] ${allData.length} items in cache; ${staleCacheKeys.length} stale/empty buckets`);
+
+      // ── Step 2: Only fetch categories that are NOT already cached ─────────
+      // This prevents the timeout that caused 500 errors when all categories
+      // had to be fetched fresh in parallel on every search request.
+      // Future-proof: any new category added to RSS_FEEDS is automatically included.
+      if (staleCacheKeys.length > 0) {
+        // Tightly limited sources per category specifically for search-triggered fetches
+        const SEARCH_SOURCES_LIMIT = 5; // keeps each category fetch under ~2s
+        const GLOBAL_SEARCH_TIMEOUT = 7500; // 7.5s stays under the 10s Netlify limit
+
+        const fetchCategoryWithTimeout = async (catKey) => {
           try {
-            const feedList = RSS_FEEDS[category] || [];
-            const limit = sourcesPerCategory[category] || 6; // Default to 6 if not specified
-            const sourcesToFetch = feedList.slice(0, Math.min(limit, feedList.length));
-            console.log(`[SEARCH] ${category}: fetching ${sourcesToFetch.length} sources`);
-            
-            // Add timeout per category (3 seconds max)
-            const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error(`Timeout fetching ${category}`)), 3000)
+            const feedList = RSS_FEEDS[catKey] || [];
+            const sourcesToFetch = feedList.slice(0, SEARCH_SOURCES_LIMIT);
+            if (sourcesToFetch.length === 0) return [];
+            console.log(`[SEARCH] Fetching stale/empty category "${catKey}": ${sourcesToFetch.length} sources`);
+
+            const perCategoryTimeout = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error(`Timeout: ${catKey}`)), 3000)
             );
-            
-            const fetchPromise = fetchFeeds(sourcesToFetch);
-            return await Promise.race([fetchPromise, timeoutPromise]);
-          } catch (error) {
-            console.error(`[SEARCH] Error fetching ${category}:`, error.message);
-            return []; // Return empty array on error, don't fail entire search
+            return await Promise.race([fetchFeeds(sourcesToFetch), perCategoryTimeout]);
+          } catch (err) {
+            console.warn(`[SEARCH] Skipped "${catKey}": ${err.message}`);
+            return [];
           }
         };
-        
-        const fetchPromises = categoryNames.map(category => fetchWithTimeout(category));
-        const allFetchedData = await Promise.all(fetchPromises);
-        
-        // Combine all fetched data from all categories
-        const freshData = allFetchedData.flat();
-        console.log(`[SEARCH] Fetched ${freshData.length} fresh articles`);
-        
-        // Merge with cached data, removing duplicates by URL
-        const mergedDataMap = new Map();
-        [...allData, ...freshData].forEach(item => {
-          const key = item.url || item.link || item.title;
-          if (key && !mergedDataMap.has(key)) {
-            mergedDataMap.set(key, item);
-          }
-        });
-        
-        allData.length = 0; // Clear array
-        allData.push(...Array.from(mergedDataMap.values()));
-        
-        console.log(`[SEARCH] Total ${allData.length} unique items available for search`);
-      } catch (error) {
-        console.error('[SEARCH] Error fetching fresh data:', error.message);
-        console.log('[SEARCH] Continuing with cached data only');
+
+        try {
+          // Global race: either all stale categories finish or we cut off at 7.5s
+          const globalTimeout = new Promise(resolve =>
+            setTimeout(() => {
+              console.warn('[SEARCH] Global timeout hit — using partial results');
+              resolve([]);
+            }, GLOBAL_SEARCH_TIMEOUT)
+          );
+
+          const fetchAll = Promise.all(staleCacheKeys.map(fetchCategoryWithTimeout))
+            .then(results => results.flat());
+
+          const freshData = await Promise.race([fetchAll, globalTimeout]);
+          console.log(`[SEARCH] Fetched ${freshData.length} fresh articles from stale categories`);
+
+          // Merge fresh + cached, dedup with URL/title heuristics
+          const mergedItems = dedupeItems([...allData, ...freshData]);
+          allData.length = 0;
+          allData.push(...mergedItems);
+        } catch (err) {
+          console.error('[SEARCH] Unexpected error during stale-fetch:', err.message);
+          // allData still has whatever was cached — safe to continue
+        }
       }
+
+      console.log(`[SEARCH] Total ${allData.length} unique items available for search`);
       
       // Enhanced search with fuzzy matching and variations
       const searchResults = allData.filter(item => {
         if (!item || !item.title) return false; // Skip invalid items
         
-        const title = (item.title || '').toLowerCase();
-        const description = (item.description || '').toLowerCase();
-        const content = (item.content || '').toLowerCase();
-        const source = (item.source || '').toLowerCase();
-        const category = (item.category || '').toLowerCase();
+        const title = toLowerSearchText(item.title);
+        const description = toLowerSearchText(item.description);
+        const content = toLowerSearchText(item.content);
+        const source = toLowerSearchText(item.source);
+        const category = toLowerSearchText(item.category);
         const searchableText = `${title} ${description} ${content} ${source} ${category}`;
         
         // Exact phrase match (highest priority)
@@ -871,15 +1281,13 @@ exports.handler = async (event, context) => {
         });
       });
       
-      // Remove duplicates based on URL
-      const uniqueResults = Array.from(
-        new Map(searchResults.map(item => [item.url || item.link, item])).values()
-      );
+      // Remove duplicates using URL/title/source heuristics
+      const uniqueResults = dedupeItems(searchResults);
       
       // Sort by relevance (count keyword matches and title relevance)
       const scoredResults = uniqueResults.map(item => {
-        const titleText = (item.title || '').toLowerCase();
-        const descText = (item.description || '').toLowerCase();
+        const titleText = toLowerSearchText(item.title);
+        const descText = toLowerSearchText(item.description);
         
         // Calculate relevance score
         let score = 0;
@@ -954,7 +1362,7 @@ exports.handler = async (event, context) => {
     
     // If category specified, fetch relevant feeds for ANY type (news, opinions, videos, podcasts)
     if (category) {
-      const cat = category.toLowerCase();
+      const cat = toLowerSearchText(category);
       
       if (cat === 'sports') {
         feedsToFetch = RSS_FEEDS.sports;

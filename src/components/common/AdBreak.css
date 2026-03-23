@@ -1,0 +1,146 @@
+.ad-break {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  padding: var(--spacing-lg) var(--spacing-sm);
+  margin: var(--spacing-lg) 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+.ad-container {
+  max-width: 728px;
+  width: 100%;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-xl) var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.ad-placeholder-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.ad-icon {
+  font-size: 48px;
+  opacity: 0.3;
+}
+
+.ad-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.3);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.sponsored-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sponsor-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.sponsor-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Compact version */
+.ad-break.compact {
+  min-height: 120px;
+  padding: 20px 16px;
+  margin: 20px 0;
+}
+
+.ad-break.compact .ad-container {
+  padding: 24px 16px;
+}
+
+.ad-break.compact .ad-icon {
+  font-size: 32px;
+}
+
+.ad-break.compact .ad-text {
+  font-size: 12px;
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+  .ad-break {
+    padding: 24px 12px;
+    min-height: 150px;
+    margin: 24px 0;
+  }
+  
+  .ad-container {
+    padding: 32px 16px;
+  }
+  
+  .ad-icon {
+    font-size: 40px;
+  }
+  
+  .ad-text {
+    font-size: 13px;
+  }
+}
+
+/* Light mode */
+@media (prefers-color-scheme: light) {
+  .ad-break {
+    background: rgba(0, 0, 0, 0.02);
+    border-top-color: rgba(0, 0, 0, 0.05);
+    border-bottom-color: rgba(0, 0, 0, 0.05);
+  }
+  
+  .ad-container {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.1);
+  }
+  
+  .ad-text {
+    color: rgba(0, 0, 0, 0.3);
+  }
+  
+  .sponsor-label {
+    color: rgba(0, 0, 0, 0.4);
+  }
+  
+  .sponsor-name {
+    color: rgba(0, 0, 0, 0.8);
+  }
+}
+
+/* Smooth entrance */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.ad-break {
+  animation: fadeIn 0.6s ease-in-out;
+}

@@ -1,14 +1,14 @@
 .social-posts-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
-  margin-top: 2rem;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
 }
 
 .social-post-card {
   background: var(--card-bg);
   border-radius: 8px;
-  padding: 1.5rem;
+  padding: var(--spacing-md);
   border: 1px solid var(--border-color);
   transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -21,8 +21,8 @@
 .social-post-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
 }
 
 .platform-icon {
@@ -50,13 +50,13 @@
   height: 200px;
   object-fit: cover;
   border-radius: 4px;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-sm);
 }
 
 .social-post-content {
   color: var(--text-color);
   line-height: 1.6;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-sm);
 }
 
 .social-post-stats {

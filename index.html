@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- Performance Optimizations: Resource Hints -->
+    <!-- Preconnect to external domains to reduce DNS lookup + TLS negotiation time -->
+    <link rel="preconnect" href="https://images.unsplash.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    
+    <!-- DNS prefetch for other external resources -->
+    <link rel="dns-prefetch" href="https://rss.app">
+    <link rel="dns-prefetch" href="https://feeds.bbci.co.uk">
+    <link rel="dns-prefetch" href="https://rss.nytimes.com">
+    
     <title>The Latest</title>
   </head>
   <body>

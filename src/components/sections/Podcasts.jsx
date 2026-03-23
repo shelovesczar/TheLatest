@@ -40,7 +40,8 @@ function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
   const getVisiblePodcasts = () => {
     if (!podcasts || podcasts.length === 0) return []
     const items = []
-    for (let i = 0; i < itemsPerPage; i++) {
+    const maxItems = Math.min(itemsPerPage, podcasts.length)
+    for (let i = 0; i < maxItems; i++) {
       const index = (currentIndex + i) % podcasts.length
       if (podcasts[index]) {
         items.push(podcasts[index])

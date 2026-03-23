@@ -110,17 +110,10 @@ function AISummary({ category = 'general', description, categoryImage, categoryT
   const defaultImage = "https://img-s-msn-com.akamaized.net/tenant/amp/entityid/AA1C0mI9.img?w=768&h=432&m=6&x=810&y=204&s=236&d=236"
 
   return (
-    <section className="ai-summary-section">
+    <section className="section ai-summary-section">
       <h2 className="section-title">
         {useTopicFilter ? `AI Summary: ${topic}` : "Today's AI Summary"}
       </h2>
-      <button 
-        className="see-more-link" 
-        onClick={handleRefresh}
-        disabled={isRefreshing}
-      >
-        {isRefreshing ? 'Refreshing...' : 'Refresh Summary'}
-      </button>
 
       <div className="story-with-ad-container">
         <article className="story-card-large">

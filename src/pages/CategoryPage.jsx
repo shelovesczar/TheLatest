@@ -4,8 +4,9 @@ import TopStories from '../components/sections/TopStories'
 import Opinions from '../components/sections/Opinions'
 import Videos from '../components/sections/Videos'
 import Podcasts from '../components/sections/Podcasts'
-import Subscribe from '../components/sections/Subscribe'
+
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
+import { filterContentByCategory } from '../utils/categoryFiltering'
 import './CategoryPage.css'
 
 function CategoryPage({ 
@@ -196,159 +197,63 @@ function CategoryPage({
         
         console.log(`[CategoryPage] Loading ${category} → RSS category: ${rssCategory}`);
         
-        // Fetch news with category filter for better relevance
+        // Fetch news - always get general news and filter by category
         let allNews = [];
         try {
+          // Fetch category-specific RSS feeds for stronger relevance
           allNews = await fetchRSSNews(rssCategory);
-          console.log(`[CategoryPage] Fetched ${allNews?.length || 0} articles from ${rssCategory}`);
+          console.log(`[CategoryPage] Fetched ${allNews?.length || 0} total articles`);
         } catch (rssError) {
-          console.error(`[CategoryPage] RSS fetch failed for ${rssCategory}:`, rssError.message);
+          console.error(`[CategoryPage] RSS fetch failed:`, rssError.message);
           allNews = [];
         }
         
-        // Use category-specific RSS feeds without fallback
+        // Use category-specific filtering
         let finalNews;
         
-        if (['sports', 'business-tech', 'entertainment', 'lifestyle', 'culture'].includes(category)) {
-          // Categories with dedicated RSS feeds - use all articles from those feeds
-          console.log(`[CategoryPage] Using all ${allNews.length} articles from dedicated ${rssCategory} feeds`);
-          finalNews = allNews.slice(0, 15);
+        if (category && category !== 'top-stories') {
+          // Filter by category keywords
+          const filtered = filterContentByCategory(allNews, category, 1, { strict: true });
+          console.log(`[CategoryPage] Filtered to ${filtered.length} ${category} articles`);
+          finalNews = filtered.slice(0, 15);
         } else {
-          // Top-stories - filter general news by keywords
-          console.log(`[CategoryPage] Filtering ${allNews.length} articles by ${category} keywords...`);
-          const filteredNews = allNews.filter(article => {
-            const content = `${article.title} ${article.description || ''} ${article.source || ''}`.toLowerCase()
-            return config.keywords.some(keyword => content.includes(keyword.toLowerCase())) ||
-                   config.sources.some(source => (article.source || '').toLowerCase().includes(source.toLowerCase()))
-          })
-
-          // Prioritize articles that match multiple keywords
-          const scoredNews = filteredNews.map(article => {
-            const content = `${article.title} ${article.description || ''}`.toLowerCase()
-            const score = config.keywords.filter(keyword => content.includes(keyword.toLowerCase())).length
-            return { ...article, relevanceScore: score }
-          }).sort((a, b) => b.relevanceScore - a.relevanceScore)
-
-          // Use filtered if we have enough, otherwise show all news
-          finalNews = scoredNews.length >= 5 ? scoredNews.slice(0, 15) : allNews.slice(0, 10);
-          console.log(`[CategoryPage] Filtered to ${finalNews.length} relevant articles from ${allNews.length} total`);
+          // Top-stories: use all news
+          finalNews = allNews.slice(0, 15);
         }
         
         setCategoryNews(finalNews)
         setLoading(false)
 
-        // Load opinions - fetch general opinions and filter by category keywords
-        const opinionData = await fetchOpinions() // Always fetch from general opinion feeds
-        if (['sports', 'business-tech', 'entertainment', 'lifestyle', 'culture'].includes(category)) {
-          // For dedicated category pages, filter opinions by category keywords with enhanced strict matching
-          const filteredOpinions = opinionData.filter(opinion => {
-            const content = `${opinion.title || ''} ${opinion.description || ''} ${opinion.source || ''}`.toLowerCase()
-            
-            // Strong category indicators (high-value keywords specific to this category)
-            const strongKeywords = category === 'sports' 
-              ? ['nfl', 'nba', 'mlb', 'nhl', 'super bowl', 'world cup', 'olympics', 'playoff', 'championship', 'espn', 'sports illustrated']
-              : category === 'entertainment'
-              ? ['oscar', 'emmy', 'grammy', 'hollywood', 'netflix', 'movie', 'film', 'album', 'concert', 'celebrity']
-              : category === 'business-tech'
-              ? ['tech', 'startup', 'ipo', 'silicon valley', 'apple', 'google', 'microsoft', 'ai', 'cryptocurrency', 'stock market']
-              : category === 'lifestyle'
-              ? ['health', 'wellness', 'travel', 'recipe', 'fitness', 'nutrition', 'vacation', 'yoga']
-              : ['culture', 'art', 'museum', 'literature', 'books', 'theatre', 'photography'];
-            
-            // Check for strong keyword matches (if any strong keyword matches, accept it)
-            const hasStrongMatch = strongKeywords.some(keyword => content.includes(keyword.toLowerCase()))
-            if (hasStrongMatch) return true
-            
-            // Otherwise, require at least 3 regular keyword matches
-            const matchCount = config.keywords.filter(keyword => content.includes(keyword.toLowerCase())).length
-            return matchCount >= 3
-          })
-          console.log(`[CategoryPage] Filtered ${filteredOpinions.length} opinions for ${category} from ${opinionData.length} total (enhanced matching)`);
-          console.log(`[CategoryPage] Sample opinion titles:`, filteredOpinions.slice(0, 3).map(o => o.title));
+        // Load opinions - fetch general opinions and filter by category
+        const opinionData = await fetchOpinions(rssCategory)
+        if (category && category !== 'top-stories') {
+          const filteredOpinions = filterContentByCategory(opinionData, category, 1, { strict: true })
+          console.log(`[CategoryPage] Filtered ${filteredOpinions.length} opinions for ${category} from ${opinionData.length} total`);
           setOpinions(filteredOpinions.slice(0, 6))
         } else {
-          // For top-stories, filter by keywords
-          const filteredOpinions = opinionData.filter(opinion => {
-            const content = `${opinion.title || ''} ${opinion.description || ''} ${opinion.source || ''}`.toLowerCase()
-            return config.keywords.some(keyword => content.includes(keyword.toLowerCase()))
-          })
-          setOpinions(filteredOpinions.length > 0 ? filteredOpinions.slice(0, 6) : opinionData.slice(0, 3))
+          setOpinions(opinionData.slice(0, 6))
         }
         setLoadingOpinions(false)
 
-        // Load videos - fetch general videos and filter by category keywords
-        const videoData = await fetchVideos() // Always fetch from general video feeds
-        if (['sports', 'business-tech', 'entertainment', 'lifestyle', 'culture'].includes(category)) {
-          // For dedicated category pages, filter videos by category keywords with enhanced strict matching
-          const filteredVideos = videoData.filter(video => {
-            const content = `${video.title || ''} ${video.description || ''} ${video.source || ''}`.toLowerCase()
-            
-            // Strong category indicators
-            const strongKeywords = category === 'sports' 
-              ? ['nfl', 'nba', 'mlb', 'nhl', 'super bowl', 'world cup', 'olympics', 'playoff', 'championship', 'espn', 'sports illustrated']
-              : category === 'entertainment'
-              ? ['oscar', 'emmy', 'grammy', 'hollywood', 'netflix', 'movie', 'film', 'album', 'concert', 'celebrity']
-              : category === 'business-tech'
-              ? ['tech', 'startup', 'ipo', 'silicon valley', 'apple', 'google', 'microsoft', 'ai', 'cryptocurrency', 'stock market']
-              : category === 'lifestyle'
-              ? ['health', 'wellness', 'travel', 'recipe', 'fitness', 'nutrition', 'vacation', 'yoga']
-              : ['culture', 'art', 'museum', 'literature', 'books', 'theatre', 'photography'];
-            
-            // Check for strong keyword matches
-            const hasStrongMatch = strongKeywords.some(keyword => content.includes(keyword.toLowerCase()))
-            if (hasStrongMatch) return true
-            
-            // Otherwise, require at least 3 regular keyword matches
-            const matchCount = config.keywords.filter(keyword => content.includes(keyword.toLowerCase())).length
-            return matchCount >= 3
-          })
-          console.log(`[CategoryPage] Filtered ${filteredVideos.length} videos for ${category} from ${videoData.length} total (enhanced matching)`);
+        // Load videos - fetch general videos and filter by category
+        const videoData = await fetchVideos(rssCategory)
+        if (category && category !== 'top-stories') {
+          const filteredVideos = filterContentByCategory(videoData, category, 1, { strict: true })
+          console.log(`[CategoryPage] Filtered ${filteredVideos.length} videos for ${category} from ${videoData.length} total`);
           setVideos(filteredVideos.slice(0, 6))
         } else {
-          // For top-stories, filter by keywords
-          const filteredVideos = videoData.filter(video => {
-            const content = `${video.title || ''} ${video.description || ''} ${video.source || ''}`.toLowerCase()
-            return config.keywords.some(keyword => content.includes(keyword.toLowerCase()))
-          })
-          setVideos(filteredVideos.length > 0 ? filteredVideos.slice(0, 6) : videoData.slice(0, 3))
+          setVideos(videoData.slice(0, 6))
         }
         setLoadingVideos(false)
 
-        // Load podcasts - fetch general podcasts and filter by category keywords
-        const podcastData = await fetchTrendingContent() // Always fetch from general podcast feeds
-        if (['sports', 'business-tech', 'entertainment', 'lifestyle', 'culture'].includes(category)) {
-          // For dedicated category pages, filter podcasts by category keywords with enhanced strict matching
-          const filteredPodcasts = podcastData.filter(podcast => {
-            const content = `${podcast.title || ''} ${podcast.description || ''} ${podcast.source || ''}`.toLowerCase()
-            
-            // Strong category indicators
-            const strongKeywords = category === 'sports' 
-              ? ['nfl', 'nba', 'mlb', 'nhl', 'super bowl', 'world cup', 'olympics', 'playoff', 'championship', 'espn', 'sports illustrated']
-              : category === 'entertainment'
-              ? ['oscar', 'emmy', 'grammy', 'hollywood', 'netflix', 'movie', 'film', 'album', 'concert', 'celebrity']
-              : category === 'business-tech'
-              ? ['tech', 'startup', 'ipo', 'silicon valley', 'apple', 'google', 'microsoft', 'ai', 'cryptocurrency', 'stock market']
-              : category === 'lifestyle'
-              ? ['health', 'wellness', 'travel', 'recipe', 'fitness', 'nutrition', 'vacation', 'yoga']
-              : ['culture', 'art', 'museum', 'literature', 'books', 'theatre', 'photography'];
-            
-            // Check for strong keyword matches
-            const hasStrongMatch = strongKeywords.some(keyword => content.includes(keyword.toLowerCase()))
-            if (hasStrongMatch) return true
-            
-            // Otherwise, require at least 3 regular keyword matches
-            const matchCount = config.keywords.filter(keyword => content.includes(keyword.toLowerCase())).length
-            return matchCount >= 3
-          })
-          console.log(`[CategoryPage] Filtered ${filteredPodcasts.length} podcasts for ${category} from ${podcastData.length} total (enhanced matching)`);
+        // Load podcasts - fetch general podcasts and filter by category
+        const podcastData = await fetchTrendingContent(rssCategory)
+        if (category && category !== 'top-stories') {
+          const filteredPodcasts = filterContentByCategory(podcastData, category, 1, { strict: true })
+          console.log(`[CategoryPage] Filtered ${filteredPodcasts.length} podcasts for ${category} from ${podcastData.length} total`);
           setPodcasts(filteredPodcasts.slice(0, 6))
         } else {
-          // For top-stories, filter by keywords
-          const filteredPodcasts = podcastData.filter(podcast => {
-            const content = `${podcast.title || ''} ${podcast.description || ''} ${podcast.source || ''}`.toLowerCase()
-            return config.keywords.some(keyword => content.includes(keyword.toLowerCase()))
-          })
-          setPodcasts(filteredPodcasts.length > 0 ? filteredPodcasts.slice(0, 6) : podcastData.slice(0, 3))
+          setPodcasts(podcastData.slice(0, 6))
         }
         setLoadingPodcasts(false)
 
@@ -418,12 +323,6 @@ function CategoryPage({
       />
 
       <div className="ad-placeholder">AD</div>
-
-      <Subscribe 
-        email={email}
-        setEmail={setEmail}
-        handleSubscribe={handleSubscribe}
-      />
     </main>
   )
 }

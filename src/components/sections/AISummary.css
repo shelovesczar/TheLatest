@@ -1,41 +1,41 @@
 /* AI Summary Section */
 .ai-summary-section {
-  padding: 0;
-  padding-bottom: clamp(1.2rem, 3vh, 2.4rem); /* Reduced from clamp(1.5rem, 4vh, 3rem) */
+  /* padding: 0 var(--section-padding-x);
+  padding-bottom: var(--spacing-lg); */
   width: 100%;
   position: relative;
   padding-top: 0;
-  border-bottom: 2px solid var(--accent-color);
-  border-top: 2px solid var(--accent-color);
-  overflow: hidden;
 }
 
 /* Story with Ad Layout - Ad inside section borders */
 .ai-summary-section .story-with-ad-container {
   display: flex;
-  gap: 2rem;
-  align-items: stretch; /* Changed from flex-start to make ad match story height */
+  gap: var(--spacing-lg);
+  align-items: stretch;
   width: 100%;
-  margin-left: clamp(1.2rem, 4vw, 3rem);
-  margin-right: clamp(1.2rem, 4vw, 3rem);
+  margin: 0;
+  padding-bottom: 1rem;
 }
 
 .ai-summary-section .section-ad-sidebar {
   flex-shrink: 0;
-  width: 300px;
+  width: min(100%, clamp(220px, 28vw, 300px));
+  flex-basis: clamp(220px, 28vw, 300px);
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  min-height: 100%; /* Ensure sidebar takes full height */
+  gap: var(--spacing-sm);
+  min-height: 100%;
 }
 
 /* Dynamic Ad - matches story card height automatically */
 .ai-summary-section .section-ad-sidebar .ad-300x250,
 .ai-summary-section .section-ad-sidebar .ad-dynamic {
-  width: 300px;
+  width: 100%;
+  max-width: clamp(220px, 28vw, 300px);
+  aspect-ratio: 6 / 5;
   height: 100%; /* Takes full height of parent */
-  min-height: 250px; /* Minimum ad height */
-  max-height: 600px; /* Maximum ad height for very tall cards */
+  min-height: clamp(190px, 38vw, 250px); /* Adaptive min ad height */
+  max-height: min(600px, 70vh); /* Prevent oversized ad on short screens */
   background-color: #1a1a1a;
   border: 2px dashed #444;
   display: flex;
@@ -50,6 +50,8 @@
 
 
 .ai-summary-section .story-card-large {
+  display: flex;
+  align-items: stretch;
   margin-bottom: 0;
   max-height: none;
   flex: 1;
@@ -58,29 +60,29 @@
 }
 
 .ai-summary-section .see-more-btn {
-  margin-left: clamp(1.2rem, 4vw, 3rem);
-  margin-right: clamp(1.2rem, 4vw, 3rem);
   display: block;
-  margin-left: auto;
-  margin-right: auto;
   width: fit-content;
 }
 
 .ai-summary-section .story-card-image {
   width: 45%;
+  flex: 0 0 45%;
   min-width: 220px; /* Reduced from 250px */
-  max-height: 350px; /* Reduced from 400px */
+  align-self: stretch;
   overflow: hidden;
+  display: flex;
 }
 
 .ai-summary-section .story-card-image img {
   height: 100%;
   width: 100%;
+  min-height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .ai-summary-section .story-card-content {
-  padding: clamp(0.85rem, 2.5vw, 1.7rem); /* Reduced from clamp(1rem, 3vw, 2rem) */
+  padding: var(--spacing-md);
   flex: 1;
 }
 
@@ -94,7 +96,7 @@
 .ai-summary-section .story-card-description {
   font-size: clamp(0.85rem, 1.8vw, 1rem);
   line-height: 1.6;
-  margin-bottom: 1.2rem;
+  margin-bottom: var(--spacing-md);
   font-weight: bold;
   word-wrap: break-word;
 }
@@ -108,19 +110,23 @@
   
   .ai-summary-section .section-ad-sidebar {
     width: 100%;
-    max-width: 300px;
+    max-width: min(100%, 420px);
     align-items: center;
   }
   
-  /* On tablets, use fixed standard ad size */
+  /* On tablets, keep ad fluid to viewport */
   .ai-summary-section .section-ad-sidebar .ad-300x250,
   .ai-summary-section .section-ad-sidebar .ad-dynamic {
-    height: 250px; /* Standard 300x250 ad size for tablets */
-    max-height: 250px;
+    max-width: min(100%, clamp(240px, 60vw, 420px));
+    min-height: clamp(180px, 38vw, 250px);
+    max-height: none;
+    aspect-ratio: 6 / 5;
+    height: auto;
   }
   
   .ai-summary-section .story-card-image {
     width: 100%;
+    flex-basis: auto;
     min-width: 100%;
     max-height: 250px;
   }
@@ -135,22 +141,23 @@
   /* Mobile-specific ad styles */
   .ai-summary-section .story-with-ad-container {
     flex-direction: column;
-    gap: 1rem;
+    gap: var(--spacing-sm);
   }
   
   .ai-summary-section .section-ad-sidebar {
     width: 100%;
     max-width: 100%;
-    padding: 0 1rem;
+    padding: 0;
   }
   
   .ai-summary-section .section-ad-sidebar .ad-300x250,
   .ai-summary-section .section-ad-sidebar .ad-dynamic {
     width: 100%;
-    max-width: 320px; /* Standard mobile ad width */
-    height: 250px; /* Standard mobile ad height */
-    min-height: 250px;
-    max-height: 250px;
+    max-width: min(100%, 92vw);
+    min-height: clamp(155px, 44vw, 230px);
+    max-height: none;
+    aspect-ratio: 6 / 5;
+    height: auto;
     margin: 0 auto; /* Center the ad */
   }
   
@@ -168,6 +175,6 @@
   }
   
   .ai-summary-section .story-card-content {
-    padding: 1.5rem;
+    padding: var(--spacing-md);
   }
 }

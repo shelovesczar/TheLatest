@@ -2,7 +2,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.8rem clamp(1rem, 3vw, 2rem);
+  padding: var(--spacing-lg) var(--section-padding-x);
   background-color: var(--bg-primary);
   border-bottom: 1px solid var(--border-color);
   position: sticky;
@@ -18,7 +18,7 @@
 .logo {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-xs);
   font-weight: 900;
   letter-spacing: 2px;
   z-index: 1001;
@@ -35,7 +35,7 @@
   font-family: 'Arial', 'Orbito', 'RCL Monoskrn', 'Reactive', sans-serif;
   background-color: var(--accent-color);
   color: white;
-  padding: 0.4rem 0.8rem;
+  padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: 0px;
 }
 
@@ -77,7 +77,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.5rem;
+  padding: var(--spacing-xs);
   z-index: 1001;
   position: relative;
 }
@@ -127,7 +127,7 @@
   border: none;
   outline: none;
   color: var(--text-primary);
-  font-size: 0.9rem;
+  font-size: 1rem; /* Increased from 0.9rem */
   width: 200px;
   padding: 0;
   font-family: 'Arial', sans-serif;
@@ -145,7 +145,7 @@
   cursor: pointer;
   padding: 0;
   margin-left: 0.5rem;
-  font-size: 1rem;
+  font-size: 1.1rem; /* Increased from 1rem */
   transition: color 0.3s ease;
 }
 
@@ -210,6 +210,23 @@
 }
 
 .nav-link-button:hover {
+  color: var(--accent-color);
+}
+
+.following-link {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: clamp(0.85rem, 1.2vw, 1rem);
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.3s ease;
+  font-family: 'Arial', sans-serif;
+  padding: 0;
+  text-decoration: none;
+}
+
+.following-link:hover {
   color: var(--accent-color);
 }
 

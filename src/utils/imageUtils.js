@@ -29,6 +29,20 @@ export const LOCAL_FALLBACKS = {
 };
 
 /**
+ * Deterministic photo fallback (always an actual image, never text SVG)
+ * Uses a stable seed so the same content gets the same fallback image.
+ * @param {string} category
+ * @param {string} seedText
+ * @returns {string}
+ */
+export function getPhotoFallback(category = 'general', seedText = '') {
+  const normalizedCategory = category?.toLowerCase() || 'general';
+  const normalizedSeed = String(seedText || '').trim().toLowerCase();
+  const seed = encodeURIComponent(`${normalizedCategory}-${normalizedSeed || 'image'}`);
+  return `https://picsum.photos/seed/${seed}/1200/800`;
+}
+
+/**
  * Get the appropriate fallback image for a category
  * @param {string} category - The content category (news, opinions, videos, podcasts, etc.)
  * @returns {string} Fallback image URL
@@ -55,20 +69,24 @@ export function getLocalFallback(category = 'general') {
  */
 export function handleImageError(event, category = 'general') {
   const img = event.target;
+  const seedText = img?.dataset?.fallbackSeed || img?.alt || '';
   
-  // Prevent infinite loop if fallback also fails
-  if (img.dataset.fallbackAttempted === 'true') {
-    // Use local SVG fallback as last resort
-    img.src = getLocalFallback(category);
-    img.dataset.fallbackAttempted = 'final';
+  // Prevent infinite loop if fallback chain also fails
+  if (img.dataset.fallbackAttempted === 'final') {
     return;
   }
   
-  // First fallback: try category-specific image from Unsplash
+  // First fallback: category-specific image from Unsplash
   if (!img.dataset.fallbackAttempted) {
     img.src = getFallbackImage(category);
     img.dataset.fallbackAttempted = 'true';
     return;
+  }
+
+  // Final fallback: deterministic photo service (real image, not text)
+  if (img.dataset.fallbackAttempted === 'true') {
+    img.src = getPhotoFallback(category, seedText);
+    img.dataset.fallbackAttempted = 'final';
   }
 }
 
@@ -79,22 +97,46 @@ export function handleImageError(event, category = 'general') {
  */
 export function isValidImageUrl(url) {
   if (!url || typeof url !== 'string') return false;
+  const normalized = url.trim();
   
   // Check for common issues
-  if (url.includes('1x1') || url.includes('pixel') || url.includes('tracker')) return false;
-  if (url.length < 10) return false;
+  if (normalized.includes('1x1') || normalized.includes('pixel') || normalized.includes('tracker')) return false;
+  if (normalized.length < 10) return false;
+
+  // Allow local SVG/data URI fallbacks
+  if (normalized.startsWith('data:image/')) return true;
+
+  // Must be a web URL
+  if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) return false;
+
+  // Block obvious non-image/asset endpoints
+  const blockedPatterns = [
+    /\/ads?(\/|$)/i,
+    /\/tracking(\/|$)/i,
+    /\/analytics(\/|$)/i,
+    /\/pixel(\/|$)/i
+  ];
+  if (blockedPatterns.some((pattern) => pattern.test(normalized))) return false;
   
-  // Check for valid image extensions or common image hosts
+  // Prefer known image extensions/hosts, but allow generic CDN URLs
   const validPatterns = [
     /\.(jpg|jpeg|png|gif|webp|svg)($|\?|#)/i,
+    /\.(avif|bmp|tiff?)($|\?|#)/i,
     /unsplash\.com/i,
     /imgur\.com/i,
     /cloudinary\.com/i,
     /ytimg\.com/i,
-    /googleusercontent\.com/i
+    /googleusercontent\.com/i,
+    /cdn\./i,
+    /images?\./i,
+    /media\./i
   ];
   
-  return validPatterns.some(pattern => pattern.test(url));
+  if (validPatterns.some(pattern => pattern.test(normalized))) return true;
+
+  // Final fallback: accept http(s) URLs that don't look like HTML/doc endpoints
+  const likelyNonImage = /\.(html?|php|asp|aspx|jsp)($|\?|#)/i;
+  return !likelyNonImage.test(normalized);
 }
 
 /**
@@ -152,6 +194,7 @@ export function getImageProps(src, alt = '', category = 'general') {
   return {
     src: getSafeImageSrc(src, category),
     alt: alt || 'Content image',
+    'data-fallback-seed': alt || '',
     onError: (e) => handleImageError(e, category),
     loading: 'lazy',
     decoding: 'async'

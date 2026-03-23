@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import './App.css'
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from './newsService'
@@ -8,21 +8,43 @@ import { getRandomTrendingPosts } from './socialMediaService'
 // Import context
 import { SearchProvider } from './context/SearchContext'
 
-// Import components
+// Always-visible layout — keep eager so there's no flash on any route
 import Header from './components/layout/Header'
 import Footer from './components/layout/Footer'
-import HomePage from './pages/HomePage'
-import CategoryPage from './pages/CategoryPage'
-import NewsPage from './pages/NewsPage'
-import SocialPage from './pages/SocialPage'
-import VideosPage from './pages/VideosPage'
-import OpinionsPage from './pages/OpinionsPage'
-import PodcastsPage from './pages/PodcastsPage'
-import AllNewsPage from './pages/AllNewsPage'
-import AllOpinionsPage from './pages/AllOpinionsPage'
-import AllVideosPage from './pages/AllVideosPage'
-import AllPodcastsPage from './pages/AllPodcastsPage'
-import SearchResults from './pages/SearchResults'
+import BottomDock from './components/layout/BottomDock'
+import ErrorBoundary from './components/common/ErrorBoundary'
+
+// Route-level code splitting — each page is its own JS chunk loaded on demand
+const HomePage      = lazy(() => import('./pages/HomePage'))
+const CategoryPage  = lazy(() => import('./pages/CategoryPage'))
+const NewsPage      = lazy(() => import('./pages/NewsPage'))
+const SocialPage    = lazy(() => import('./pages/SocialPage'))
+const VideosPage    = lazy(() => import('./pages/VideosPage'))
+const OpinionsPage  = lazy(() => import('./pages/OpinionsPage'))
+const PodcastsPage  = lazy(() => import('./pages/PodcastsPage'))
+const AllNewsPage   = lazy(() => import('./pages/AllNewsPage'))
+const AllOpinionsPage = lazy(() => import('./pages/AllOpinionsPage'))
+const AllVideosPage   = lazy(() => import('./pages/AllVideosPage'))
+const AllPodcastsPage = lazy(() => import('./pages/AllPodcastsPage'))
+const SearchResults   = lazy(() => import('./pages/SearchResults'))
+const SportsPage      = lazy(() => import('./components/sections/Sports'))
+const FollowingPage   = lazy(() => import('./pages/FollowingPage'))
+
+// Minimal spinner shown while a route chunk is downloading
+const RouteLoader = () => (
+  <div style={{
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    minHeight: '60vh'
+  }}>
+    <div style={{
+      width: 44, height: 44,
+      border: '3px solid rgba(102,126,234,0.2)',
+      borderTop: '3px solid #667eea',
+      borderRadius: '50%',
+      animation: 'spin 0.8s linear infinite'
+    }} />
+  </div>
+)
 
 function App() {
   // State management
@@ -32,8 +54,13 @@ function App() {
   const [email, setEmail] = useState('')
   const [newsDropdownOpen, setNewsDropdownOpen] = useState(false)
   const [darkMode, setDarkMode] = useState(() => {
+    // Check localStorage first
     const saved = localStorage.getItem('darkMode')
-    return saved !== null ? JSON.parse(saved) : false
+    if (saved !== null) {
+      return JSON.parse(saved)
+    }
+    // Default to dark mode if no preference saved (matches CSS default)
+    return true
   })
   
   // Content state
@@ -114,6 +141,9 @@ function App() {
   useEffect(() => {
     localStorage.setItem('darkMode', JSON.stringify(darkMode))
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
+    // Also set it on the body for additional styling hooks
+    document.body.classList.toggle('dark-mode', darkMode)
+    document.body.classList.toggle('light-mode', !darkMode)
   }, [darkMode])
 
   useEffect(() => {
@@ -229,6 +259,8 @@ function App() {
             setMenuOpen={setMenuOpen}
           />
 
+          <ErrorBoundary>
+          <Suspense fallback={<RouteLoader />}>
           <Routes>
             <Route 
               path="/" 
@@ -262,6 +294,10 @@ function App() {
             <Route path="/videos" element={<VideosPage />} />
             <Route path="/opinions" element={<OpinionsPage />} />
             <Route path="/podcasts" element={<PodcastsPage />} />
+            
+            {/* Apple News-style pages */}
+            <Route path="/sports" element={<SportsPage />} />
+            <Route path="/following" element={<FollowingPage />} />
             
             {/* All content pages (See More pages) */}
             <Route path="/all-news" element={<AllNewsPage />} />
@@ -346,7 +382,10 @@ function App() {
               } 
             />
           </Routes>
+          </Suspense>
+          </ErrorBoundary>
 
+          <BottomDock />
           <Footer />
         </div>
       </SearchProvider>

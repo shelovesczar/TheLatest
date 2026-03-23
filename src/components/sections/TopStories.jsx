@@ -49,7 +49,9 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
   }
 
   // Determine section title
-  const sectionTitle = categoryTitle ? `TOP ${categoryTitle.toUpperCase()} STORIES` : 'TOP STORIES'
+  const sectionTitle = categoryTitle && categoryTitle.toLowerCase() !== 'top stories'
+    ? `TOP ${categoryTitle.toUpperCase()} STORIES`
+    : 'TOP STORIES'
 
   // Scroll active pill into view
   useEffect(() => {
@@ -91,7 +93,6 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
   return (
     <section id="news" className="section top-stories-section">
       <h2 className="section-title">{sectionTitle}</h2>
-      <Link to={categoryPath || "/all-news"} className="see-more-link">See More News</Link>
 
       {loading ? (
         <div className="loading-container">

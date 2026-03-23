@@ -2,13 +2,20 @@ import { Link, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSun, faMoon, faChevronLeft, faSearch } from '@fortawesome/free-solid-svg-icons'
 import { useState } from 'react'
+import { useSearch } from '../../context/SearchContext'
 import LoginModal from './LoginModal'
 import './Header.css'
 
 function Header({ menuOpen, toggleMenu, darkMode, toggleTheme, newsDropdownOpen, setNewsDropdownOpen, setMenuOpen }) {
   const navigate = useNavigate()
+  const { clearTopic } = useSearch()
   const [searchQuery, setSearchQuery] = useState('')
   const [loginModalOpen, setLoginModalOpen] = useState(false)
+
+  const handleLogoClick = () => {
+    setSearchQuery('')   // clear the header search bar
+    clearTopic()         // clear context topic & navigate to '/'
+  }
 
   const handleSearch = (e) => {
     e.preventDefault()
@@ -37,7 +44,7 @@ function Header({ menuOpen, toggleMenu, darkMode, toggleTheme, newsDropdownOpen,
   return (
     <>
       <header className="header">
-        <Link to="/" className="logo">
+        <Link to="/" className="logo" onClick={handleLogoClick}>
           <span className="logo-main">THE</span>
           <span className="logo-accent">LATEST</span>
         </Link>
@@ -83,10 +90,11 @@ function Header({ menuOpen, toggleMenu, darkMode, toggleTheme, newsDropdownOpen,
               <Link to="/category/culture" onClick={() => handleCategoryClick('/category/culture')}>Culture</Link>
             </div>
           </div>
-          <button className="nav-link-button" onClick={() => handleSectionClick('social-media')}>SOCIAL MEDIA</button>
-          <button className="nav-link-button" onClick={() => handleSectionClick('opinions')}>OPINIONS</button>
-          <button className="nav-link-button" onClick={() => handleSectionClick('videos')}>VIDEOS</button>
-          <button className="nav-link-button" onClick={() => handleSectionClick('podcasts')}>PODCASTS</button>
+          
+          {/* Navigate to Following page for sections */}
+          <Link to="/following" className="nav-link-button following-link">
+            FOLLOWING
+          </Link>
           
           <button 
             className="login-button-header"

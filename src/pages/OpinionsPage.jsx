@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { Link } from 'react-router-dom'
 import Opinions from '../components/sections/Opinions'
-import Subscribe from '../components/sections/Subscribe'
 import { fetchOpinions } from '../newsService'
 import './CategoryPage.css'
 
@@ -42,9 +41,7 @@ function OpinionsPage() {
 
   return (
     <div className="category-page">
-      <div className="category-hero" style={{
-        backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=800&h=500&fit=crop)`
-      }}>
+      <div className="category-hero">
         <div className="category-hero-content">
           <Link to="/" className="back-link">← Back to Home</Link>
           <h1 className="category-title">
@@ -64,8 +61,6 @@ function OpinionsPage() {
           opinions={opinions}
           loadingOpinions={loading}
         />
-
-        <Subscribe />
       </div>
     </div>
   )

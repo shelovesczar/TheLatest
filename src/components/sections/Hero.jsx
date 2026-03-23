@@ -1,13 +1,11 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faMagnifyingGlass, faChevronDown } from '@fortawesome/free-solid-svg-icons'
+import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons'
 import { useState, useEffect } from 'react'
 import { useSearch } from '../../context/SearchContext'
 import './Hero.css'
 
 function Hero({ visibleTopics, handleTopicClick }) {
   const { searchQuery, setSearchQuery, setTopic } = useSearch()
-  const [showScrollIndicator, setShowScrollIndicator] = useState(true)
-  const [isMobile, setIsMobile] = useState(false)
   const [currentWord, setCurrentWord] = useState(0)
   const [displayText, setDisplayText] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
@@ -60,34 +58,6 @@ function Hero({ visibleTopics, handleTopicClick }) {
     return () => clearTimeout(timeout)
   }, [displayText, isDeleting, currentWord, rotatingWords])
 
-  useEffect(() => {
-    // Detect if device is mobile/touch-enabled
-    const checkMobile = () => {
-      const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
-                      || (window.matchMedia && window.matchMedia('(max-width: 768px)').matches)
-      setIsMobile(mobile)
-    }
-
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
-
-  useEffect(() => {
-    const handleScroll = () => {
-      // Show indicator only when at the top of the page (within hero section)
-      if (window.scrollY < 100) {
-        setShowScrollIndicator(true)
-      } else {
-        setShowScrollIndicator(false)
-      }
-    }
-
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
-
   return (
     <section className="hero">
       <h1 className="hero-title">
@@ -112,17 +82,7 @@ function Hero({ visibleTopics, handleTopicClick }) {
         </button>
       </form>
 
-      {/* Scroll Indicator - Mobile Only */}
-      {showScrollIndicator && isMobile && (
-        <div className="scroll-indicator">
-          <span className="scroll-text">Swipe to see more</span>
-          <div className="scroll-chevrons">
-            <FontAwesomeIcon icon={faChevronDown} className="chevron chevron-large" />
-            <FontAwesomeIcon icon={faChevronDown} className="chevron chevron-medium" />
-            <FontAwesomeIcon icon={faChevronDown} className="chevron chevron-small" />
-          </div>
-        </div>
-      )}
+      {/* Scroll Indicator removed per user request */}
 
       {/* Hot Topics */}
       {/* <div className="hot-topics">

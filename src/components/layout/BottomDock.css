@@ -1,0 +1,150 @@
+.bottom-dock {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(28, 28, 30, 0.95);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-top: 0.5px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  z-index: 1000;
+  display: none; /* Hidden by default, shown on mobile */
+}
+
+.bottom-dock-container {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  max-width: 100%;
+}
+
+.bottom-dock-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px var(--spacing-sm);
+  text-decoration: none;
+  transition: all 0.2s ease;
+  border-radius: 12px;
+  min-width: 60px;
+  position: relative;
+}
+
+.bottom-dock-icon {
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);
+  margin-bottom: 4px;
+}
+
+.bottom-dock-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);
+  letter-spacing: 0.2px;
+}
+
+/* Active state */
+.bottom-dock-item.active .bottom-dock-icon {
+  color: var(--item-color, #FF2D55);
+  transform: scale(1.1);
+}
+
+.bottom-dock-item.active .bottom-dock-label {
+  color: var(--item-color, #FF2D55);
+  font-weight: 600;
+}
+
+/* Hover effect for desktop */
+@media (hover: hover) {
+  .bottom-dock-item:hover:not(.active) .bottom-dock-icon {
+    color: rgba(255, 255, 255, 0.85);
+    transform: scale(1.05);
+  }
+  
+  .bottom-dock-item:hover:not(.active) .bottom-dock-label {
+    color: rgba(255, 255, 255, 0.85);
+  }
+}
+
+/* Active tap effect */
+.bottom-dock-item:active {
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Show on mobile */
+@media (max-width: 768px) {
+  .bottom-dock {
+    display: block;
+  }
+  
+  /* Add bottom padding to main content to account for dock */
+  body {
+    padding-bottom: calc(65px + env(safe-area-inset-bottom, 0));
+  }
+}
+
+/* Dark mode (default) */
+.bottom-dock {
+  background: rgba(28, 28, 30, 0.95);
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Light theme adjustments */
+[data-theme="light"] .bottom-dock {
+  background: rgba(255, 255, 255, 0.95);
+  border-top-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .bottom-dock-icon {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="light"] .bottom-dock-label {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="light"] .bottom-dock-item.active .bottom-dock-icon,
+[data-theme="light"] .bottom-dock-item.active .bottom-dock-label {
+  color: var(--item-color, #FF2D55);
+}
+
+@media (hover: hover) {
+  [data-theme="light"] .bottom-dock-item:hover:not(.active) .bottom-dock-icon,
+  [data-theme="light"] .bottom-dock-item:hover:not(.active) .bottom-dock-label {
+      color: rgba(0, 0, 0, 0.75);
+    }
+  }
+  
+  .bottom-dock-item:active {
+    background: rgba(0, 0, 0, 0.05);
+  }
+}
+
+/* Smooth animations */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.bottom-dock {
+  animation: slideUp 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* Notch support for iPhone X and newer */
+@supports (padding: max(0px)) {
+  .bottom-dock {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+}

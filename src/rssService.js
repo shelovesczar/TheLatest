@@ -1,26 +1,17 @@
 import axios from 'axios';
+import { cacheManager } from './utils/cacheManager';
 
 // RSS Aggregator endpoint - works both locally (with netlify dev) and in production
 const RSS_API_URL = '/.netlify/functions/rss-aggregator';
+const RSS_CACHE_VERSION = 'v2-images';
+
+const getVersionedCacheKey = (type, category = null) => {
+  const scoped = category ? `${type}_${category}` : type;
+  return `${RSS_CACHE_VERSION}_${scoped}`;
+};
 
 // Detect if Netlify Functions are available
 let functionsAvailable = true;
-
-// Cache to reduce function calls
-let rssCache = {
-  news: { data: null, timestamp: 0 },
-  opinions: { data: null, timestamp: 0 },
-  videos: { data: null, timestamp: 0 },
-  podcasts: { data: null, timestamp: 0 }
-};
-
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes client-side cache
-
-// Check if cache is valid
-function isCacheValid(type) {
-  const cached = rssCache[type];
-  return cached.data && cached.data.length > 0 && (Date.now() - cached.timestamp < CACHE_DURATION);
-}
 
 // Test if Netlify Functions are available
 async function checkFunctionsAvailability() {
@@ -41,17 +32,13 @@ async function checkFunctionsAvailability() {
  * @returns {Promise<Array>} - Array of news articles
  */
 export async function fetchRSSNews(category = null) {
-  const cacheKey = category ? `news_${category}` : 'news';
+  const cacheKey = getVersionedCacheKey('news', category);
   
-  // Initialize cache for this key if it doesn't exist
-  if (!rssCache[cacheKey]) {
-    rssCache[cacheKey] = { data: null, timestamp: 0 };
-  }
-  
-  // Check cache first
-  if (isCacheValid(cacheKey)) {
+  // Check cache first using IndexedDB
+  const cachedData = await cacheManager.get(cacheKey);
+  if (cachedData) {
     console.log(`[RSS] Using cached news for ${cacheKey}`);
-    return rssCache[cacheKey].data;
+    return cachedData;
   }
 
   // If functions not available, return empty (will trigger fallback in newsService)
@@ -97,11 +84,8 @@ export async function fetchRSSNews(category = null) {
       return [];
     }
     
-    // Update cache
-    rssCache[cacheKey] = {
-      data: articles,
-      timestamp: Date.now()
-    };
+    // Update cache with IndexedDB
+    await cacheManager.set(cacheKey, articles);
     
     console.log(`[RSS] Fetched ${articles.length} news articles${category ? ` for ${category}` : ''}`);
     return articles;
@@ -121,22 +105,20 @@ export async function fetchRSSNews(category = null) {
  * @returns {Promise<Array>} - Array of opinion articles
  */
 export async function fetchRSSOpinions(category = null) {
-  const cacheKey = category ? `opinions_${category}` : 'opinions';
+  const cacheKey = getVersionedCacheKey('opinions', category);
   
-  // Initialize cache for this key if it doesn't exist
-  if (!rssCache[cacheKey]) {
-    rssCache[cacheKey] = { data: null, timestamp: 0 };
-  }
-  
-  if (isCacheValid(cacheKey)) {
+  // Check cache first using IndexedDB
+  const cachedData = await cacheManager.get(cacheKey);
+  if (cachedData) {
     console.log(`[RSS] Using cached opinions for ${cacheKey}`);
-    return rssCache[cacheKey].data;
+    return cachedData;
   }
 
   if (functionsAvailable === false) {
     console.log('[RSS] Skipping opinions fetch - functions unavailable');
     return [];
   }
+  
   try {
     const params = new URLSearchParams({ type: 'opinions' });
     if (category) {
@@ -155,10 +137,8 @@ export async function fetchRSSOpinions(category = null) {
         date: item.publishedAt || 'Recently'
       }));
       
-      rssCache[cacheKey] = {
-        data: opinions,
-        timestamp: Date.now()
-      };
+      // Update cache with IndexedDB
+      await cacheManager.set(cacheKey, opinions);
       
       console.log(`[RSS] Fetched ${opinions.length} opinion pieces${category ? ` for ${category}` : ''}`);
       return opinions;
@@ -180,16 +160,13 @@ export async function fetchRSSOpinions(category = null) {
  * @returns {Promise<Array>} - Array of video items
  */
 export async function fetchRSSVideos(category = null) {
-  const cacheKey = category ? `videos_${category}` : 'videos';
+  const cacheKey = getVersionedCacheKey('videos', category);
   
-  // Initialize cache for this key if it doesn't exist
-  if (!rssCache[cacheKey]) {
-    rssCache[cacheKey] = { data: null, timestamp: 0 };
-  }
-  
-  if (isCacheValid(cacheKey)) {
+  // Check cache first using IndexedDB
+  const cachedData = await cacheManager.get(cacheKey);
+  if (cachedData) {
     console.log(`[RSS] Using cached videos for ${cacheKey}`);
-    return rssCache[cacheKey].data;
+    return cachedData;
   }
 
   if (functionsAvailable === false) {
@@ -215,10 +192,8 @@ export async function fetchRSSVideos(category = null) {
         duration: '5:30' // RSS doesn't provide duration, using placeholder
       }));
       
-      rssCache[cacheKey] = {
-        data: videos,
-        timestamp: Date.now()
-      };
+      // Update cache with IndexedDB
+      await cacheManager.set(cacheKey, videos);
       
       console.log(`[RSS] Fetched ${videos.length} videos${category ? ` for ${category}` : ''}`);
       return videos;
@@ -240,16 +215,13 @@ export async function fetchRSSVideos(category = null) {
  * @returns {Promise<Array>} - Array of podcast items
  */
 export async function fetchRSSPodcasts(category = null) {
-  const cacheKey = category ? `podcasts_${category}` : 'podcasts';
+  const cacheKey = getVersionedCacheKey('podcasts', category);
   
-  // Initialize cache for this key if it doesn't exist
-  if (!rssCache[cacheKey]) {
-    rssCache[cacheKey] = { data: null, timestamp: 0 };
-  }
-  
-  if (isCacheValid(cacheKey)) {
+  // Check cache first using IndexedDB
+  const cachedData = await cacheManager.get(cacheKey);
+  if (cachedData) {
     console.log(`[RSS] Using cached podcasts for ${cacheKey}`);
-    return rssCache[cacheKey].data;
+    return cachedData;
   }
 
   if (functionsAvailable === false) {
@@ -276,10 +248,8 @@ export async function fetchRSSPodcasts(category = null) {
         date: item.publishedAt
       }));
       
-      rssCache[cacheKey] = {
-        data: podcasts,
-        timestamp: Date.now()
-      };
+      // Update cache with IndexedDB
+      await cacheManager.set(cacheKey, podcasts);
       
       console.log(`[RSS] Fetched ${podcasts.length} podcasts${category ? ` for ${category}` : ''}`);
       return podcasts;

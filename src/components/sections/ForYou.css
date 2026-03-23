@@ -1,0 +1,129 @@
+.for-you-section {
+  background: var(--bg-primary);
+  padding: var(--section-padding-y) var(--section-padding-x);
+  margin: 0;
+  max-width: var(--container-max-width);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.for-you-header {
+  margin-bottom: var(--spacing-lg);
+  text-align: left;
+  padding: 0;
+}
+
+.for-you-title {
+  font-size: 36px; /* Increased from 32px */
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+  letter-spacing: -0.5px;
+}
+
+.for-you-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.for-you-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--spacing-3xl) 0;
+}
+
+.for-you-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.for-you-load-more {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.for-you-load-more:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.for-you-load-more:active {
+  transform: translateY(0);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+  .for-you-section {
+    padding: var(--spacing-md) var(--spacing-sm);
+  }
+  
+  .for-you-title {
+    font-size: 28px;
+  }
+  
+  .for-you-subtitle {
+    font-size: 13px;
+  }
+  
+  .for-you-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+  }
+}
+
+/* Smaller mobile devices */
+@media (max-width: 480px) {
+  .for-you-section {
+    padding: var(--spacing-md) 10px;
+  }
+  
+  .for-you-title {
+    font-size: 24px;
+  }
+  
+  .for-you-grid {
+    gap: 10px;
+  }
+}
+
+/* Light theme adjustments */
+[data-theme="light"] .for-you-section {
+  background: var(--bg-primary);
+}
+
+[data-theme="light"] .for-you-title {
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .for-you-subtitle {
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .for-you-load-more {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .for-you-load-more:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-hover);
+}

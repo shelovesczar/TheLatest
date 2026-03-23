@@ -60,7 +60,6 @@ function SocialMedia({ socialPosts, loadingSocial }) {
   return (
     <section id="social-media" className="section social-media">
       <h2 className="section-title">Social Media</h2>
-      <Link to="/social" className="see-more-link">See More</Link>
       
       {loadingSocial ? (
         <div className="loading-container">

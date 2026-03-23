@@ -1,81 +1,88 @@
-import { useState, useEffect } from 'react'
-import { useSearch } from '../context/SearchContext'
 import { Link } from 'react-router-dom'
-import TopStories from '../components/sections/TopStories'
-import Subscribe from '../components/sections/Subscribe'
-import { fetchRSSNews, fetchTrendingContent } from '../newsService'
-import './CategoryPage.css'
+import './NewsPage.css'
 
+/**
+ * NewsPage - Shows NEWS categories for navigation
+ * Accessible via News+ button in the bottom dock
+ */
 function NewsPage() {
-  const { topic, hasActiveTopic } = useSearch()
-  const [news, setNews] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [activeStory, setActiveStory] = useState(0)
-
-  useEffect(() => {
-    const loadNews = async () => {
-      setLoading(true)
-      try {
-        let newsData = []
-        
-        if (hasActiveTopic) {
-          // Fetch news filtered by current topic
-          const allNews = await fetchRSSNews()
-          newsData = allNews.filter(article => {
-            const content = `${article.title} ${article.description || ''} ${article.source || ''}`.toLowerCase()
-            return content.includes(topic.toLowerCase())
-          })
-          
-          // If not enough results, try trending content
-          if (newsData.length < 10) {
-            const trendingNews = await fetchTrendingContent(topic)
-            newsData = [...newsData, ...trendingNews].slice(0, 30)
-          }
-        } else {
-          // Show all news if no topic selected
-          newsData = await fetchRSSNews()
-        }
-        
-        setNews(newsData)
-      } catch (error) {
-        console.error('Error loading news:', error)
-      } finally {
-        setLoading(false)
-      }
+  const newsCategories = [
+    {
+      name: 'Top Stories',
+      path: '/category/top-stories',
+      icon: '🔥',
+      color: '#FF2D55',
+      description: 'Breaking news and trending headlines'
+    },
+    {
+      name: 'Business/Tech',
+      path: '/category/business-tech',
+      icon: '💼',
+      color: '#007AFF',
+      description: 'Technology and business updates'
+    },
+    {
+      name: 'Entertainment',
+      path: '/category/entertainment',
+      icon: '🎬',
+      color: '#AF52DE',
+      description: 'Movies, music, and celebrity news'
+    },
+    {
+      name: 'Sports',
+      path: '/category/sports',
+      icon: '⚽',
+      color: '#FFD60A',
+      description: 'Latest scores, highlights, and analysis'
+    },
+    {
+      name: 'Lifestyle',
+      path: '/category/lifestyle',
+      icon: '✨',
+      color: '#FF9500',
+      description: 'Health, wellness, and lifestyle trends'
+    },
+    {
+      name: 'Culture',
+      path: '/category/culture',
+      icon: '🎨',
+      color: '#34C759',
+      description: 'Arts, books, and cultural events'
     }
-
-    loadNews()
-  }, [topic, hasActiveTopic])
+  ]
 
   return (
-    <div className="category-page">
-      <div className="category-hero" style={{
-        backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&h=500&fit=crop)`
-      }}>
-        <div className="category-hero-content">
-          <Link to="/" className="back-link">← Back to Home</Link>
-          <h1 className="category-title">
-            {hasActiveTopic ? `${topic} News` : 'All News'}
-          </h1>
-          <p className="category-description">
-            {hasActiveTopic 
-              ? `Latest breaking news and stories about ${topic}`
-              : 'All the latest breaking news and trending stories from around the world'
-            }
-          </p>
-        </div>
+    <div className="news-page">
+      <div className="news-header">
+        <h1 className="news-title">
+          <span className="news-icon">📰</span>
+          News
+        </h1>
+        <h2 className="news-subtitle">Categories</h2>
       </div>
 
-      <div className="category-content">
-        <TopStories 
-          topStories={news}
-          loading={loading}
-          activeStory={activeStory}
-          setActiveStory={setActiveStory}
-          categoryTitle={hasActiveTopic ? topic : 'All'}
-        />
+      <div className="news-categories-grid">
+        {newsCategories.map((category, index) => (
+          <Link
+            key={index}
+            to={category.path}
+            className="news-category-card"
+            style={{ '--category-color': category.color }}
+          >
+            <div className="category-card-icon">{category.icon}</div>
+            <div className="category-card-content">
+              <h3 className="category-card-title">{category.name}</h3>
+              <p className="category-card-description">{category.description}</p>
+            </div>
+            <div className="category-card-arrow">→</div>
+          </Link>
+        ))}
+      </div>
 
-        <Subscribe />
+      <div className="news-footer">
+        <p className="news-footer-text">
+          Tap any category to explore stories
+        </p>
       </div>
     </div>
   )

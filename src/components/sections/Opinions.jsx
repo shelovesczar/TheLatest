@@ -40,7 +40,8 @@ function Opinions({ loadingOpinions, opinions, categoryPath }) {
   const getVisibleOpinions = () => {
     if (!opinions || opinions.length === 0) return []
     const items = []
-    for (let i = 0; i < itemsPerPage; i++) {
+    const maxItems = Math.min(itemsPerPage, opinions.length)
+    for (let i = 0; i < maxItems; i++) {
       const index = (currentIndex + i) % opinions.length
       if (opinions[index]) {
         items.push(opinions[index])
@@ -54,7 +55,6 @@ function Opinions({ loadingOpinions, opinions, categoryPath }) {
   return (
     <section id="opinions" className="section opinions">
       <h2 className="section-title">Opinions</h2>
-      <Link to={categoryPath || "/all-opinions"} className="see-more-link">See More Opinions</Link>
       {loadingOpinions ? (
         <div className="loading-container">
           <p className="loading-text">Loading opinions...</p>

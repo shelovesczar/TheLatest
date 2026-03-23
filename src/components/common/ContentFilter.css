@@ -1,0 +1,125 @@
+.content-filter {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  padding: var(--spacing-sm);
+  position: sticky;
+  top: 0;
+  z-index: 99;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+}
+
+.filter-tabs {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 4px;
+  position: relative;
+  gap: 4px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.filter-tab {
+  position: relative;
+  z-index: 2;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  font-weight: 600;
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.3s ease;
+  min-width: 90px;
+}
+
+.filter-tab.active {
+  color: #ffffff;
+}
+
+.filter-indicator {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc(50% - 6px);
+  height: calc(100% - 8px);
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  z-index: 1;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Hover effect */
+@media (hover: hover) {
+  .filter-tab:hover:not(.active) {
+    color: rgba(255, 255, 255, 0.85);
+  }
+}
+
+/* Active tap effect */
+.filter-tab:active {
+  transform: scale(0.98);
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+  .content-filter {
+    padding: 12px;
+    margin-left: calc(-1 * var(--section-padding-x));
+    margin-right: calc(-1 * var(--section-padding-x));
+    width: calc(100% + 2 * var(--section-padding-x));
+    max-width: 100vw;
+  }
+  
+  .filter-tab {
+    font-size: 13px;
+    padding: 7px 16px;
+    min-width: 80px;
+  }
+}
+
+/* Light theme adjustments */
+[data-theme="light"] .content-filter {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  border-bottom-color: rgba(255, 255, 255, 0.3);
+}
+
+[data-theme="light"] .filter-tabs {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+[data-theme="light"] .filter-tab {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+[data-theme="light"] .filter-tab.active {
+  color: #ffffff;
+}
+
+[data-theme="light"] .filter-indicator {
+  background: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+}
+
+/* Smooth entrance */
+@keyframes slideInFromTop {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.content-filter {
+  animation: slideInFromTop 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+}

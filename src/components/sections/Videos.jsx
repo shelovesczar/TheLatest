@@ -33,7 +33,8 @@ function Videos({ loadingVideos, videos, categoryPath }) {
   const getVisibleVideos = () => {
     if (!videos || videos.length === 0) return []
     const items = []
-    for (let i = 0; i < itemsPerPage; i++) {
+    const maxItems = Math.min(itemsPerPage, videos.length)
+    for (let i = 0; i < maxItems; i++) {
       const index = (currentIndex + i) % videos.length
       if (videos[index]) {
         items.push(videos[index])
@@ -47,7 +48,6 @@ function Videos({ loadingVideos, videos, categoryPath }) {
   return (
     <section id="videos" className="section videos">
       <h2 className="section-title">Videos</h2>
-      <Link to={categoryPath || "/all-videos"} className="see-more-link">See More Videos</Link>
       {loadingVideos ? (
         <div className="loading-container">
           <p className="loading-text">Loading videos...</p>

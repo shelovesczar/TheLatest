@@ -1012,11 +1012,11 @@ export const fetchNewsByCategory = async (category) => {
 };
 
 // Fetch opinions/editorials
-export const fetchOpinions = async () => {
+export const fetchOpinions = async (category = null) => {
   try {
     // Use RSS aggregator for opinions
-    console.log('Fetching opinions from RSS feeds...');
-    const rssOpinions = await getRSSOpinions();
+    console.log(`Fetching opinions from RSS feeds${category ? ` (${category})` : ''}...`);
+    const rssOpinions = await getRSSOpinions(category);
     
     if (rssOpinions && rssOpinions.length > 0) {
       console.log(`Successfully fetched ${rssOpinions.length} opinion pieces from RSS`);
@@ -1032,11 +1032,11 @@ export const fetchOpinions = async () => {
 };
 
 // Fetch video content
-export const fetchVideos = async () => {
+export const fetchVideos = async (category = null) => {
   try {
     // Use RSS aggregator for videos
-    console.log('Fetching videos from RSS feeds...');
-    const rssVideos = await getRSSVideos();
+    console.log(`Fetching videos from RSS feeds${category ? ` (${category})` : ''}...`);
+    const rssVideos = await getRSSVideos(category);
     
     if (rssVideos && rssVideos.length > 0) {
       console.log(`Successfully fetched ${rssVideos.length} videos from RSS`);
@@ -1052,11 +1052,11 @@ export const fetchVideos = async () => {
 };
 
 // Fetch trending informative content (podcasts/interviews)
-export const fetchTrendingContent = async () => {
+export const fetchTrendingContent = async (category = null) => {
   try {
     // Use RSS aggregator for podcasts
-    console.log('Fetching podcasts from RSS feeds...');
-    const rssPodcasts = await getRSSPodcasts();
+    console.log(`Fetching podcasts from RSS feeds${category ? ` (${category})` : ''}...`);
+    const rssPodcasts = await getRSSPodcasts(category);
     
     if (rssPodcasts && rssPodcasts.length > 0) {
       console.log(`Successfully fetched ${rssPodcasts.length} podcasts from RSS`);

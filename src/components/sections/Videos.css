@@ -1,13 +1,8 @@
 /* Videos Section */
 .videos-section .section-title,
 .videos-section .see-more-link {
-  margin-left: clamp(1.2rem, 4vw, 3rem); /* Reduced for compact layout */
-  margin-right: clamp(1.2rem, 4vw, 3rem);
-}
-
-.videos-section .see-more-btn {
-  margin-left: clamp(1.2rem, 4vw, 3rem);
-  margin-right: clamp(1.2rem, 4vw, 3rem);
+  margin-left: var(--section-padding-x);
+  margin-right: var(--section-padding-x);
 }
 
 .videos .see-more-btn {
@@ -20,17 +15,18 @@
 .videos-slider-container {
   display: flex;
   align-items: center;
-  gap: 1.2rem; /* Reduced from 1.5rem */
-  margin-bottom: 1.2rem; /* Reduced from 1.5rem */
-  margin-left: clamp(1.2rem, 4vw, 3rem);
-  margin-right: clamp(1.2rem, 4vw, 3rem);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  margin-left: var(--section-padding-x);
+  margin-right: var(--section-padding-x);
+  padding-bottom: 1rem;
 }
 
 .videos-slider {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
+  gap: var(--spacing-md);
   overflow: hidden;
 }
 
@@ -48,33 +44,34 @@
 
 .videos-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); /* Reduced from 280px */
-  gap: 1.2rem; /* Reduced from 1.5rem */
-  margin-bottom: 1.2rem; /* Reduced from 1.5rem */
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
   justify-content: center;
-  margin-left: clamp(1.2rem, 4vw, 3rem);
-  margin-right: clamp(1.2rem, 4vw, 3rem);
+  margin-left: var(--section-padding-x);
+  margin-right: var(--section-padding-x);
 }
 
 .video-card {
   background-color: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
   border: 1px solid var(--border-color);
-  transition: all 0.3s;
+  transition: all var(--transition-base);
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
 }
 
 .video-card:focus {
-  outline: 3px solid var(--accent-color);
+  outline: 2px solid var(--accent-color);
   outline-offset: 2px;
   border-color: var(--accent-color);
 }
 
 .video-card:hover {
-  border-color: #ff4757;
-  transform: translateY(-5px);
-  box-shadow: 0 10px 30px rgba(255, 71, 87, 0.2);
+  border-color: var(--border-hover);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
 }
 
 .video-thumbnail {

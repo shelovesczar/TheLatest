@@ -1,8 +1,8 @@
 /* Podcasts Section */
 .podcasts-section .section-title,
 .podcasts-section .see-more-link {
-  margin-left: clamp(1.2rem, 4vw, 3rem); /* Reduced for compact layout */
-  margin-right: clamp(1.2rem, 4vw, 3rem);
+  margin-left: var(--section-padding-x);
+  margin-right: var(--section-padding-x);
 }
 
 .podcasts .see-more-btn {
@@ -12,25 +12,21 @@
   width: fit-content;
 }
 
-.podcasts-section .see-more-btn {
-  margin-left: clamp(1.2rem, 4vw, 3rem);
-  margin-right: clamp(1.2rem, 4vw, 3rem);
-}
-
 .podcasts-slider-container {
   display: flex;
   align-items: center;
-  gap: 1.2rem; /* Reduced from 1.5rem */
-  margin-bottom: 1.5rem; /* Reduced from 2rem */
-  margin-left: clamp(1.2rem, 4vw, 3rem);
-  margin-right: clamp(1.2rem, 4vw, 3rem);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  margin-left: var(--section-padding-x);
+  margin-right: var(--section-padding-x);
+  padding-bottom: 1rem;
 }
 
 .podcasts-slider {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1.8rem; /* Reduced from 2.5rem */
+  gap: var(--spacing-lg);
   overflow: hidden;
 }
 
@@ -48,33 +44,34 @@
 
 .podcasts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* Reduced from 320px */
-  gap: 1.8rem; /* Reduced from 2.5rem */
-  margin-bottom: 1.5rem; /* Reduced from 2rem */
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
   justify-content: center;
-  margin-left: clamp(1.2rem, 4vw, 3rem);
-  margin-right: clamp(1.2rem, 4vw, 3rem);
+  margin-left: var(--section-padding-x);
+  margin-right: var(--section-padding-x);
 }
 
 .podcast-card {
   background-color: var(--bg-secondary);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
   border: 1px solid var(--border-color);
-  transition: all 0.3s;
+  transition: all var(--transition-base);
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
 }
 
 .podcast-card:focus {
-  outline: 3px solid var(--accent-color);
+  outline: 2px solid var(--accent-color);
   outline-offset: 2px;
-  border-color: var(--accent-hover);
+  border-color: var(--accent-color);
 }
 
 .podcast-card:hover {
-  border-color: #ff3344;
-  transform: translateY(-8px);
-  box-shadow: 0 15px 40px rgba(255, 71, 87, 0.3);
+  border-color: var(--border-hover);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
 }
 
 .podcast-video-wrapper {

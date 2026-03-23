@@ -6,7 +6,6 @@ import { getRandomCategoryPosts } from '../socialMediaPosts'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faXTwitter, faInstagram, faTiktok, faReddit } from '@fortawesome/free-brands-svg-icons'
 import { getImageProps } from '../utils/imageUtils'
-import Subscribe from '../components/sections/Subscribe'
 import './CategoryPage.css'
 import '../components/sections/SocialMedia.css'
 
@@ -54,9 +53,7 @@ function SocialPage() {
 
   return (
     <div className="category-page">
-      <div className="category-hero" style={{
-        backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&h=500&fit=crop)`
-      }}>
+      <div className="category-hero">
         <div className="category-hero-content">
           <Link to="/" className="back-link">← Back to Home</Link>
           <h1 className="category-title">
@@ -113,7 +110,6 @@ function SocialPage() {
           )}
         </section>
 
-        <Subscribe />
       </div>
     </div>
   )
