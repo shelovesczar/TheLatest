@@ -5,7 +5,7 @@ import './DateTicker.css';
  * Apple News-style Date Display and News Ticker
  * Shows current date and scrolling breaking news
  */
-const DateTicker = ({ breakingNews = [], sticky = true, label = 'BREAKING' }) => {
+const DateTicker = ({ breakingNews = [], sticky = true, label = 'BREAKING', showDate = true }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   useEffect(() => {
@@ -40,9 +40,11 @@ const DateTicker = ({ breakingNews = [], sticky = true, label = 'BREAKING' }) =>
   return (
     <div className={`date-ticker-container${sticky ? '' : ' is-static'}`}>
       {/* Date Display */}
-      <div className="date-display">
-        <span className="date-text">{formatDate(currentDate)}</span>
-      </div>
+      {showDate && (
+        <div className="date-display">
+          <span className="date-text">{formatDate(currentDate)}</span>
+        </div>
+      )}
 
       {/* Breaking News Ticker */}
       {newsItems.length > 0 && (

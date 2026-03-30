@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faNewspaper, faPlus, faHeadphones, faBookmark, faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons';
+import { faNewspaper, faPlus, faPlay, faBookmark, faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons';
 import './BottomDock.css';
 
 /**
@@ -25,9 +25,9 @@ const BottomDock = () => {
     },
     { 
       path: '/podcasts', 
-      icon: faHeadphones, 
-      label: 'Audio',
-      color: '#AF52DE'
+      icon: faPlay, 
+      label: 'Media',
+      color: '#667eea'
     },
     { 
       path: '/following', 

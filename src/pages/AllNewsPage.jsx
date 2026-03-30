@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSearch } from '../context/SearchContext'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
+import { recordHistory } from '../utils/savedArticles'
 import DateTicker from '../components/layout/DateTicker'
 import { fetchRSSNews } from '../newsService'
 import { getImageProps } from '../utils/imageUtils'
@@ -10,10 +11,21 @@ import './AllNewsPage.css'
 
 function AllNewsPage({ category = null }) {
   const { categoryName } = useParams()
+  const navigate = useNavigate()
   const { topic, hasActiveTopic } = useSearch()
   const [news, setNews] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedSource, setSelectedSource] = useState('ALL')
+  const [tickerPage, setTickerPage] = useState(0)
+  const [visibleCount, setVisibleCount] = useState(8)
+  const TICKER_PAGE_SIZE = 5
+  const LOAD_MORE_SIZE = 8
+
+  // Navigate to the on-site article reader
+  const goToArticle = useCallback((article) => {
+    recordHistory(article)
+    navigate('/article', { state: { article } })
+  }, [navigate])
 
   const toStr = (value) => {
     if (value === null || value === undefined) return ''
@@ -110,12 +122,34 @@ function AllNewsPage({ category = null }) {
     ? news
     : news.filter((item) => item.source === selectedSource)
 
+  // Paginated ticker — shows TICKER_PAGE_SIZE pills at a time.
+  // 'ALL' is always pinned left; the remaining source names page independently.
+  const pagedSources = sources.filter(s => s !== 'ALL')
+  const totalPages = Math.ceil(pagedSources.length / TICKER_PAGE_SIZE)
+  const safeTickerPage = tickerPage % (totalPages || 1)
+  const visibleSources = [
+    'ALL',
+    ...pagedSources.slice(safeTickerPage * TICKER_PAGE_SIZE, safeTickerPage * TICKER_PAGE_SIZE + TICKER_PAGE_SIZE)
+  ]
+
+  const handleSourceClick = (source) => {
+    setSelectedSource(source)
+    setVisibleCount(8) // reset pagination when switching source
+    if (source !== 'ALL') {
+      // Advance to the next page so the user always sees fresh options
+      setTickerPage(prev => (prev + 1) % (totalPages || 1))
+    }
+  }
+
   const contextLabel = formatContextLabel(filterContext)
   const monthDayLabel = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
   const leadStory = filteredNews[0]
   const mostReadStories = filteredNews.slice(1, 6)
   const featuredStories = filteredNews.slice(1, 4)
-  const latestStories = filteredNews.slice(4)
+  const latestStoriesAll = filteredNews.slice(4)
+  const latestStories = latestStoriesAll.slice(0, visibleCount)
+  const hasMore = visibleCount < latestStoriesAll.length
+  const remaining = latestStoriesAll.length - visibleCount
   const quickUpdates = filteredNews.slice(0, 8)
   const breakingHeadlines = filteredNews.slice(0, 10).map((item) => item.title).filter(Boolean)
 
@@ -148,7 +182,7 @@ function AllNewsPage({ category = null }) {
       </div>
 
       {!loading && breakingHeadlines.length > 0 && (
-        <DateTicker breakingNews={breakingHeadlines} sticky={false} label="TRENDING NOW" />
+        <DateTicker breakingNews={breakingHeadlines} sticky={false} label="TRENDING NOW" showDate={false} />
       )}
 
       <div className="source-filter-container">
@@ -159,15 +193,24 @@ function AllNewsPage({ category = null }) {
           </span>
         </div>
         <div className="source-pills">
-          {sources.map((source) => (
+          {visibleSources.map((source) => (
             <button
               key={source}
               className={`source-pill ${selectedSource === source ? 'active' : ''}`}
-              onClick={() => setSelectedSource(source)}
+              onClick={() => handleSourceClick(source)}
             >
               {source}
             </button>
           ))}
+          {totalPages > 1 && (
+            <button
+              className="source-pill ticker-next-btn"
+              onClick={() => setTickerPage(prev => (prev + 1) % totalPages)}
+              title={`Page ${safeTickerPage + 1} of ${totalPages} — click to see next 5 sources`}
+            >
+              More sources ›
+            </button>
+          )}
         </div>
       </div>
 
@@ -184,7 +227,7 @@ function AllNewsPage({ category = null }) {
               {leadStory && (
                 <article className="lead-story-card">
                   {leadStory.image && (
-                    <a href={leadStory.link} target="_blank" rel="noopener noreferrer" className="lead-story-image">
+                    <a href="#" onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="lead-story-image">
                       <img {...getImageProps(leadStory.image, leadStory.title, 'news')} />
                     </a>
                   )}
@@ -193,7 +236,7 @@ function AllNewsPage({ category = null }) {
                       <span className="news-card-source">{leadStory.category || leadStory.source}</span>
                       {leadStory.publishedAt && <span className="news-card-time">{leadStory.publishedAt}</span>}
                     </div>
-                    <a href={leadStory.link} target="_blank" rel="noopener noreferrer" className="lead-story-headline-link">
+                    <a href="#" onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="lead-story-headline-link">
                       <h2 className="lead-story-headline">{leadStory.title}</h2>
                     </a>
                     <p className="lead-story-description">
@@ -201,7 +244,7 @@ function AllNewsPage({ category = null }) {
                     </p>
                     <div className="lead-story-footer">
                       <span className="lead-story-source">{leadStory.source}</span>
-                      <a href={leadStory.link} target="_blank" rel="noopener noreferrer" className="read-more-link">
+                      <a href="#" onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="read-more-link">
                         Read full story →
                       </a>
                     </div>
@@ -218,9 +261,8 @@ function AllNewsPage({ category = null }) {
                   {mostReadStories.map((item, index) => (
                     <a
                       key={`${item.link || item.title}-${index}`}
-                      href={item.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href="#"
+                      onClick={e => { e.preventDefault(); goToArticle(item) }}
                       className="most-read-item"
                     >
                       <span className="most-read-rank">{index + 1}</span>
@@ -239,7 +281,7 @@ function AllNewsPage({ category = null }) {
                 {featuredStories.map((item, index) => (
                   <article key={`${item.link || item.title}-${index}`} className="secondary-story-card">
                     {item.image && (
-                      <a href={item.link} target="_blank" rel="noopener noreferrer" className="secondary-story-image">
+                      <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="secondary-story-image">
                         <img {...getImageProps(item.image, item.title, 'news')} />
                       </a>
                     )}
@@ -248,7 +290,7 @@ function AllNewsPage({ category = null }) {
                         <span className="news-card-source">{item.source}</span>
                         {item.publishedAt && <span className="news-card-time">{item.publishedAt}</span>}
                       </div>
-                      <a href={item.link} target="_blank" rel="noopener noreferrer" className="secondary-story-link">
+                      <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="secondary-story-link">
                         <h3 className="secondary-story-headline">{item.title}</h3>
                       </a>
                     </div>
@@ -265,10 +307,12 @@ function AllNewsPage({ category = null }) {
                 </div>
 
                 <div className="latest-news-list">
-                  {(latestStories.length > 0 ? latestStories : filteredNews.slice(1)).map((item, index) => (
-                    <article key={`${item.link || item.title}-${index}`} className="latest-story-card">
+                  {(latestStories.length > 0 ? latestStories : filteredNews.slice(1)).map((item, index) => {
+                    const isLast = index === latestStories.length - 1 && hasMore
+                    return (
+                    <article key={`${item.link || item.title}-${index}`} className={`latest-story-card${isLast ? ' latest-story-card--fade' : ''}`}>
                       {item.image && (
-                        <a href={item.link} target="_blank" rel="noopener noreferrer" className="latest-story-image">
+                        <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-image">
                           <img {...getImageProps(item.image, item.title, 'news')} />
                         </a>
                       )}
@@ -277,7 +321,7 @@ function AllNewsPage({ category = null }) {
                           <span className="news-card-source">{item.category || item.source}</span>
                           {item.publishedAt && <span className="news-card-time">{item.publishedAt}</span>}
                         </div>
-                        <a href={item.link} target="_blank" rel="noopener noreferrer" className="latest-story-link">
+                        <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-link">
                           <h3 className="latest-story-headline">{item.title}</h3>
                         </a>
                         {item.description && (
@@ -287,13 +331,26 @@ function AllNewsPage({ category = null }) {
                               : truncateText(item.description, 180)}
                           </p>
                         )}
-                        <a href={item.link} target="_blank" rel="noopener noreferrer" className="read-more-link">
+                        <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="read-more-link">
                           Continue reading →
                         </a>
                       </div>
                     </article>
-                  ))}
+                    )
+                  })}
                 </div>
+
+                {hasMore && (
+                  <div className="load-more-container">
+                    <button
+                      className="load-more-btn"
+                      onClick={() => setVisibleCount(c => c + LOAD_MORE_SIZE)}
+                    >
+                      Show {Math.min(remaining, LOAD_MORE_SIZE)} more
+                      <span className="load-more-total">({remaining} remaining)</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <aside className="quick-updates-panel">
@@ -306,9 +363,8 @@ function AllNewsPage({ category = null }) {
                   {quickUpdates.map((item, index) => (
                     <a
                       key={`${item.link || item.title}-quick-${index}`}
-                      href={item.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href="#"
+                      onClick={e => { e.preventDefault(); goToArticle(item) }}
                       className="quick-update-item"
                     >
                       <span className="quick-update-source">{item.source}</span>

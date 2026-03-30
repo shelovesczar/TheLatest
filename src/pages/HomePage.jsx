@@ -5,11 +5,12 @@ import { searchRSSContent } from '../rssService'
 import { getRandomTrendingPosts } from '../socialMediaService'
 import { getRandomCategoryPosts } from '../socialMediaPosts'
 import { findClosestMatch, COMMON_KEYWORDS } from '../utils/fuzzySearch'
+import './HomePage.css'
 import Hero from '../components/sections/Hero'
 import TopStories from '../components/sections/TopStories'
 import DateTicker from '../components/layout/DateTicker'
 import TrendingStories from '../components/sections/TrendingStories'
-
+import LeadStory from '../components/sections/LeadStory'
 import AdBreak from '../components/common/AdBreak'
 
 // Lazy load below-the-fold components
@@ -260,9 +261,11 @@ function HomePage({
 
   return (
     <main className="main-content">
-      {/* Date & News Ticker */}
+
+      {/* ── Breaking news ticker ── */}
       <DateTicker breakingNews={topStories.slice(0, 10).map(s => s.title).filter(Boolean)} />
-      
+
+      {/* ── Fuzzy-match suggestion banner ── */}
       {suggestedTopic && (
         <div style={{
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -291,85 +294,99 @@ function HomePage({
           ? Showing similar results below.
         </div>
       )}
-      
-      {/* Hero Section */}
-      <Hero 
+
+      {/* ── 1. Hero — search + typewriter ── */}
+      <Hero
         visibleTopics={hotTopics}
         handleTopicClick={handleTopicClick}
       />
-      
-      {/* Trending Stories with Numbered Bubbles */}
+
+      {/* ── 2. Lead Story — single dominant editorial card ── */}
+      <LeadStory story={topStories[0]} loading={loading} />
+
+      {/* ── 3. Trending numbered list ── */}
       <TrendingStories stories={topStories} loading={loading} />
-      
-      <AdBreak type="standard" />
-      
-      {/* AI Summary - Lazy loaded */}
+
+      {/* ── 4. AI Summary — now contextualises stories the reader just saw ── */}
       <Suspense fallback={<SectionLoader />}>
-        <AISummary 
+        <AISummary
           category="general"
           description="Get a quick AI-generated summary of today's most important news across all categories."
         />
       </Suspense>
-      
-      {/* Top Stories - Loaded immediately */}
-      <TopStories 
-        topStories={topStories} 
+
+      {/* ── 5. Topic filter strip + Top Stories ── */}
+      {hotTopics && hotTopics.length > 0 && (
+        <div className="topic-filter-strip">
+          <span className="topic-filter-label">FILTER BY TOPIC</span>
+          <div className="topic-filter-chips">
+            {hotTopics.map((t, i) => (
+              <button
+                key={i}
+                className={`topic-chip ${topic === t ? 'active' : ''}`}
+                onClick={() => handleTopicClick(t)}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <TopStories
+        topStories={topStories}
         loading={loading}
         activeStory={activeStory}
         setActiveStory={setActiveStory}
       />
 
-      <AdBreak type="compact" />
-      
-      {/* Social Media - Lazy loaded on scroll */}
-      <div data-section="social">
-        <Suspense fallback={<SectionLoader />}>
-          <SocialMedia 
-            socialPosts={socialPosts}
-            loadingSocial={loadingSocial}
-          />
-        </Suspense>
-      </div>
-
+      {/* ── Single strategic ad placement ── */}
       <AdBreak type="standard" />
-      
-      {/* Opinions - Lazy loaded on scroll */}
+
+      {/* ── 6. Opinions ── */}
       <div data-section="opinions">
         <Suspense fallback={<SectionLoader />}>
-          <Opinions 
+          <Opinions
             opinions={opinions}
             loadingOpinions={loadingOpinions}
           />
         </Suspense>
       </div>
-      
-      {/* Videos - Lazy loaded on scroll */}
+
+      {/* ── 7. Videos ── */}
       <div data-section="videos">
         <Suspense fallback={<SectionLoader />}>
-          <Videos 
+          <Videos
             videos={videos}
             loadingVideos={loadingVideos}
           />
         </Suspense>
       </div>
 
-      <AdBreak type="compact" />
-      
-      {/* Podcasts - Lazy loaded on scroll */}
+      {/* ── 8. Podcasts ── */}
       <div data-section="podcasts">
         <Suspense fallback={<SectionLoader />}>
-          <Podcasts 
+          <Podcasts
             podcasts={podcasts}
             loadingPodcasts={loadingPodcasts}
           />
         </Suspense>
       </div>
 
-      <AdBreak type="standard" />
-      
+      {/* ── 9. Social Media — lowest editorial priority, moved to bottom ── */}
+      <div data-section="social">
+        <Suspense fallback={<SectionLoader />}>
+          <SocialMedia
+            socialPosts={socialPosts}
+            loadingSocial={loadingSocial}
+          />
+        </Suspense>
+      </div>
+
       <Suspense fallback={<SectionLoader />}>
         <Search />
       </Suspense>
+
     </main>
   )
 }

@@ -59,6 +59,15 @@ function Header({ menuOpen, toggleMenu, darkMode, toggleTheme, newsDropdownOpen,
           <span></span>
         </button>
 
+        {/* Theme toggle visible only on mobile — replaces the hamburger */}
+        <button
+          className="mobile-theme-toggle"
+          onClick={toggleTheme}
+          aria-label="Toggle theme"
+        >
+          <FontAwesomeIcon icon={darkMode ? faSun : faMoon} />
+        </button>
+
         <nav className={`nav ${menuOpen ? 'active' : ''}`}>
           <form className="header-search-form" onSubmit={handleSearch}>
             <input

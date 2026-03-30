@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { processImageUrl } from '../../utils/imageUtils';
 import './LazyImage.css';
 
 /**
@@ -10,9 +11,15 @@ const LazyImage = ({
   src, 
   alt, 
   className = '', 
+  width = 900,
+  quality = 88,
   placeholder = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"%3E%3Crect fill="%23f0f0f0"/%3E%3C/svg%3E',
   errorFallback = 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&q=80'
 }) => {
+  // Route through weserv.nl for WebP conversion + sharpening.
+  // Keep the original src so we can fall back to it if the proxy is blocked.
+  const processedSrc = processImageUrl(src, { width, quality, sharpen: true });
+  const isProxied = processedSrc !== src;
   const [imageSrc, setImageSrc] = useState(placeholder);
   const [imageRef, setImageRef] = useState();
   const [isLoading, setIsLoading] = useState(true);
@@ -34,7 +41,7 @@ const LazyImage = ({
                 (entry.intersectionRatio > 0 || entry.isIntersecting)
               ) {
                 setIsLoading(true);
-                setImageSrc(src);
+                setImageSrc(processedSrc);
                 observer.unobserve(imageRef);
               }
             });
@@ -47,7 +54,7 @@ const LazyImage = ({
         observer.observe(imageRef);
       } else {
         // Fallback for browsers that don't support IntersectionObserver
-        setImageSrc(src);
+        setImageSrc(processedSrc);
       }
     }
     
@@ -65,6 +72,12 @@ const LazyImage = ({
   };
 
   const handleError = () => {
+    // Step 1: proxy blocked? try the original unproxied URL
+    if (isProxied && imageSrc === processedSrc) {
+      setImageSrc(src);
+      return;
+    }
+    // Step 2: original also failed → generic fallback
     setHasError(true);
     setIsLoading(false);
     if (errorFallback && imageSrc !== errorFallback) {

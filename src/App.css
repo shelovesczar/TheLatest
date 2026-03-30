@@ -17,6 +17,65 @@ img {
   max-width: 100%;
   height: auto;
   display: block;
+  /* Instruct the browser to use the highest-quality downscaling algorithm */
+  image-rendering: high-quality;
+}
+
+/* ── Editorial image treatment ───────────────────────────────────
+   url(#img-editorial) = SVG filter in index.html that chains:
+     1. feConvolveMatrix  — gentle unsharp mask (real pixel sharpening)
+     2. feColorMatrix     — cool-neutral grade (NYT/Guardian tonal range)
+
+   contrast(1.10)  — punchy blacks like print reproduction
+   saturate(0.88)  — pull back consumer-camera over-saturation
+   brightness(0.97) — just a hair darker so it reads as serious journalism
+   ─────────────────────────────────────────────────────────────── */
+.story-card-image img,
+.lazy-image,
+.result-image img,
+.opinion-card img,
+.video-card img,
+.podcast-card img,
+.news-card-image img,
+.secondary-story-image img,
+.latest-story-image img {
+  filter: url(#img-editorial) contrast(1.10) saturate(0.88) brightness(0.97);
+  image-rendering: high-quality;
+  will-change: transform;
+}
+
+/* On hover: restore near-natural colour so the card feels alive */
+.story-card-large:hover .story-card-image img,
+.news-card:hover .lazy-image,
+.result-image:hover img {
+  filter: url(#img-editorial) contrast(1.04) saturate(1.0) brightness(1.0);
+}
+
+/* ── Editorial vignette overlay ──────────────────────────────────
+   A radial gradient pseudo-element over every image container.
+   Darkens the perimeter, draws the eye to the subject — the same
+   technique used in darkroom printing and Lightroom's "Vignette"
+   panel. mix-blend-mode:multiply means it only darkens, never
+   lightens or shifts hue.
+   ─────────────────────────────────────────────────────────────── */
+.story-card-image,
+.news-card-image-container {
+  position: relative;
+}
+
+.story-card-image::after,
+.news-card-image-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    transparent 45%,
+    rgba(0, 0, 0, 0.42) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+  mix-blend-mode: multiply;
 }
 
 /* ============== Theme Variables ============== */

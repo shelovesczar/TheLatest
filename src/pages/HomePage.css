@@ -1,0 +1,72 @@
+/* ─── Topic Filter Strip ─────────────────────────────────────── */
+
+.topic-filter-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 0 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  flex-wrap: nowrap;
+}
+
+.topic-filter-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.topic-filter-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text-tertiary, #888);
+  white-space: nowrap;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.topic-filter-chips {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+}
+
+.topic-chip {
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  border: 1.5px solid var(--border-color, rgba(255, 255, 255, 0.15));
+  background: transparent;
+  color: var(--text-secondary, #bbb);
+}
+
+.topic-chip:hover {
+  background: var(--accent-color, #667eea);
+  border-color: var(--accent-color, #667eea);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.topic-chip.active {
+  background: var(--accent-color, #667eea);
+  border-color: var(--accent-color, #667eea);
+  color: #fff;
+}
+
+/* ─── Light theme overrides ──────────────────────────────────── */
+
+[data-theme="light"] .topic-chip {
+  border-color: rgba(0, 0, 0, 0.15);
+  color: var(--text-secondary, #555);
+}
+
+[data-theme="light"] .topic-chip:hover,
+[data-theme="light"] .topic-chip.active {
+  background: var(--accent-color, #667eea);
+  border-color: var(--accent-color, #667eea);
+  color: #fff;
+}

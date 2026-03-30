@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef, memo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { recordHistory } from '../../utils/savedArticles';
 import './TrendingStories.css';
 
 /**
@@ -14,6 +16,12 @@ const TrendingStories = memo(({ stories = [], loading: externalLoading, limit = 
   const [internalLoading, setInternalLoading] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef(null);
+  const navigate = useNavigate();
+
+  const goToArticle = useCallback((story) => {
+    recordHistory(story)
+    navigate('/article', { state: { article: story } })
+  }, [navigate])
 
   // Intersection Observer — start rendering list only when section enters viewport
   useEffect(() => {
@@ -170,10 +178,9 @@ const TrendingStories = memo(({ stories = [], loading: externalLoading, limit = 
         {trendingStories.map((story) => (
           <a 
             key={story.rank}
-            href={story.url || story.link || '#'}
+            href="#"
+            onClick={e => { e.preventDefault(); goToArticle(story) }}
             className="trending-item"
-            target="_blank"
-            rel="noopener noreferrer"
           >
             <div 
               className="trending-number"

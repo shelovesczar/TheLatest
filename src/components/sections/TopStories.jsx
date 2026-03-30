@@ -1,14 +1,21 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
-import { useRef, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useRef, useEffect, useState, useCallback } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { getImageProps } from '../../utils/imageUtils'
+import { recordHistory } from '../../utils/savedArticles'
 import './TopStories.css'
 
 function TopStories({ loading, topStories, activeStory, setActiveStory, categoryTitle, categorySources, categoryPath }) {
   const tickerRef = useRef(null)
   const imageRef = useRef(null)
+  const navigate = useNavigate()
   const [descriptionLength, setDescriptionLength] = useState(150)
+
+  const goToArticle = useCallback((article) => {
+    recordHistory(article)
+    navigate('/article', { state: { article } })
+  }, [navigate])
 
   // Truncate text helper
   const truncateText = (text, maxLength) => {
@@ -142,9 +149,8 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
               </div>
               <div className="story-card-content">
                 <a 
-                  href={topStories[activeStory].url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
+                  href="#"
+                  onClick={e => { e.preventDefault(); goToArticle(topStories[activeStory]) }}
                   style={{ textDecoration: 'none', color: 'inherit' }}
                 >
                   <h3 className="story-card-headline">{topStories[activeStory].title}</h3>
@@ -155,9 +161,8 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
                 </div>
                 <p className="story-card-description">{truncateText(topStories[activeStory].description, descriptionLength)}</p>
                 <a 
-                  href={topStories[activeStory].url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
+                  href="#"
+                  onClick={e => { e.preventDefault(); goToArticle(topStories[activeStory]) }}
                   className="read-more-link"
                 >
                   Read full story →

@@ -1,0 +1,189 @@
+/* ── Lead Story — Dominant front-page editorial card ─────────── */
+
+.lead-story {
+  position: relative;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  min-height: clamp(420px, 65vh, 720px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  margin-bottom: 0;
+}
+
+/* ── Background image ────────────────────────────────────────── */
+.lead-story__image-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.lead-story__bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+  max-width: none;
+  image-rendering: high-quality;
+  /* Same editorial pipeline as all other images + slightly warmer for hero impact */
+  filter: url(#img-editorial) contrast(1.08) saturate(0.90) brightness(0.96);
+  transform: scale(1);
+  will-change: transform;
+}
+
+/* Multi-stop gradient: heavy black at bottom, lighter at top */
+.lead-story__gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(5, 3, 15, 0.97) 0%,
+    rgba(5, 3, 15, 0.80) 35%,
+    rgba(5, 3, 15, 0.45) 60%,
+    rgba(5, 3, 15, 0.10) 100%
+  );
+  pointer-events: none;
+}
+
+/* ── Text overlay ─────────────────────────────────────────────── */
+.lead-story__overlay {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+  min-height: clamp(420px, 65vh, 720px);
+}
+
+.lead-story__inner {
+  max-width: var(--container-max-width);
+  margin: 0 auto;
+  width: 100%;
+  padding: clamp(1.5rem, 4vw, 3rem) var(--section-padding-x) clamp(2rem, 5vw, 3.5rem);
+}
+
+/* ── Kicker — source · time ──────────────────────────────────── */
+.lead-story__kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.lead-story__source {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.15rem;
+  color: #ffffff;
+  background: var(--accent-color);
+  padding: 0.3rem 0.7rem;
+  border-radius: 4px;
+}
+
+.lead-story__sep {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.85rem;
+}
+
+.lead-story__time {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.65);
+  font-weight: 500;
+}
+
+/* ── Headline ────────────────────────────────────────────────── */
+.lead-story__headline-link {
+  text-decoration: none;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.lead-story__headline {
+  font-size: clamp(1.8rem, 4.5vw, 3.8rem);
+  font-weight: 900;
+  color: #ffffff;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.6);
+  transition: color 0.2s ease;
+  max-width: 820px;
+}
+
+.lead-story__headline-link:hover .lead-story__headline {
+  color: #d4b8ff;
+}
+
+/* ── Description ─────────────────────────────────────────────── */
+.lead-story__description {
+  font-size: clamp(0.95rem, 1.6vw, 1.15rem);
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.65;
+  max-width: 680px;
+  margin-bottom: 1.5rem;
+  font-weight: 400;
+}
+
+/* ── CTA ─────────────────────────────────────────────────────── */
+.lead-story__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50px;
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 0.7rem 1.4rem;
+  text-decoration: none;
+  letter-spacing: 0.04rem;
+  backdrop-filter: blur(8px);
+  transition: background 0.25s ease, border-color 0.25s ease, transform 0.2s ease;
+}
+
+.lead-story__cta:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.75);
+  transform: translateY(-2px);
+}
+
+/* ── Skeleton ─────────────────────────────────────────────────── */
+.lead-story--skeleton .lead-story__image-wrap {
+  background: var(--bg-secondary);
+}
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: -500px 0; }
+  100% { background-position: 500px 0; }
+}
+
+.lead-story--skeleton .skeleton-block {
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary) 25%,
+    var(--bg-elevated) 50%,
+    var(--bg-tertiary) 75%
+  );
+  background-size: 1000px 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+/* ── Mobile ──────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .lead-story {
+    min-height: clamp(360px, 70vw, 520px);
+  }
+
+  .lead-story__overlay {
+    min-height: clamp(360px, 70vw, 520px);
+  }
+
+  .lead-story__description {
+    display: none; /* headline + CTA only on small screens */
+  }
+}

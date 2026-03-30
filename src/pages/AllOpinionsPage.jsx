@@ -14,6 +14,8 @@ function AllOpinionsPage({ category = null }) {
   const [opinions, setOpinions] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedSource, setSelectedSource] = useState('ALL')
+  const [visibleCount, setVisibleCount] = useState(8)
+  const LOAD_MORE_SIZE = 8
 
   const toStr = (value) => {
     if (value === null || value === undefined) return ''
@@ -90,7 +92,10 @@ function AllOpinionsPage({ category = null }) {
   const leadStory = filteredOpinions[0]
   const mostReadStories = filteredOpinions.slice(1, 6)
   const featuredStories = filteredOpinions.slice(1, 4)
-  const latestStories = filteredOpinions.slice(4)
+  const latestStoriesAll = filteredOpinions.slice(4)
+  const latestStories = latestStoriesAll.slice(0, visibleCount)
+  const hasMore = visibleCount < latestStoriesAll.length
+  const remaining = latestStoriesAll.length - visibleCount
   const quickUpdates = filteredOpinions.slice(0, 8)
   const breakingHeadlines = filteredOpinions.slice(0, 10).map((item) => item.title).filter(Boolean)
 
@@ -123,7 +128,7 @@ function AllOpinionsPage({ category = null }) {
       </div>
 
       {!loading && breakingHeadlines.length > 0 && (
-        <DateTicker breakingNews={breakingHeadlines} sticky={false} label="OPINION NOW" />
+        <DateTicker breakingNews={breakingHeadlines} sticky={false} label="OPINION NOW" showDate={false} />
       )}
 
       <div className="source-filter-container">
@@ -240,8 +245,10 @@ function AllOpinionsPage({ category = null }) {
                 </div>
 
                 <div className="latest-news-list">
-                  {(latestStories.length > 0 ? latestStories : filteredOpinions.slice(1)).map((item, index) => (
-                    <article key={`${item.link || item.title}-${index}`} className="latest-story-card">
+                  {(latestStories.length > 0 ? latestStories : filteredOpinions.slice(1)).map((item, index) => {
+                    const isLast = index === latestStories.length - 1 && hasMore
+                    return (
+                    <article key={`${item.link || item.title}-${index}`} className={`latest-story-card${isLast ? ' latest-story-card--fade' : ''}`}>
                       {item.image && (
                         <a href={item.link} target="_blank" rel="noopener noreferrer" className="latest-story-image">
                           <img {...getImageProps(item.image, item.title, 'opinions')} />
@@ -265,8 +272,18 @@ function AllOpinionsPage({ category = null }) {
                         </a>
                       </div>
                     </article>
-                  ))}
+                    )
+                  })}
                 </div>
+
+                {hasMore && (
+                  <div className="load-more-container">
+                    <button className="load-more-btn" onClick={() => setVisibleCount(c => c + LOAD_MORE_SIZE)}>
+                      Show {Math.min(remaining, LOAD_MORE_SIZE)} more
+                      <span className="load-more-total">({remaining} remaining)</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <aside className="quick-updates-panel">

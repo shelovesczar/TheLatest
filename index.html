@@ -19,6 +19,44 @@
   </head>
   <body>
     <!--
+      SVG image processing pipeline — applied via CSS filter:url(#img-editorial)
+
+      Two chained primitives:
+      1. feConvolveMatrix — gentle unsharp mask (kernel sum=1, no brightness shift)
+         Centre=3.4, neighbours=-0.3. Subtler than pure Laplacian — recovers
+         edge detail from JPEG compression without visible haloes.
+
+      2. feColorMatrix — editorial colour grade
+         Goal: NYT/Guardian look — slightly muted, cool-neutral, lifted shadows.
+         R:  0.88R + 0.10G + 0.02B + 0.010  (pull back warm reds slightly)
+         G:  0.05R + 0.88G + 0.07B + 0.008  (neutral greens, slight lift)
+         B:  0.04R + 0.06G + 0.90B + 0.022  (boost blues — gives cool cast)
+         Net effect: skin tones look measured (not orange), sky/fabric reads
+         clean blue-grey, overall image feels "shot on a real camera".
+    -->
+    <svg style="display:none;position:absolute;width:0;height:0" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="img-editorial" color-interpolation-filters="sRGB">
+          <!-- Pass 1: gentle unsharp mask -->
+          <feConvolveMatrix
+            order="3"
+            preserveAlpha="true"
+            kernelMatrix="-0.3 -0.3 -0.3  -0.3 3.4 -0.3  -0.3 -0.3 -0.3"
+            result="sharpened"
+          />
+          <!-- Pass 2: editorial colour grade -->
+          <feColorMatrix
+            type="matrix"
+            in="sharpened"
+            values="0.88 0.10 0.02 0 0.010
+                    0.05 0.88 0.07 0 0.008
+                    0.04 0.06 0.90 0 0.022
+                    0    0    0    1 0"
+          />
+        </filter>
+      </defs>
+    </svg>
+    <!--
     
      ██████╗███████╗███████╗ █████╗ ██████╗     ██╗  ██╗███████╗██████╗ ███╗   ██╗ █████╗ ███╗   ██╗██████╗ ███████╗███████╗
     ██╔════╝██╔════╝██╔════╝██╔══██╗██╔══██╗    ██║  ██║██╔════╝██╔══██╗████╗  ██║██╔══██╗████╗  ██║██╔══██╗██╔════╝╚══███╔╝

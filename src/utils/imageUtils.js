@@ -3,6 +3,53 @@
  * Future-proofed to prevent missing/broken images across the site
  */
 
+// Sources that already serve optimized images — skip the proxy for these
+const SKIP_PROXY_HOSTS = [
+  'images.weserv.nl',       // already proxied
+  'picsum.photos',           // already high quality
+  'unsplash.com',            // handles its own CDN params
+  'thum.io',                 // screenshot service
+  'cloudinary.com',          // self-optimizing CDN
+  'imgix.net',               // self-optimizing CDN
+];
+
+/**
+ * Route an image URL through images.weserv.nl for free WebP conversion,
+ * sharpening, and upscaling to the requested width.
+ *
+ * @param {string}  url           Source image URL
+ * @param {object}  opts
+ * @param {number}  opts.width    Output width in px (default 1200)
+ * @param {number}  opts.quality  Output quality 1-100 (default 88)
+ * @param {boolean} opts.sharpen  Apply sharpening pass (default true)
+ * @returns {string} Processed URL
+ */
+export function processImageUrl(url, opts = {}) {
+  if (!url || typeof url !== 'string') return url;
+
+  // Don't touch data URIs
+  if (url.startsWith('data:')) return url;
+
+  // Only proxy http/https
+  if (!url.startsWith('http://') && !url.startsWith('https://')) return url;
+
+  // Skip already-optimized sources
+  if (SKIP_PROXY_HOSTS.some(host => url.includes(host))) return url;
+
+  const { width = 1200, quality = 88, sharpen = true } = opts;
+
+  const params = new URLSearchParams({
+    url,
+    w:      String(width),
+    q:      String(quality),
+    output: 'webp',        // WebP is ~30% smaller at equal quality
+    fit:    'cover',
+    ...(sharpen ? { sharp: '1' } : {}),
+  });
+
+  return `https://images.weserv.nl/?${params.toString()}`;
+}
+
 // Category-based fallback images (using high-quality placeholders)
 export const FALLBACK_IMAGES = {
   news: 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&h=600&q=80&fit=crop',
@@ -63,28 +110,47 @@ export function getLocalFallback(category = 'general') {
 }
 
 /**
- * Handle image error with cascading fallbacks
+ * Handle image error with cascading fallbacks.
+ *
+ * Chain: proxy URL → original source URL → Unsplash category → Picsum deterministic
+ *
+ * Many news CDNs block external proxy requests (weserv.nl, etc.), so the most
+ * important step is falling back to the original unproxied URL before giving up
+ * and showing a generic placeholder.
+ *
  * @param {Event} event - The error event
  * @param {string} category - The content category
  */
 export function handleImageError(event, category = 'general') {
   const img = event.target;
   const seedText = img?.dataset?.fallbackSeed || img?.alt || '';
-  
-  // Prevent infinite loop if fallback chain also fails
-  if (img.dataset.fallbackAttempted === 'final') {
-    return;
-  }
-  
-  // First fallback: category-specific image from Unsplash
+
+  // Prevent infinite loop
+  if (img.dataset.fallbackAttempted === 'final') return;
+
+  // Step 1: proxy failed → try the original unproxied URL
   if (!img.dataset.fallbackAttempted) {
+    const originalSrc = img.dataset.originalSrc;
+    if (originalSrc && originalSrc !== img.src) {
+      img.src = originalSrc;
+      img.dataset.fallbackAttempted = 'original';
+      return;
+    }
+    // No original stored — jump straight to category fallback
     img.src = getFallbackImage(category);
-    img.dataset.fallbackAttempted = 'true';
+    img.dataset.fallbackAttempted = 'category';
     return;
   }
 
-  // Final fallback: deterministic photo service (real image, not text)
-  if (img.dataset.fallbackAttempted === 'true') {
+  // Step 2: original also failed → category-specific Unsplash image
+  if (img.dataset.fallbackAttempted === 'original') {
+    img.src = getFallbackImage(category);
+    img.dataset.fallbackAttempted = 'category';
+    return;
+  }
+
+  // Step 3: final deterministic photo (always a real image)
+  if (img.dataset.fallbackAttempted === 'category') {
     img.src = getPhotoFallback(category, seedText);
     img.dataset.fallbackAttempted = 'final';
   }
@@ -140,15 +206,17 @@ export function isValidImageUrl(url) {
 }
 
 /**
- * Get a safe image source with fallback
+ * Get a safe image source with fallback, routed through the quality proxy.
  * @param {string} imageUrl - The primary image URL
  * @param {string} category - The content category for fallback
- * @returns {string} A valid image URL
+ * @param {object} opts     - Options forwarded to processImageUrl
+ * @returns {string} A valid, optimised image URL
  */
-export function getSafeImageSrc(imageUrl, category = 'general') {
+export function getSafeImageSrc(imageUrl, category = 'general', opts = {}) {
   if (isValidImageUrl(imageUrl)) {
-    return imageUrl;
+    return processImageUrl(imageUrl, opts);
   }
+  // Don't proxy fallback images — they're already quality-controlled
   return getFallbackImage(category);
 }
 
@@ -184,19 +252,29 @@ export function preloadImage(url) {
 }
 
 /**
- * Create image props with error handling
- * @param {string} src - Primary image source
- * @param {string} alt - Alt text
+ * Create image props with error handling and quality processing.
+ *
+ * @param {string} src      - Primary image source
+ * @param {string} alt      - Alt text
  * @param {string} category - Content category for fallbacks
+ * @param {object} opts     - Optional hints: { width, quality, sharpen }
+ *   width   — intended display width in px; drives proxy upscale (default 1200)
+ *   quality — proxy quality 1-100 (default 88)
+ *   sharpen — whether to apply proxy sharpening (default true)
  * @returns {object} Props object for img element
  */
-export function getImageProps(src, alt = '', category = 'general') {
+export function getImageProps(src, alt = '', category = 'general', opts = {}) {
+  const proxied = getSafeImageSrc(src, category, opts);
+  // Store the raw original URL so handleImageError can fall back to it
+  // if the proxy (weserv.nl) is blocked by the image's CDN.
+  const original = (src && src !== proxied) ? src : undefined;
   return {
-    src: getSafeImageSrc(src, category),
+    src: proxied,
     alt: alt || 'Content image',
     'data-fallback-seed': alt || '',
+    ...(original ? { 'data-original-src': original } : {}),
     onError: (e) => handleImageError(e, category),
     loading: 'lazy',
-    decoding: 'async'
+    decoding: 'async',
   };
 }

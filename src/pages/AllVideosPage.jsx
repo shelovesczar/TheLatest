@@ -14,6 +14,8 @@ function AllVideosPage({ category = null }) {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedSource, setSelectedSource] = useState('ALL')
+  const [visibleCount, setVisibleCount] = useState(8)
+  const LOAD_MORE_SIZE = 8
 
   const toStr = (value) => {
     if (value === null || value === undefined) return ''
@@ -89,7 +91,10 @@ function AllVideosPage({ category = null }) {
   const leadStory = filteredVideos[0]
   const mostReadStories = filteredVideos.slice(1, 6)
   const featuredStories = filteredVideos.slice(1, 4)
-  const latestStories = filteredVideos.slice(4)
+  const latestStoriesAll = filteredVideos.slice(4)
+  const latestStories = latestStoriesAll.slice(0, visibleCount)
+  const hasMore = visibleCount < latestStoriesAll.length
+  const remaining = latestStoriesAll.length - visibleCount
   const quickUpdates = filteredVideos.slice(0, 8)
   const breakingHeadlines = filteredVideos.slice(0, 10).map((item) => item.title).filter(Boolean)
 
@@ -122,7 +127,7 @@ function AllVideosPage({ category = null }) {
       </div>
 
       {!loading && breakingHeadlines.length > 0 && (
-        <DateTicker breakingNews={breakingHeadlines} sticky={false} label="VIDEO NOW" />
+        <DateTicker breakingNews={breakingHeadlines} sticky={false} label="VIDEO NOW" showDate={false} />
       )}
 
       <div className="source-filter-container">
@@ -239,8 +244,10 @@ function AllVideosPage({ category = null }) {
                 </div>
 
                 <div className="latest-news-list">
-                  {(latestStories.length > 0 ? latestStories : filteredVideos.slice(1)).map((item, index) => (
-                    <article key={`${item.link || item.title}-${index}`} className="latest-story-card">
+                  {(latestStories.length > 0 ? latestStories : filteredVideos.slice(1)).map((item, index) => {
+                    const isLast = index === latestStories.length - 1 && hasMore
+                    return (
+                    <article key={`${item.link || item.title}-${index}`} className={`latest-story-card${isLast ? ' latest-story-card--fade' : ''}`}>
                       {item.image && (
                         <a href={item.link} target="_blank" rel="noopener noreferrer" className="latest-story-image">
                           <img {...getImageProps(item.image, item.title, 'videos')} />
@@ -264,8 +271,18 @@ function AllVideosPage({ category = null }) {
                         </a>
                       </div>
                     </article>
-                  ))}
+                    )
+                  })}
                 </div>
+
+                {hasMore && (
+                  <div className="load-more-container">
+                    <button className="load-more-btn" onClick={() => setVisibleCount(c => c + LOAD_MORE_SIZE)}>
+                      Show {Math.min(remaining, LOAD_MORE_SIZE)} more
+                      <span className="load-more-total">({remaining} remaining)</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <aside className="quick-updates-panel">

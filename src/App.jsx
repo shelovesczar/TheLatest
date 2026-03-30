@@ -1,6 +1,65 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import './App.css'
+
+/**
+ * Extract trending topics from a set of news article headlines.
+ * Algorithm:
+ *   1. Split every headline into tokens.
+ *   2. Collect runs of Title-Cased or ALL-CAPS words (proper noun phrases).
+ *   3. Score by frequency across all headlines.
+ *   4. Return the top N, filtered against a stop-list of words that are
+ *      grammatically capitalized but carry no topical meaning.
+ */
+function extractTopicsFromHeadlines(articles, topN = 12) {
+  const STOP = new Set([
+    'The','A','An','In','On','At','By','For','Of','To','And','Or','But',
+    'Is','Are','Was','Were','Has','Have','Had','Will','Would','Could',
+    'Should','Be','Been','Being','With','This','That','These','Those',
+    'From','Up','After','Before','As','Its','It','He','She','They','We',
+    'His','Her','Their','Our','My','Your','It\'s','How','Why','What',
+    'When','Where','Who','Says','Say','Said','New','Over','About','Into',
+    'More','Than','Now','Just','Also','Still','Even','Not','No','So',
+    'Report','Reports','Source','Sources','Amid','Despite','Calls',
+  ])
+
+  const freq = {}
+
+  for (const article of articles) {
+    const text = article.title || ''
+    // Split on spaces and punctuation, keep only letter-sequences
+    const tokens = text.split(/[\s\-–—/|:,;!?"()\[\]]+/).filter(Boolean)
+
+    let phrase = []
+    const flush = () => {
+      if (phrase.length > 0) {
+        const key = phrase.join(' ')
+        // Minimum 1 word, but single words must be ≥4 chars to avoid noise
+        if (phrase.length > 1 || (phrase.length === 1 && phrase[0].length >= 4)) {
+          freq[key] = (freq[key] || 0) + 1
+        }
+        phrase = []
+      }
+    }
+
+    for (const token of tokens) {
+      // A proper-noun token: starts with uppercase, rest can be anything,
+      // not in stop list, not a pure number
+      const isProper = /^[A-Z]/.test(token) && !/^\d+$/.test(token) && !STOP.has(token)
+      if (isProper) {
+        phrase.push(token.replace(/['.]/g, '')) // strip trailing punctuation
+      } else {
+        flush()
+      }
+    }
+    flush()
+  }
+
+  return Object.entries(freq)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(([topic]) => topic)
+}
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from './newsService'
 import { fallbackSocialPosts, getRandomCategoryPosts } from './socialMediaPosts'
 import { getRandomTrendingPosts } from './socialMediaService'
@@ -28,7 +87,8 @@ const AllVideosPage   = lazy(() => import('./pages/AllVideosPage'))
 const AllPodcastsPage = lazy(() => import('./pages/AllPodcastsPage'))
 const SearchResults   = lazy(() => import('./pages/SearchResults'))
 const SportsPage      = lazy(() => import('./components/sections/Sports'))
-const FollowingPage   = lazy(() => import('./pages/FollowingPage'))
+const SavedPage       = lazy(() => import('./pages/SavedPage'))
+const ArticleReader   = lazy(() => import('./pages/ArticleReader'))
 
 // Minimal spinner shown while a route chunk is downloading
 const RouteLoader = () => (
@@ -75,14 +135,11 @@ function App() {
   const [socialPosts, setSocialPosts] = useState(fallbackSocialPosts)
   const [loadingSocial, setLoadingSocial] = useState(false)
   
-  // Hot topics state with rotation
-  const allTopics = [
-    'Donald Trump', 'AI', 'Stock Market', 'Tech', 'Greenland',
-    'Minneapolis', 'The Fed', 'Golden Globes', 'Super Bowl', 'Climate Change',
-    'Elon Musk', 'Chat GPT', 'Ukraine', 'Bitcoin', 'NASA',
-    'Taylor Swift', 'NFL', 'Elections', 'Apple', 'SpaceX'
-  ]
-  const [visibleTopics, setVisibleTopics] = useState(allTopics.slice(0, 10))
+  // Hot topics — derived from live headlines, not a hardcoded list.
+  // Seeded with a sensible default so the strip is never empty on first paint.
+  const FALLBACK_TOPICS = ['Donald Trump', 'AI', 'Ukraine', 'Tech', 'Economy',
+    'Climate Change', 'Elon Musk', 'Bitcoin', 'NASA', 'Elections']
+  const [visibleTopics, setVisibleTopics] = useState(FALLBACK_TOPICS)
 
   // Event handlers
   const handleSearch = (e) => {
@@ -150,13 +207,15 @@ function App() {
     const loadNews = async () => {
       setLoading(true)
       try {
-        console.log('Fetching news...')
         const news = await fetchRSSNews()
-        console.log('News fetched:', news.length, 'articles')
         if (news && news.length > 0) {
           setTopStories(news)
+          // Derive hot topics directly from what's in today's headlines
+          const extracted = extractTopicsFromHeadlines(news, 12)
+          if (extracted.length >= 4) {
+            setVisibleTopics(extracted)
+          }
         } else {
-          console.error('No news articles returned')
           setTopStories([])
         }
       } catch (error) {
@@ -227,21 +286,9 @@ function App() {
       rotateSocialPosts()
     }, 10 * 60 * 1000)
 
-    // Rotate hot topics every 7 minutes
-    const topicInterval = setInterval(() => {
-      setVisibleTopics(prevTopics => {
-        const currentIndex = allTopics.indexOf(prevTopics[0])
-        const nextIndex = (currentIndex + 10) % allTopics.length
-        return allTopics.slice(nextIndex, nextIndex + 10).concat(
-          allTopics.slice(0, Math.max(0, nextIndex + 10 - allTopics.length))
-        )
-      })
-    }, 7 * 60 * 1000)
-
     return () => {
       clearInterval(newsInterval)
       clearInterval(socialInterval)
-      clearInterval(topicInterval)
     }
   }, [])
 
@@ -297,7 +344,10 @@ function App() {
             
             {/* Apple News-style pages */}
             <Route path="/sports" element={<SportsPage />} />
-            <Route path="/following" element={<FollowingPage />} />
+            <Route path="/following" element={<SavedPage />} />
+
+            {/* On-site article reader */}
+            <Route path="/article" element={<ArticleReader />} />
             
             {/* All content pages (See More pages) */}
             <Route path="/all-news" element={<AllNewsPage />} />
