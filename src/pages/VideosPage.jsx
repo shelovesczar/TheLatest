@@ -14,20 +14,8 @@ function VideosPage() {
     const loadVideos = async () => {
       setLoading(true)
       try {
-        let videoData = []
-        
-        if (hasActiveTopic) {
-          // Fetch videos filtered by current topic
-          const allVideos = await fetchVideos()
-          videoData = allVideos.filter(video => {
-            const content = `${video.title} ${video.description || ''} ${video.source || ''}`.toLowerCase()
-            return content.includes(topic.toLowerCase())
-          })
-        } else {
-          // Show all videos if no topic selected
-          videoData = await fetchVideos()
-        }
-        
+        const activeTopic = hasActiveTopic ? topic : ''
+        const videoData = await fetchVideos(null, activeTopic)
         setVideos(videoData)
       } catch (error) {
         console.error('Error loading videos:', error)

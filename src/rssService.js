@@ -1,17 +1,151 @@
 import axios from 'axios';
 import { cacheManager } from './utils/cacheManager';
+import { deriveMediaOutlet } from './utils/sourceUtils';
 
 // RSS Aggregator endpoint - works both locally (with netlify dev) and in production
 const RSS_API_URL = '/.netlify/functions/rss-aggregator';
-const RSS_CACHE_VERSION = 'v2-images';
+const RSS_CACHE_VERSION = 'v4-dedupe';
+const REQUEST_TIMEOUT = 12000; // 12s — matches backend feed timeout
+const RETRY_ATTEMPTS = 2;      // was 3 — one retry is enough
+const RETRY_BASE_DELAY_MS = 500;
+const FUNCTIONS_RECHECK_COOLDOWN_MS = 15000;
 
 const getVersionedCacheKey = (type, category = null) => {
   const scoped = category ? `${type}_${category}` : type;
   return `${RSS_CACHE_VERSION}_${scoped}`;
 };
 
+const getSearchCacheKey = (term) => {
+  const normalized = String(term || '').trim().toLowerCase().replace(/\s+/g, '_');
+  return `${RSS_CACHE_VERSION}_search_${normalized}`;
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const shouldDisableFunctions = (error) => {
+  const code = error?.code;
+  const status = error?.response?.status;
+  return code === 'ERR_NETWORK' || status === 404 || status === 502 || status === 503 || status === 504;
+};
+
+async function requestWithRetry(url, config = {}, attempts = RETRY_ATTEMPTS) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await axios.get(url, {
+        timeout: REQUEST_TIMEOUT,
+        ...config
+      });
+    } catch (error) {
+      lastError = error;
+      const isRetryable = !error?.response || error?.response?.status >= 500 || error?.code === 'ECONNABORTED' || error?.code === 'ERR_NETWORK';
+
+      if (!isRetryable || attempt === attempts) {
+        throw error;
+      }
+
+      const delay = RETRY_BASE_DELAY_MS * attempt;
+      console.debug(`[RSS] Retry ${attempt}/${attempts} for ${url} in ${delay}ms`);
+      await sleep(delay);
+    }
+  }
+
+  throw lastError;
+}
+
+const extractDataArray = (response) => {
+  const payload = response?.data?.data;
+  return Array.isArray(payload) ? payload : [];
+};
+
+const getStaleOrEmpty = async (cacheKey, label) => {
+  const staleData = await cacheManager.getStale(cacheKey);
+  if (staleData && staleData.length > 0) {
+    console.log(`[RSS] Using stale ${label} cache for ${cacheKey}`);
+    return staleData;
+  }
+  return [];
+};
+
+const normalizeOutletSource = (item) => ({
+  ...item,
+  source: deriveMediaOutlet(item),
+});
+
+const normalizeDedupeUrl = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  try {
+    const parsed = new URL(raw, 'https://thelatest.local');
+    parsed.hash = '';
+    parsed.search = '';
+
+    const pathname = parsed.pathname.replace(/\/+$/, '') || '/';
+    return `${parsed.origin}${pathname}`.toLowerCase();
+  } catch {
+    return raw
+      .replace(/[?#].*$/, '')
+      .replace(/\/+$/, '')
+      .toLowerCase();
+  }
+};
+
+const normalizeDedupeText = (value) => String(value || '')
+  .toLowerCase()
+  .replace(/&amp;/g, 'and')
+  .replace(/[^\p{L}\p{N}]+/gu, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const dedupeContentItems = (items = []) => {
+  const seen = new Set();
+
+  return items.filter((item) => {
+    if (!item) return false;
+
+    const normalizedUrl = normalizeDedupeUrl(item.url || item.link);
+    const normalizedSource = normalizeDedupeText(item.source);
+    const normalizedTitle = normalizeDedupeText(item.title);
+    const titleKey = normalizedTitle ? `title:${normalizedSource}|${normalizedTitle}` : '';
+
+    if (!normalizedUrl && !titleKey) {
+      return false;
+    }
+
+    if ((normalizedUrl && seen.has(`url:${normalizedUrl}`)) || (titleKey && seen.has(titleKey))) {
+      return false;
+    }
+
+    if (normalizedUrl) {
+      seen.add(`url:${normalizedUrl}`);
+    }
+    if (titleKey) {
+      seen.add(titleKey);
+    }
+
+    return true;
+  });
+};
+
 // Detect if Netlify Functions are available
 let functionsAvailable = true;
+let lastFunctionsFailureAt = 0;
+
+const markFunctionsUnavailable = () => {
+  functionsAvailable = false;
+  lastFunctionsFailureAt = Date.now();
+};
+
+const canAttemptFunctions = () => {
+  if (functionsAvailable) return true;
+  return Date.now() - lastFunctionsFailureAt >= FUNCTIONS_RECHECK_COOLDOWN_MS;
+};
+
+const markFunctionsAvailable = () => {
+  functionsAvailable = true;
+};
 
 // Test if Netlify Functions are available
 async function checkFunctionsAvailability() {
@@ -21,7 +155,7 @@ async function checkFunctionsAvailability() {
     return functionsAvailable;
   } catch (error) {
     console.log('[RSS] Netlify Functions not available (run "netlify dev" to enable)');
-    functionsAvailable = false;
+    markFunctionsUnavailable();
     return false;
   }
 }
@@ -42,9 +176,9 @@ export async function fetchRSSNews(category = null) {
   }
 
   // If functions not available, return empty (will trigger fallback in newsService)
-  if (functionsAvailable === false) {
+  if (!canAttemptFunctions()) {
     console.log('[RSS] Skipping RSS fetch - functions unavailable (use "netlify dev")');
-    return [];
+    return getStaleOrEmpty(cacheKey, 'news');
   }
 
   try {
@@ -57,31 +191,18 @@ export async function fetchRSSNews(category = null) {
     const url = `${RSS_API_URL}?${params.toString()}`;
     console.log(`[RSS] Request URL: ${url}`);
     
-    const response = await axios.get(url, {
-      timeout: 30000
-    });
+    const response = await requestWithRetry(url);
+    markFunctionsAvailable();
 
-    // Check response structure carefully
-    if (!response) {
-      console.warn('[RSS] No response received');
-      return [];
+    const normalizedArticles = extractDataArray(response).map(normalizeOutletSource);
+    const articles = dedupeContentItems(normalizedArticles);
+    if (!articles.length) {
+      console.warn('[RSS] Empty news payload returned from endpoint');
+      return getStaleOrEmpty(cacheKey, 'news');
     }
-    
-    if (!response.data) {
-      console.warn('[RSS] Response has no data property');
-      return [];
-    }
-    
-    if (!response.data.data) {
-      console.warn('[RSS] Response.data has no data property:', response.data);
-      return [];
-    }
-    
-    const articles = response.data.data;
-    
-    if (!Array.isArray(articles)) {
-      console.warn('[RSS] Articles is not an array:', articles);
-      return [];
+
+    if (articles.length !== normalizedArticles.length) {
+      console.log(`[RSS] Removed ${normalizedArticles.length - articles.length} duplicate news items`);
     }
     
     // Update cache with IndexedDB
@@ -92,10 +213,10 @@ export async function fetchRSSNews(category = null) {
   } catch (error) {
     console.error('[RSS] Error fetching news:', error.message);
     // Mark functions as unavailable on first error
-    if (error.code === 'ERR_NETWORK' || error.response?.status === 404) {
-      functionsAvailable = false;
+    if (shouldDisableFunctions(error)) {
+      markFunctionsUnavailable();
     }
-    return [];
+    return getStaleOrEmpty(cacheKey, 'news');
   }
 }
 
@@ -114,9 +235,9 @@ export async function fetchRSSOpinions(category = null) {
     return cachedData;
   }
 
-  if (functionsAvailable === false) {
+  if (!canAttemptFunctions()) {
     console.log('[RSS] Skipping opinions fetch - functions unavailable');
-    return [];
+    return getStaleOrEmpty(cacheKey, 'opinions');
   }
   
   try {
@@ -126,16 +247,24 @@ export async function fetchRSSOpinions(category = null) {
       console.log(`[RSS] Fetching opinions with category filter: ${category}`);
     }
     
-    const response = await axios.get(`${RSS_API_URL}?${params.toString()}`, {
-      timeout: 30000
-    });
+    const response = await requestWithRetry(`${RSS_API_URL}?${params.toString()}`);
+    markFunctionsAvailable();
 
-    if (response && response.data && response.data.data) {
-      const opinions = response.data.data.map(item => ({
-        ...item,
-        author: item.source || 'Editorial',
-        date: item.publishedAt || 'Recently'
-      }));
+    const payload = extractDataArray(response);
+    if (payload.length > 0) {
+      const normalizedOpinions = payload.map(item => {
+        const normalized = normalizeOutletSource(item);
+        return {
+          ...normalized,
+          author: item.author || 'Editorial',
+          date: item.publishedAt || 'Recently'
+        };
+      });
+      const opinions = dedupeContentItems(normalizedOpinions);
+
+      if (opinions.length !== normalizedOpinions.length) {
+        console.log(`[RSS] Removed ${normalizedOpinions.length - opinions.length} duplicate opinion items`);
+      }
       
       // Update cache with IndexedDB
       await cacheManager.set(cacheKey, opinions);
@@ -143,14 +272,14 @@ export async function fetchRSSOpinions(category = null) {
       console.log(`[RSS] Fetched ${opinions.length} opinion pieces${category ? ` for ${category}` : ''}`);
       return opinions;
     }
-    
-    return [];
+
+    return getStaleOrEmpty(cacheKey, 'opinions');
   } catch (error) {
     console.error('[RSS] Error fetching opinions:', error.message);
-    if (error.code === 'ERR_NETWORK' || error.response?.status === 404) {
-      functionsAvailable = false;
+    if (shouldDisableFunctions(error)) {
+      markFunctionsUnavailable();
     }
-    return [];
+    return getStaleOrEmpty(cacheKey, 'opinions');
   }
 }
 
@@ -169,9 +298,9 @@ export async function fetchRSSVideos(category = null) {
     return cachedData;
   }
 
-  if (functionsAvailable === false) {
+  if (!canAttemptFunctions()) {
     console.log('[RSS] Skipping videos fetch - functions unavailable');
-    return [];
+    return getStaleOrEmpty(cacheKey, 'videos');
   }
 
   try {
@@ -181,16 +310,24 @@ export async function fetchRSSVideos(category = null) {
       console.log(`[RSS] Fetching videos with category filter: ${category}`);
     }
     
-    const response = await axios.get(`${RSS_API_URL}?${params.toString()}`, {
-      timeout: 30000
-    });
+    const response = await requestWithRetry(`${RSS_API_URL}?${params.toString()}`);
+    markFunctionsAvailable();
 
-    if (response && response.data && response.data.data) {
-      const videos = response.data.data.map(item => ({
-        ...item,
-        thumbnail: item.image,
-        duration: '5:30' // RSS doesn't provide duration, using placeholder
-      }));
+    const payload = extractDataArray(response);
+    if (payload.length > 0) {
+      const normalizedVideos = payload.map(item => {
+        const normalized = normalizeOutletSource(item);
+        return {
+          ...normalized,
+          thumbnail: item.image,
+          duration: '5:30' // RSS doesn't provide duration, using placeholder
+        };
+      });
+      const videos = dedupeContentItems(normalizedVideos);
+
+      if (videos.length !== normalizedVideos.length) {
+        console.log(`[RSS] Removed ${normalizedVideos.length - videos.length} duplicate video items`);
+      }
       
       // Update cache with IndexedDB
       await cacheManager.set(cacheKey, videos);
@@ -198,14 +335,14 @@ export async function fetchRSSVideos(category = null) {
       console.log(`[RSS] Fetched ${videos.length} videos${category ? ` for ${category}` : ''}`);
       return videos;
     }
-    
-    return [];
+
+    return getStaleOrEmpty(cacheKey, 'videos');
   } catch (error) {
     console.error('[RSS] Error fetching videos:', error.message);
-    if (error.code === 'ERR_NETWORK' || error.response?.status === 404) {
-      functionsAvailable = false;
+    if (shouldDisableFunctions(error)) {
+      markFunctionsUnavailable();
     }
-    return [];
+    return getStaleOrEmpty(cacheKey, 'videos');
   }
 }
 
@@ -224,9 +361,9 @@ export async function fetchRSSPodcasts(category = null) {
     return cachedData;
   }
 
-  if (functionsAvailable === false) {
+  if (!canAttemptFunctions()) {
     console.log('[RSS] Skipping podcasts fetch - functions unavailable');
-    return [];
+    return getStaleOrEmpty(cacheKey, 'podcasts');
   }
 
   try {
@@ -236,17 +373,25 @@ export async function fetchRSSPodcasts(category = null) {
       console.log(`[RSS] Fetching podcasts with category filter: ${category}`);
     }
     
-    const response = await axios.get(`${RSS_API_URL}?${params.toString()}`, {
-      timeout: 30000
-    });
+    const response = await requestWithRetry(`${RSS_API_URL}?${params.toString()}`);
+    markFunctionsAvailable();
 
-    if (response && response.data && response.data.data) {
-      const podcasts = response.data.data.map(item => ({
-        ...item,
-        thumbnail: item.image,
-        hosts: item.source,
-        date: item.publishedAt
-      }));
+    const payload = extractDataArray(response);
+    if (payload.length > 0) {
+      const normalizedPodcasts = payload.map(item => {
+        const normalized = normalizeOutletSource(item);
+        return {
+          ...normalized,
+          thumbnail: item.image,
+          hosts: item.hosts || item.author || '',
+          date: item.publishedAt
+        };
+      });
+      const podcasts = dedupeContentItems(normalizedPodcasts);
+
+      if (podcasts.length !== normalizedPodcasts.length) {
+        console.log(`[RSS] Removed ${normalizedPodcasts.length - podcasts.length} duplicate podcast items`);
+      }
       
       // Update cache with IndexedDB
       await cacheManager.set(cacheKey, podcasts);
@@ -254,12 +399,14 @@ export async function fetchRSSPodcasts(category = null) {
       console.log(`[RSS] Fetched ${podcasts.length} podcasts${category ? ` for ${category}` : ''}`);
       return podcasts;
     }
-    
-    return [];
+
+    return getStaleOrEmpty(cacheKey, 'podcasts');
   } catch (error) {
-    console.error('[RSS] Error fetching podcasts:', error.message);    if (error.code === 'ERR_NETWORK' || error.response?.status === 404) {
-      functionsAvailable = false;
-    }    return [];
+    console.error('[RSS] Error fetching podcasts:', error.message);
+    if (shouldDisableFunctions(error)) {
+      markFunctionsUnavailable();
+    }
+    return getStaleOrEmpty(cacheKey, 'podcasts');
   }
 }
 
@@ -274,26 +421,40 @@ export async function searchRSSContent(searchTerm) {
     return [];
   }
 
-  if (functionsAvailable === false) {
+  const cacheKey = getSearchCacheKey(searchTerm);
+  const cachedData = await cacheManager.get(cacheKey);
+  if (cachedData) {
+    console.log(`[RSS Search] Using cached results for "${searchTerm}"`);
+    return cachedData;
+  }
+
+  if (!canAttemptFunctions()) {
     console.log('[RSS Search] Functions unavailable');
-    return [];
+    return getStaleOrEmpty(cacheKey, 'search');
   }
 
   try {
-    const response = await axios.get(`${RSS_API_URL}?search=${encodeURIComponent(searchTerm)}`, {
-      timeout: 30000
-    });
+    const response = await requestWithRetry(`${RSS_API_URL}?search=${encodeURIComponent(searchTerm)}`);
+    markFunctionsAvailable();
 
-    if (response && response.data && response.data.data) {
-      const results = response.data.data;
+    const normalizedResults = extractDataArray(response).map(normalizeOutletSource);
+    const results = dedupeContentItems(normalizedResults);
+    if (results.length > 0) {
+      if (results.length !== normalizedResults.length) {
+        console.log(`[RSS Search] Removed ${normalizedResults.length - results.length} duplicate search results`);
+      }
+      await cacheManager.set(cacheKey, results);
       console.log(`[RSS Search] Found ${results.length} results for "${searchTerm}"`);
       return results;
     }
-    
-    return [];
+
+    return getStaleOrEmpty(cacheKey, 'search');
   } catch (error) {
     console.error('[RSS Search] Error:', error.message);
-    return [];
+    if (shouldDisableFunctions(error)) {
+      markFunctionsUnavailable();
+    }
+    return getStaleOrEmpty(cacheKey, 'search');
   }
 }
 
@@ -301,12 +462,9 @@ export async function searchRSSContent(searchTerm) {
  * Clear all RSS cache
  */
 export function clearRSSCache() {
-  rssCache = {
-    news: { data: null, timestamp: 0 },
-    opinions: { data: null, timestamp: 0 },
-    videos: { data: null, timestamp: 0 },
-    podcasts: { data: null, timestamp: 0 }
-  };
+  functionsAvailable = true;
+  lastFunctionsFailureAt = 0;
+  cacheManager.clear();
   console.log('[RSS] Cache cleared');
 }
 

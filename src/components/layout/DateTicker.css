@@ -1,15 +1,16 @@
 .date-ticker-container {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--gradient-brand);
+
   position: sticky;
   top: 0;
   z-index: 100;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 20px rgba(10, 19, 34, 0.34);
   width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .date-ticker-container.is-static {
@@ -38,8 +39,8 @@
 .news-ticker {
   display: flex;
   align-items: center;
-  background: linear-gradient(90deg, #f093fb 0%, #764ba2 50%, #667eea 100%);
-  padding: 10px 0;
+  background: var(--gradient-brand-reverse);
+  padding: 9px 0;
   overflow: hidden;
   position: relative;
 }
@@ -48,7 +49,6 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 var(--spacing-sm);
   font-size: 11px;
   font-weight: 700;
   color: #ffffff;
@@ -59,6 +59,8 @@
   -webkit-backdrop-filter: blur(10px);
   border-radius: 20px;
   padding: 6px 12px;
+  margin-left: clamp(8px, 2vw, 16px);
+  margin-right: clamp(10px, 2vw, 18px);
   position: relative;
   z-index: 2;
 }
@@ -105,15 +107,15 @@
 .ticker-wrapper {
   display: flex;
   gap: 40px;
-  animation: scroll 30s linear infinite;
+  animation: scroll linear infinite;
   white-space: nowrap;
+  will-change: transform;
 }
 
 .ticker-item {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
   color: #ffffff;
-  text-shadow: 0 0 30px rgba(255, 255, 255, 0.6), 0 0 60px rgba(240, 147, 251, 0.4);
   padding: 0 20px;
   position: relative;
 }
@@ -130,7 +132,7 @@
     transform: translateX(0);
   }
   100% {
-    transform: translateX(-50%);
+    transform: translateX(-25%);
   }
 }
 
@@ -142,27 +144,33 @@
 /* Mobile Optimizations */
 @media (max-width: 768px) {
   .date-display {
-    padding: 10px 16px;
+    padding: 0.7rem 1rem;
   }
   
   .date-text {
-    font-size: 11px;
+    font-size: 0.82rem;
+    letter-spacing: 0.08em;
+  }
+
+  .news-ticker {
+    padding: 0.45rem 0;
   }
   
   .ticker-label {
-    padding: 0 12px;
-    font-size: 10px;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
   }
   
   .ticker-item {
-    font-size: 12px;
-    padding: 0 15px;
+    font-size: 0.84rem;
+    padding: 0 12px;
   }
 }
 
 /* Light theme adjustments */
 [data-theme="light"] .date-ticker-container {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background: var(--gradient-brand);
   border-bottom-color: rgba(255, 255, 255, 0.3);
 }
 

@@ -7,7 +7,7 @@
 
 /* ── Hero / Search Bar ───────────────────────────────────────── */
 .sr-hero {
-  background: linear-gradient(135deg, #1a0533 0%, #4a1080 45%, #8b5cf6 100%);
+  background: var(--gradient-brand);
   color: #ffffff;
   width: 100vw;
   margin-left: calc(50% - 50vw);

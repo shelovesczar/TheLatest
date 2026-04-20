@@ -1,11 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { useParams } from 'react-router-dom'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import DateTicker from '../components/layout/DateTicker'
 import { fetchOpinions } from '../newsService'
+import { searchRSSContent, fetchRSSOpinions } from '../rssService'
 import { getImageProps } from '../utils/imageUtils'
 import { getCategoryConfig } from '../utils/categoryConfig'
 import { filterContentByCategory } from '../utils/categoryFiltering'
+import { dedupeContentItems } from '../utils/contentDeduplication'
+import { deriveMediaOutlet } from '../utils/sourceUtils'
+import { matchesTopicQuery } from '../utils/topicFiltering'
 import './AllNewsPage.css'
 
 function AllOpinionsPage({ category = null }) {
@@ -16,6 +22,7 @@ function AllOpinionsPage({ category = null }) {
   const [selectedSource, setSelectedSource] = useState('ALL')
   const [visibleCount, setVisibleCount] = useState(8)
   const LOAD_MORE_SIZE = 8
+  const sourceTickerRef = useRef(null)
 
   const toStr = (value) => {
     if (value === null || value === undefined) return ''
@@ -55,28 +62,60 @@ function AllOpinionsPage({ category = null }) {
   const loadOpinions = async () => {
     setLoading(true)
     try {
-      const opinionsData = await fetchOpinions(filterContext)
-      const normalizedOpinions = (Array.isArray(opinionsData) ? opinionsData : []).map((item) => ({
+      const normalizeOpinionItem = (item) => ({
         ...item,
         title: toStr(item?.title),
         description: toStr(item?.description),
         content: toStr(item?.content),
+        type: toStr(item?.type),
         author: toStr(item?.author),
-        source: toStr(item?.source) || toStr(item?.author) || 'Opinion Desk',
+        source: deriveMediaOutlet({ source: toStr(item?.source), url: toStr(item?.link || item?.url) }) || 'Opinion Desk',
         category: toStr(item?.category),
         publishedAt: toStr(item?.publishedAt || item?.time),
         link: toStr(item?.link || item?.url),
         image: toStr(item?.image) || toStr(item?.thumbnail),
-      }))
-      
-      let filtered = normalizedOpinions
-      if (filterContext) {
-        filtered = filterContentByCategory(normalizedOpinions, filterContext, 1, { strict: true })
+      })
+
+      if (hasActiveTopic && topic && topic.trim().length > 0) {
+        const searchResults = await searchRSSContent(topic)
+        const normalizedResults = (Array.isArray(searchResults) ? searchResults : []).map(normalizeOpinionItem)
+        let topicOpinions = dedupeContentItems(normalizedResults.filter((item) => {
+          const typeText = toStr(item?.type).toLowerCase()
+          const categoryText = toStr(item?.category).toLowerCase()
+          const sourceText = toStr(item?.source).toLowerCase()
+          return (
+            typeText === 'opinion' ||
+            categoryText.includes('opinion') ||
+            categoryText.includes('commentary') ||
+            categoryText.includes('editorial') ||
+            sourceText.includes('opinion')
+          )
+        }))
+
+        const MIN_TOPIC_OPINIONS = 20
+        if (topicOpinions.length < MIN_TOPIC_OPINIONS) {
+          const opinionsPool = await fetchRSSOpinions()
+          const supplemental = (Array.isArray(opinionsPool) ? opinionsPool : [])
+            .map(normalizeOpinionItem)
+            .filter((item) => matchesTopicQuery(item, topic))
+          topicOpinions = dedupeContentItems([...topicOpinions, ...supplemental])
+        }
+
+        setOpinions(dedupeContentItems(topicOpinions))
+      } else {
+        const opinionsData = await fetchOpinions(filterContext)
+        const normalizedOpinions = (Array.isArray(opinionsData) ? opinionsData : []).map(normalizeOpinionItem)
+
+        let filtered = normalizedOpinions
+        if (filterContext) {
+          filtered = filterContentByCategory(normalizedOpinions, filterContext, 1, { strict: true })
+        }
+
+        setOpinions(dedupeContentItems(filtered))
       }
-      
-      setOpinions(filtered)
     } catch (error) {
       console.error('Error loading opinions:', error)
+      setOpinions([])
     } finally {
       setLoading(false)
     }
@@ -86,6 +125,19 @@ function AllOpinionsPage({ category = null }) {
   const filteredOpinions = selectedSource === 'ALL'
     ? opinions
     : opinions.filter((item) => item.source === selectedSource)
+
+  const handleSourceClick = (source) => {
+    setSelectedSource(source)
+    setVisibleCount(8)
+  }
+
+  const scrollTickerLeft = () => {
+    sourceTickerRef.current?.scrollBy({ left: -240, behavior: 'smooth' })
+  }
+
+  const scrollTickerRight = () => {
+    sourceTickerRef.current?.scrollBy({ left: 240, behavior: 'smooth' })
+  }
 
   const contextLabel = formatContextLabel(filterContext)
   const monthDayLabel = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
@@ -138,16 +190,24 @@ function AllOpinionsPage({ category = null }) {
             {selectedSource === 'ALL' ? 'All voices active' : `${filteredOpinions.length} opinions from ${selectedSource}`}
           </span>
         </div>
-        <div className="source-pills">
-          {sources.map((source) => (
-            <button
-              key={source}
-              className={`source-pill ${selectedSource === source ? 'active' : ''}`}
-              onClick={() => setSelectedSource(source)}
-            >
-              {source}
-            </button>
-          ))}
+        <div className="source-ticker-row">
+          <button className="slider-btn ticker-btn" onClick={scrollTickerLeft} aria-label="Scroll sources left">
+            <FontAwesomeIcon icon={faChevronLeft} />
+          </button>
+          <div className="source-pills" ref={sourceTickerRef}>
+            {sources.map((source) => (
+              <button
+                key={source}
+                className={`source-pill ${selectedSource === source ? 'active' : ''}`}
+                onClick={() => handleSourceClick(source)}
+              >
+                {source}
+              </button>
+            ))}
+          </div>
+          <button className="slider-btn ticker-btn" onClick={scrollTickerRight} aria-label="Scroll sources right">
+            <FontAwesomeIcon icon={faChevronRight} />
+          </button>
         </div>
       </div>
 

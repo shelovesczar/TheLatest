@@ -3,6 +3,7 @@ import { useSearch } from '../../context/SearchContext'
 import { generateAISummary, getCachedSummary, cacheSummary } from '../../services/aiService'
 import { getTopicImage } from '../../utils/topicImages'
 import { getImageProps } from '../../utils/imageUtils'
+import AdBreak from '../common/AdBreak'
 import './AISummary.css'
 
 function AISummary({ category = 'general', description, categoryImage, categoryTitle, ignoreTopic = false }) {
@@ -148,9 +149,7 @@ function AISummary({ category = 'general', description, categoryImage, categoryT
         </article>
         
         <div className="section-ad-sidebar">
-          <div className="ad-placeholder ad-dynamic">
-            <span>AD</span>
-          </div>
+          <AdBreak type="sidebar" />
         </div>
       </div>
 

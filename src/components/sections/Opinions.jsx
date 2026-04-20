@@ -3,6 +3,7 @@ import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getImageProps } from '../../utils/imageUtils'
+import { deriveMediaOutlet } from '../../utils/sourceUtils'
 import './Opinions.css'
 
 function Opinions({ loadingOpinions, opinions, categoryPath }) {
@@ -80,7 +81,7 @@ function Opinions({ loadingOpinions, opinions, categoryPath }) {
               className="opinion-card" 
               tabIndex="0" 
               role="article" 
-              aria-label={`Opinion by ${opinion.author} from ${opinion.source}`}
+              aria-label={`Opinion by ${opinion.author} from ${deriveMediaOutlet(opinion)}`}
               style={{ textDecoration: 'none', color: 'inherit' }}
             >
               <img {...getImageProps(opinion.image, opinion.author, 'opinions')} className="opinion-image" />
@@ -89,7 +90,7 @@ function Opinions({ loadingOpinions, opinions, categoryPath }) {
                 <p className="opinion-excerpt">{truncateText(opinion.description, 120)}</p>
                 <div className="opinion-meta">
                   <span className="opinion-author">{opinion.author}</span>
-                  <span className="opinion-source">{opinion.source}</span>
+                  <span className="opinion-source">{deriveMediaOutlet(opinion)}</span>
                   <span className="opinion-date">{opinion.date}</span>
                 </div>
               </div>

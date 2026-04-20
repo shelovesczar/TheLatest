@@ -1,6 +1,6 @@
 /* Subscribe Section */
 .subscribe {
-  background: linear-gradient(135deg, #ff4757 0%, #ff3344 100%);
+  background: var(--gradient-brand-soft);
   padding: var(--spacing-2xl) var(--section-padding-x);
   text-align: center;
   margin-top: var(--spacing-lg);

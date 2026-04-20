@@ -9,7 +9,7 @@
 }
 
 .category-hero {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background: var(--gradient-brand);
   background-size: 300% 300%;
   animation: gradientFlow 8s ease infinite;
   padding: var(--spacing-3xl) var(--spacing-lg) var(--spacing-xl);

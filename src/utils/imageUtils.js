@@ -36,7 +36,7 @@ export function processImageUrl(url, opts = {}) {
   // Skip already-optimized sources
   if (SKIP_PROXY_HOSTS.some(host => url.includes(host))) return url;
 
-  const { width = 1200, quality = 88, sharpen = true } = opts;
+  const { width = 1600, quality = 90, sharpen = true } = opts;
 
   const params = new URLSearchParams({
     url,
@@ -52,18 +52,18 @@ export function processImageUrl(url, opts = {}) {
 
 // Category-based fallback images (using high-quality placeholders)
 export const FALLBACK_IMAGES = {
-  news: 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&h=600&q=80&fit=crop',
-  opinions: 'https://images.unsplash.com/photo-1586339949216-35c2747e98f8?w=800&h=600&q=80&fit=crop',
-  videos: 'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=800&h=600&q=80&fit=crop',
-  podcasts: 'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=800&h=600&q=80&fit=crop',
-  politics: 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=800&h=600&q=80&fit=crop',
-  sports: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=800&h=600&q=80&fit=crop',
-  technology: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&h=600&q=80&fit=crop',
-  business: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&h=600&q=80&fit=crop',
-  entertainment: 'https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=800&h=600&q=80&fit=crop',
-  health: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=800&h=600&q=80&fit=crop',
-  science: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=800&h=600&q=80&fit=crop',
-  general: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&h=600&q=80&fit=crop'
+  news: 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=1600&h=1000&q=85&fit=crop',
+  opinions: 'https://images.unsplash.com/photo-1586339949216-35c2747e98f8?w=1600&h=1000&q=85&fit=crop',
+  videos: 'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=1600&h=1000&q=85&fit=crop',
+  podcasts: 'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=1600&h=1000&q=85&fit=crop',
+  politics: 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=1600&h=1000&q=85&fit=crop',
+  sports: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=1600&h=1000&q=85&fit=crop',
+  technology: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1600&h=1000&q=85&fit=crop',
+  business: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1600&h=1000&q=85&fit=crop',
+  entertainment: 'https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=1600&h=1000&q=85&fit=crop',
+  health: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=1600&h=1000&q=85&fit=crop',
+  science: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=1600&h=1000&q=85&fit=crop',
+  general: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=1600&h=1000&q=85&fit=crop'
 };
 
 // Local fallback images (SVG data URIs) - used when external images fail

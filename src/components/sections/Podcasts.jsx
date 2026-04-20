@@ -3,6 +3,7 @@ import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getImageProps } from '../../utils/imageUtils'
+import { deriveMediaOutlet } from '../../utils/sourceUtils'
 import './Podcasts.css'
 
 function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
@@ -93,7 +94,7 @@ function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
                 <h3 className="podcast-title">{truncateText(podcast.title, 60)}</h3>
                 <p className="podcast-description">{truncateText(podcast.description, 100)}</p>
                 <div className="podcast-footer">
-                  <span className="podcast-platform">Listen on {podcast.source}</span>
+                  <span className="podcast-platform">Listen on {deriveMediaOutlet(podcast)}</span>
                   <span className="podcast-date">{podcast.date}</span>
                 </div>
               </div>

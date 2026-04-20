@@ -3,6 +3,7 @@ import { faPlay, faChevronLeft, faChevronRight } from '@fortawesome/free-solid-s
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getImageProps } from '../../utils/imageUtils'
+import { deriveMediaOutlet } from '../../utils/sourceUtils'
 import './Videos.css'
 
 function Videos({ loadingVideos, videos, categoryPath }) {
@@ -73,7 +74,7 @@ function Videos({ loadingVideos, videos, categoryPath }) {
               className="video-card" 
               tabIndex="0" 
               role="article" 
-              aria-label={`Video: ${video.title} from ${video.source}`}
+              aria-label={`Video: ${video.title} from ${deriveMediaOutlet(video)}`}
               style={{ textDecoration: 'none', color: 'inherit' }}
             >
               <div className="video-thumbnail">
@@ -83,7 +84,7 @@ function Videos({ loadingVideos, videos, categoryPath }) {
               </div>
               <h3 className="video-title">{video.title}</h3>
               <div className="video-meta">
-                <span className="video-source">{video.source}</span>
+                <span className="video-source">{deriveMediaOutlet(video)}</span>
                 <span className="video-date">{video.date}</span>
               </div>
               </a>

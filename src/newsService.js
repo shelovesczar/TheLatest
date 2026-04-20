@@ -5,6 +5,8 @@ import {
   fetchRSSVideos as getRSSVideos, 
   fetchRSSPodcasts as getRSSPodcasts 
 } from './rssService';
+import { dedupeContentItems } from './utils/contentDeduplication';
+import { filterItemsByTopic } from './utils/topicFiltering';
 
 // Check if running in development mode
 const isDevelopment = import.meta.env.DEV;
@@ -971,103 +973,152 @@ const getFallbackTrendingContent = () => {
   ];
 };
 
+const applyTopicFilter = (items, topic) => filterItemsByTopic(items || [], topic || '')
+
 // Fetch top news stories
-export const fetchTopNews = async (category = null) => {
+export const fetchTopNews = async (category = null, topic = '') => {
   try {
-    // Try RSS first (no API limits, unlimited requests)
-    console.log('Fetching news from RSS feeds...');
-    const rssNews = await getRSSNews(category);
-    
-    if (rssNews && rssNews.length > 0) {
-      console.log(`Successfully fetched ${rssNews.length} articles from RSS feeds`);
-      return rssNews;
+    console.log(`Fetching news from RSS feeds${category ? ` (${category})` : ''}...`);
+
+    const scopedNews = applyTopicFilter(await getRSSNews(category), topic);
+    if (scopedNews && scopedNews.length > 0) {
+      console.log(`Successfully fetched ${scopedNews.length} scoped news articles`);
+      return scopedNews;
     }
-    
-    console.log('RSS returned no articles, falling back to hardcoded content');
-    return getFallbackNews();
+
+    // Live failover: broaden to general RSS feed instead of static fallback.
+    const generalNews = applyTopicFilter(await getRSSNews(null), topic);
+    if (generalNews && generalNews.length > 0) {
+      console.log(`Scoped news empty; using ${generalNews.length} general RSS articles`);
+      return generalNews;
+    }
+
+    console.warn('No live RSS news available right now. Returning empty list.');
+    return [];
   } catch (error) {
     console.error('Error fetching news (RSS failed):', error.message);
-    return getFallbackNews();
+    return [];
   }
 };
 
 // Fetch news by category
-export const fetchNewsByCategory = async (category) => {
-  try {
-    // Use RSS aggregator with category filtering
-    console.log(`Fetching ${category} news from RSS feeds...`);
-    const rssNews = await getRSSNews(category);
-    
-    if (rssNews && rssNews.length > 0) {
-      console.log(`Successfully fetched ${rssNews.length} ${category} articles from RSS`);
-      return rssNews;
-    }
-    
-    console.log(`RSS returned no ${category} articles, using fallback content`);
-    return getFallbackNews();
-  } catch (error) {
-    console.error(`Error fetching ${category} news:`, error);
-    return getFallbackNews();
-  }
+export const fetchNewsByCategory = async (category, topic = '') => {
+  return fetchTopNews(category, topic);
 };
 
 // Fetch opinions/editorials
-export const fetchOpinions = async (category = null) => {
+export const fetchOpinions = async (category = null, topic = '') => {
   try {
-    // Use RSS aggregator for opinions
     console.log(`Fetching opinions from RSS feeds${category ? ` (${category})` : ''}...`);
-    const rssOpinions = await getRSSOpinions(category);
-    
-    if (rssOpinions && rssOpinions.length > 0) {
-      console.log(`Successfully fetched ${rssOpinions.length} opinion pieces from RSS`);
-      return rssOpinions;
+
+    const scopedOpinions = applyTopicFilter(await getRSSOpinions(category), topic);
+    if (scopedOpinions && scopedOpinions.length > 0) {
+      console.log(`Successfully fetched ${scopedOpinions.length} opinion pieces from scoped RSS`);
+      return scopedOpinions;
     }
-    
-    console.log('RSS returned no opinions, using fallback content');
-    return getFallbackOpinions();
+
+    const generalOpinions = applyTopicFilter(await getRSSOpinions(null), topic);
+    if (generalOpinions && generalOpinions.length > 0) {
+      console.log(`Scoped opinions empty; using ${generalOpinions.length} general opinion items`);
+      return generalOpinions;
+    }
+
+    // Live failover: derive opinion-like items from news feed.
+    const newsPool = await fetchTopNews(category, topic);
+    const derivedOpinions = (newsPool || []).filter((item) => {
+      const text = `${item?.title || ''} ${item?.description || ''} ${item?.category || ''} ${item?.source || ''}`.toLowerCase();
+      return text.includes('opinion') || text.includes('analysis') || text.includes('editorial') || text.includes('commentary');
+    }).map((item) => ({
+      ...item,
+      author: item?.author || item?.source || 'Editorial',
+      date: item?.date || item?.publishedAt || item?.time || 'Recently'
+    }));
+
+    return derivedOpinions;
   } catch (error) {
     console.error('Error fetching opinions:', error);
-    return getFallbackOpinions();
+    return [];
   }
 };
 
 // Fetch video content
-export const fetchVideos = async (category = null) => {
+export const fetchVideos = async (category = null, topic = '') => {
   try {
-    // Use RSS aggregator for videos
     console.log(`Fetching videos from RSS feeds${category ? ` (${category})` : ''}...`);
-    const rssVideos = await getRSSVideos(category);
-    
-    if (rssVideos && rssVideos.length > 0) {
-      console.log(`Successfully fetched ${rssVideos.length} videos from RSS`);
-      return rssVideos;
+
+    const scopedVideos = applyTopicFilter(await getRSSVideos(category), topic);
+    if (scopedVideos && scopedVideos.length > 0) {
+      console.log(`Successfully fetched ${scopedVideos.length} scoped videos from RSS`);
+      return scopedVideos;
     }
-    
-    console.log('RSS returned no videos, using fallback content');
-    return getFallbackVideos();
+
+    const generalVideos = applyTopicFilter(await getRSSVideos(null), topic);
+    if (generalVideos && generalVideos.length > 0) {
+      console.log(`Scoped videos empty; using ${generalVideos.length} general video items`);
+      return generalVideos;
+    }
+
+    // Live failover: only items with a real YouTube URL qualify as videos.
+    // Returning generic news articles here would cause videos & podcasts to show identical content.
+    const newsPool = await fetchTopNews(category, topic);
+    const derivedVideos = (newsPool || []).filter((item) => {
+      const url = `${item?.url || item?.link || ''}`.toLowerCase();
+      return url.includes('youtube.com') || url.includes('youtu.be');
+    }).map((item) => ({
+      ...item,
+      thumbnail: item?.thumbnail || item?.image,
+      duration: item?.duration || '5:30'
+    }));
+
+    return derivedVideos;
   } catch (error) {
     console.error('Error fetching videos:', error);
-    return getFallbackVideos();
+    return [];
   }
 };
 
 // Fetch trending informative content (podcasts/interviews)
-export const fetchTrendingContent = async (category = null) => {
+export const fetchTrendingContent = async (category = null, topic = '') => {
   try {
-    // Use RSS aggregator for podcasts
     console.log(`Fetching podcasts from RSS feeds${category ? ` (${category})` : ''}...`);
-    const rssPodcasts = await getRSSPodcasts(category);
-    
-    if (rssPodcasts && rssPodcasts.length > 0) {
-      console.log(`Successfully fetched ${rssPodcasts.length} podcasts from RSS`);
-      return rssPodcasts;
+
+    const scopedPodcasts = applyTopicFilter(await getRSSPodcasts(category), topic);
+    if (scopedPodcasts && scopedPodcasts.length > 0) {
+      console.log(`Successfully fetched ${scopedPodcasts.length} scoped podcasts from RSS`);
+      return scopedPodcasts;
     }
-    
-    console.log('RSS returned no podcasts, using fallback content');
-    return getFallbackTrendingContent();
+
+    const generalPodcasts = applyTopicFilter(await getRSSPodcasts(null), topic);
+    if (generalPodcasts && generalPodcasts.length > 0) {
+      console.log(`Scoped podcasts empty; using ${generalPodcasts.length} general podcast items`);
+      return generalPodcasts;
+    }
+
+    // Live failover: only items from known podcast/audio sources qualify as podcasts.
+    // Never return generic news articles here — they would duplicate the videos feed.
+    const newsPool = await fetchTopNews(category, topic);
+    const derivedPodcasts = (newsPool || []).filter((item) => {
+      const url   = `${item?.url || item?.link || ''}`.toLowerCase();
+      const src   = `${item?.source || ''}`.toLowerCase();
+      const isPodcastUrl = url.includes('podcast') || url.includes('megaphone.fm') ||
+                           url.includes('simplecast') || url.includes('omnycontent') ||
+                           url.includes('feeds.npr') || url.includes('art19.com') ||
+                           url.includes('acast.com');
+      const isPodcastSrc = src.includes('podcast') || src.includes('npr') ||
+                           src.includes('radio hour') || src.includes('daily') ||
+                           src.includes('morning') || src.includes('show');
+      return isPodcastUrl || isPodcastSrc;
+    }).map((item) => ({
+      ...item,
+      thumbnail: item?.thumbnail || item?.image,
+      hosts: item?.hosts || item?.source,
+      date: item?.date || item?.publishedAt || item?.time || 'Recently'
+    }));
+
+    return derivedPodcasts;
   } catch (error) {
     console.error('Error fetching podcasts:', error);
-    return getFallbackTrendingContent();
+    return [];
   }
 };
 

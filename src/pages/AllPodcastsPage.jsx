@@ -1,11 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { useParams } from 'react-router-dom'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import DateTicker from '../components/layout/DateTicker'
 import { fetchTrendingContent } from '../newsService'
+import { searchRSSContent, fetchRSSPodcasts } from '../rssService'
 import { getImageProps } from '../utils/imageUtils'
 import { getCategoryConfig } from '../utils/categoryConfig'
 import { filterContentByCategory } from '../utils/categoryFiltering'
+import { dedupeContentItems } from '../utils/contentDeduplication'
+import { deriveMediaOutlet } from '../utils/sourceUtils'
+import { matchesTopicQuery } from '../utils/topicFiltering'
 import './AllNewsPage.css'
 
 function AllPodcastsPage({ category = null }) {
@@ -16,6 +22,7 @@ function AllPodcastsPage({ category = null }) {
   const [selectedSource, setSelectedSource] = useState('ALL')
   const [visibleCount, setVisibleCount] = useState(8)
   const LOAD_MORE_SIZE = 8
+  const sourceTickerRef = useRef(null)
 
   const toStr = (value) => {
     if (value === null || value === undefined) return ''
@@ -55,27 +62,60 @@ function AllPodcastsPage({ category = null }) {
   const loadPodcasts = async () => {
     setLoading(true)
     try {
-      const podcastsData = await fetchTrendingContent(filterContext)
-      const normalizedPodcasts = (Array.isArray(podcastsData) ? podcastsData : []).map((item) => ({
+      const normalizePodcastItem = (item) => ({
         ...item,
         title: toStr(item?.title),
         description: toStr(item?.description),
-        source: toStr(item?.source) || toStr(item?.hosts) || 'Podcast Desk',
+        type: toStr(item?.type),
+        source: deriveMediaOutlet({ source: toStr(item?.source), url: toStr(item?.link || item?.url) }) || 'Podcast Desk',
         hosts: toStr(item?.hosts),
         category: toStr(item?.category),
         publishedAt: toStr(item?.publishedAt || item?.time),
         link: toStr(item?.link || item?.url),
         image: toStr(item?.thumbnail) || toStr(item?.image),
-      }))
-      
-      let filtered = normalizedPodcasts
-      if (filterContext) {
-        filtered = filterContentByCategory(normalizedPodcasts, filterContext, 1, { strict: true })
+      })
+
+      if (hasActiveTopic && topic && topic.trim().length > 0) {
+        const searchResults = await searchRSSContent(topic)
+        const normalizedResults = (Array.isArray(searchResults) ? searchResults : []).map(normalizePodcastItem)
+        let topicPodcasts = dedupeContentItems(normalizedResults.filter((item) => {
+          const typeText = toStr(item?.type).toLowerCase()
+          const categoryText = toStr(item?.category).toLowerCase()
+          const sourceText = toStr(item?.source).toLowerCase()
+          const linkText = toStr(item?.link).toLowerCase()
+          return (
+            typeText === 'podcast' ||
+            categoryText.includes('podcast') ||
+            categoryText.includes('audio') ||
+            sourceText.includes('podcast') ||
+            linkText.includes('podcast')
+          )
+        }))
+
+        const MIN_TOPIC_PODCASTS = 20
+        if (topicPodcasts.length < MIN_TOPIC_PODCASTS) {
+          const podcastPool = await fetchRSSPodcasts()
+          const supplemental = (Array.isArray(podcastPool) ? podcastPool : [])
+            .map(normalizePodcastItem)
+            .filter((item) => matchesTopicQuery(item, topic))
+          topicPodcasts = dedupeContentItems([...topicPodcasts, ...supplemental])
+        }
+
+        setPodcasts(dedupeContentItems(topicPodcasts))
+      } else {
+        const podcastsData = await fetchTrendingContent(filterContext)
+        const normalizedPodcasts = (Array.isArray(podcastsData) ? podcastsData : []).map(normalizePodcastItem)
+
+        let filtered = normalizedPodcasts
+        if (filterContext) {
+          filtered = filterContentByCategory(normalizedPodcasts, filterContext, 1, { strict: true })
+        }
+
+        setPodcasts(dedupeContentItems(filtered))
       }
-      
-      setPodcasts(filtered)
     } catch (error) {
       console.error('Error loading podcasts:', error)
+      setPodcasts([])
     } finally {
       setLoading(false)
     }
@@ -85,6 +125,19 @@ function AllPodcastsPage({ category = null }) {
   const filteredPodcasts = selectedSource === 'ALL'
     ? podcasts
     : podcasts.filter((item) => item.source === selectedSource)
+
+  const handleSourceClick = (source) => {
+    setSelectedSource(source)
+    setVisibleCount(8)
+  }
+
+  const scrollTickerLeft = () => {
+    sourceTickerRef.current?.scrollBy({ left: -240, behavior: 'smooth' })
+  }
+
+  const scrollTickerRight = () => {
+    sourceTickerRef.current?.scrollBy({ left: 240, behavior: 'smooth' })
+  }
 
   const contextLabel = formatContextLabel(filterContext)
   const monthDayLabel = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
@@ -137,16 +190,24 @@ function AllPodcastsPage({ category = null }) {
             {selectedSource === 'ALL' ? 'All shows active' : `${filteredPodcasts.length} episodes from ${selectedSource}`}
           </span>
         </div>
-        <div className="source-pills">
-          {sources.map((source) => (
-            <button
-              key={source}
-              className={`source-pill ${selectedSource === source ? 'active' : ''}`}
-              onClick={() => setSelectedSource(source)}
-            >
-              {source}
-            </button>
-          ))}
+        <div className="source-ticker-row">
+          <button className="slider-btn ticker-btn" onClick={scrollTickerLeft} aria-label="Scroll sources left">
+            <FontAwesomeIcon icon={faChevronLeft} />
+          </button>
+          <div className="source-pills" ref={sourceTickerRef}>
+            {sources.map((source) => (
+              <button
+                key={source}
+                className={`source-pill ${selectedSource === source ? 'active' : ''}`}
+                onClick={() => handleSourceClick(source)}
+              >
+                {source}
+              </button>
+            ))}
+          </div>
+          <button className="slider-btn ticker-btn" onClick={scrollTickerRight} aria-label="Scroll sources right">
+            <FontAwesomeIcon icon={faChevronRight} />
+          </button>
         </div>
       </div>
 

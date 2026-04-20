@@ -1,8 +1,8 @@
 /* Opinions Section */
 .opinions-section .section-title,
 .opinions-section .see-more-link {
-  margin-left: var(--section-padding-x);
-  margin-right: var(--section-padding-x);
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .opinions .see-more-btn {
@@ -15,15 +15,15 @@
 .opinions-slider-container {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-md);
-  margin-left: var(--section-padding-x);
-  margin-right: var(--section-padding-x);
-  padding-bottom: 1rem;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+  /* no side margins — main-content padding already provides the gutter */
+  padding-bottom: 0.35rem;
 }
 
 .opinions-slider {
   flex: 1;
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--spacing-md);
@@ -31,9 +31,10 @@
 }
 
 .opinions-slider-btn {
-  font-size: 22px;
-  height: 60px;
-  width: 60px;
+  font-size: 18px;
+  height: 44px;
+  width: 44px;
+  min-width: 44px;
   flex-shrink: 0;
 }
 
@@ -76,66 +77,73 @@
 
 .opinion-image {
   width: 100%;
-  height: 170px; /* Reduced from 200px */
-  max-height: 170px; /* Reduced from 200px */
+  aspect-ratio: 16 / 9;
+  height: auto;
+  max-height: none;
   object-fit: cover;
   object-position: center;
   background-color: var(--bg-tertiary);
 }
 
 .opinion-content {
-  padding: 1rem; /* Reduced from 1.25rem */
+  padding: 0.75rem;
   text-align: center;
 }
 
 .opinion-headline {
-  font-size: 1.15rem;
+  font-size: 1.02rem;
   font-weight: 600;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.45rem;
   line-height: 1.3;
   color: var(--text-primary);
   letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .opinion-excerpt {
   color: var(--text-secondary);
-  line-height: 1.5;
-  margin-bottom: 1rem;
-  font-size: 0.95rem;
+  line-height: 1.4;
+  margin-bottom: 0.65rem;
+  font-size: 0.88rem;
   font-weight: bold;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .opinion-meta {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.3rem;
 }
 
 .opinion-author {
   font-weight: 700;
   color: var(--text-primary);
-  font-size: 1.05rem;
+  font-size: 0.96rem;
 }
 
 .opinion-source {
   color: #ff4757;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 
 .opinion-date {
   color: var(--text-tertiary);
-  font-size: 0.85rem;
-  margin-top: 0.25rem;
+  font-size: 0.78rem;
+  margin-top: 0.1rem;
 }
 
 /* Responsive */
 @media (max-width: 1200px) {
-  .opinion-image {
-    max-height: 180px;
-  }
-  
   .opinion-headline {
     font-size: 1.1rem;
   }
@@ -153,25 +161,24 @@
   }
 }
 
-@media (max-width: 900px) {
-  .opinions-slider-container {
-    margin-left: clamp(1rem, 4vw, 2rem);
-    margin-right: clamp(1rem, 4vw, 2rem);
-  }
-
+@media (max-width: 1100px) {
   .opinions-slider {
     grid-template-columns: repeat(2, 1fr);
-    gap: 1.5rem;
+    gap: 1.25rem;
   }
 
-  .opinions-slider-btn {
-    font-size: 20px;
-    height: 55px;
-    width: 55px;
+  /* Stretch lone last card to fill the row */
+  .opinions-slider > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
-  
-  .opinion-image {
-    max-height: 160px;
+}
+
+@media (max-width: 900px) {
+  .opinions-slider-btn {
+    font-size: 16px;
+    height: 40px;
+    width: 40px;
+    min-width: 40px;
   }
   
   .opinion-headline {
@@ -197,9 +204,7 @@
 
 @media (max-width: 600px) {
   .opinions-slider-container {
-    gap: 0.75rem;
-    margin-left: clamp(0.75rem, 3vw, 1.5rem);
-    margin-right: clamp(0.75rem, 3vw, 1.5rem);
+    gap: 0.5rem;
   }
 
   .opinions-slider-btn {
@@ -209,10 +214,6 @@
   .opinions-slider {
     grid-template-columns: 1fr;
     gap: 1rem;
-  }
-  
-  .opinion-image {
-    max-height: 140px;
   }
   
   .opinion-headline {
@@ -238,7 +239,11 @@
   }
   
   .opinion-content {
-    padding: 1rem;
+    padding: 0.85rem;
+  }
+
+  .opinion-meta {
+    gap: 0.2rem;
   }
 }
 /* ============== Accessibility Support ============== */

@@ -1,11 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { useParams } from 'react-router-dom'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import DateTicker from '../components/layout/DateTicker'
 import { fetchVideos } from '../newsService'
+import { searchRSSContent, fetchRSSVideos } from '../rssService'
 import { getImageProps } from '../utils/imageUtils'
 import { getCategoryConfig } from '../utils/categoryConfig'
 import { filterContentByCategory } from '../utils/categoryFiltering'
+import { dedupeContentItems } from '../utils/contentDeduplication'
+import { deriveMediaOutlet } from '../utils/sourceUtils'
+import { matchesTopicQuery } from '../utils/topicFiltering'
 import './AllNewsPage.css'
 
 function AllVideosPage({ category = null }) {
@@ -16,6 +22,7 @@ function AllVideosPage({ category = null }) {
   const [selectedSource, setSelectedSource] = useState('ALL')
   const [visibleCount, setVisibleCount] = useState(8)
   const LOAD_MORE_SIZE = 8
+  const sourceTickerRef = useRef(null)
 
   const toStr = (value) => {
     if (value === null || value === undefined) return ''
@@ -55,27 +62,59 @@ function AllVideosPage({ category = null }) {
   const loadVideos = async () => {
     setLoading(true)
     try {
-      const videosData = await fetchVideos(filterContext)
-      const normalizedVideos = (Array.isArray(videosData) ? videosData : []).map((item) => ({
+      const normalizeVideoItem = (item) => ({
         ...item,
         title: toStr(item?.title),
         description: toStr(item?.description),
-        source: toStr(item?.source) || 'Video Desk',
+        source: deriveMediaOutlet({ source: toStr(item?.source), url: toStr(item?.link || item?.url) }) || 'Video Desk',
+        type: toStr(item?.type),
         category: toStr(item?.category),
         publishedAt: toStr(item?.publishedAt || item?.time),
         link: toStr(item?.link || item?.url),
         image: toStr(item?.thumbnail) || toStr(item?.image),
         duration: toStr(item?.duration),
-      }))
-      
-      let filtered = normalizedVideos
-      if (filterContext) {
-        filtered = filterContentByCategory(normalizedVideos, filterContext, 1, { strict: true })
+      })
+
+      if (hasActiveTopic && topic && topic.trim().length > 0) {
+        const searchResults = await searchRSSContent(topic)
+        const normalizedResults = (Array.isArray(searchResults) ? searchResults : []).map(normalizeVideoItem)
+        let topicVideos = dedupeContentItems(normalizedResults.filter((item) => {
+          const typeText = toStr(item?.type).toLowerCase()
+          const categoryText = toStr(item?.category).toLowerCase()
+          const sourceText = toStr(item?.source).toLowerCase()
+          const linkText = toStr(item?.link).toLowerCase()
+          return (
+            typeText === 'video' ||
+            categoryText.includes('video') ||
+            sourceText.includes('youtube') ||
+            linkText.includes('youtube.com')
+          )
+        }))
+
+        const MIN_TOPIC_VIDEOS = 20
+        if (topicVideos.length < MIN_TOPIC_VIDEOS) {
+          const videoPool = await fetchRSSVideos()
+          const supplemental = (Array.isArray(videoPool) ? videoPool : [])
+            .map(normalizeVideoItem)
+            .filter((item) => matchesTopicQuery(item, topic))
+          topicVideos = dedupeContentItems([...topicVideos, ...supplemental])
+        }
+
+        setVideos(dedupeContentItems(topicVideos))
+      } else {
+        const videosData = await fetchVideos(filterContext)
+        const normalizedVideos = (Array.isArray(videosData) ? videosData : []).map(normalizeVideoItem)
+
+        let filtered = normalizedVideos
+        if (filterContext) {
+          filtered = filterContentByCategory(normalizedVideos, filterContext, 1, { strict: true })
+        }
+
+        setVideos(dedupeContentItems(filtered))
       }
-      
-      setVideos(filtered)
     } catch (error) {
       console.error('Error loading videos:', error)
+      setVideos([])
     } finally {
       setLoading(false)
     }
@@ -85,6 +124,19 @@ function AllVideosPage({ category = null }) {
   const filteredVideos = selectedSource === 'ALL'
     ? videos
     : videos.filter((item) => item.source === selectedSource)
+
+  const handleSourceClick = (source) => {
+    setSelectedSource(source)
+    setVisibleCount(8)
+  }
+
+  const scrollTickerLeft = () => {
+    sourceTickerRef.current?.scrollBy({ left: -240, behavior: 'smooth' })
+  }
+
+  const scrollTickerRight = () => {
+    sourceTickerRef.current?.scrollBy({ left: 240, behavior: 'smooth' })
+  }
 
   const contextLabel = formatContextLabel(filterContext)
   const monthDayLabel = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
@@ -137,16 +189,24 @@ function AllVideosPage({ category = null }) {
             {selectedSource === 'ALL' ? 'All sources active' : `${filteredVideos.length} videos from ${selectedSource}`}
           </span>
         </div>
-        <div className="source-pills">
-          {sources.map((source) => (
-            <button
-              key={source}
-              className={`source-pill ${selectedSource === source ? 'active' : ''}`}
-              onClick={() => setSelectedSource(source)}
-            >
-              {source}
-            </button>
-          ))}
+        <div className="source-ticker-row">
+          <button className="slider-btn ticker-btn" onClick={scrollTickerLeft} aria-label="Scroll sources left">
+            <FontAwesomeIcon icon={faChevronLeft} />
+          </button>
+          <div className="source-pills" ref={sourceTickerRef}>
+            {sources.map((source) => (
+              <button
+                key={source}
+                className={`source-pill ${selectedSource === source ? 'active' : ''}`}
+                onClick={() => handleSourceClick(source)}
+              >
+                {source}
+              </button>
+            ))}
+          </div>
+          <button className="slider-btn ticker-btn" onClick={scrollTickerRight} aria-label="Scroll sources right">
+            <FontAwesomeIcon icon={faChevronRight} />
+          </button>
         </div>
       </div>
 

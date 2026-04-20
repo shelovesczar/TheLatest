@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import './DateTicker.css';
 
 /**
@@ -7,6 +7,8 @@ import './DateTicker.css';
  */
 const DateTicker = ({ breakingNews = [], sticky = true, label = 'BREAKING', showDate = true }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [tickerDuration, setTickerDuration] = useState(70);
+  const tickerWrapperRef = useRef(null);
 
   useEffect(() => {
     // Update date every minute
@@ -37,6 +39,28 @@ const DateTicker = ({ breakingNews = [], sticky = true, label = 'BREAKING', show
 
   const newsItems = breakingNews.length > 0 ? breakingNews : defaultNews;
 
+  useLayoutEffect(() => {
+    const wrapper = tickerWrapperRef.current;
+    if (!wrapper) return;
+
+    const updateDuration = () => {
+      const totalWidth = wrapper.scrollWidth;
+      const loopDistance = totalWidth / 4;
+      const pixelsPerSecond = 55;
+      const nextDuration = loopDistance > 0 ? loopDistance / pixelsPerSecond : 70;
+      setTickerDuration(Math.max(35, Math.min(nextDuration, 140)));
+    };
+
+    updateDuration();
+    const rafId = window.requestAnimationFrame(updateDuration);
+    window.addEventListener('resize', updateDuration);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', updateDuration);
+    };
+  }, [newsItems]);
+
   return (
     <div className={`date-ticker-container${sticky ? '' : ' is-static'}`}>
       {/* Date Display */}
@@ -54,9 +78,13 @@ const DateTicker = ({ breakingNews = [], sticky = true, label = 'BREAKING', show
             {label}
           </div>
           <div className="ticker-content">
-            <div className="ticker-wrapper">
-              {/* Duplicate for seamless loop */}
-              {[...newsItems, ...newsItems].map((item, index) => (
+            <div
+              ref={tickerWrapperRef}
+              className="ticker-wrapper"
+              style={{ animationDuration: `${tickerDuration}s` }}
+            >
+              {/* Quadruplicate for seamless loop — ensures content fills full viewport width */}
+              {[...newsItems, ...newsItems, ...newsItems, ...newsItems].map((item, index) => (
                 <span key={index} className="ticker-item">
                   {item}
                 </span>

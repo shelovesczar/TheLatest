@@ -3,6 +3,41 @@
   publish = "dist"
   functions = "netlify/functions"
 
+# ─── HTTP Cache Headers ────────────────────────────────────────────────────────
+# Vite appends a content-hash to every JS/CSS filename (e.g. index-Bk3xQp8.js)
+# so these assets are safe to cache forever — browsers only re-download when
+# the file actually changes (new deploy = new hash = new URL).
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Fonts are also hashed and never change once published.
+[[headers]]
+  for = "/fonts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Images in /images/ are not hashed, cache for 7 days and allow revalidation.
+[[headers]]
+  for = "/images/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800, stale-while-revalidate=86400"
+
+# The HTML shell must never be cached — it's what loads the hashed chunks.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+# Netlify function responses — let the in-memory cache on the function handle
+# freshness; tell the CDN/browser not to cache the JSON directly.
+[[headers]]
+  for = "/.netlify/functions/*"
+  [headers.values]
+    Cache-Control = "no-cache"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

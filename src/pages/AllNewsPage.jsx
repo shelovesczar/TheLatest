@@ -1,12 +1,16 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { useParams, useNavigate } from 'react-router-dom'
 import { recordHistory } from '../utils/savedArticles'
 import DateTicker from '../components/layout/DateTicker'
 import { fetchRSSNews } from '../newsService'
+import { searchRSSContent } from '../rssService'
 import { getImageProps } from '../utils/imageUtils'
 import { getCategoryConfig } from '../utils/categoryConfig'
 import { filterContentByCategory } from '../utils/categoryFiltering'
+import { dedupeContentItems } from '../utils/contentDeduplication'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import './AllNewsPage.css'
 
 function AllNewsPage({ category = null }) {
@@ -16,10 +20,9 @@ function AllNewsPage({ category = null }) {
   const [news, setNews] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedSource, setSelectedSource] = useState('ALL')
-  const [tickerPage, setTickerPage] = useState(0)
   const [visibleCount, setVisibleCount] = useState(8)
-  const TICKER_PAGE_SIZE = 5
   const LOAD_MORE_SIZE = 8
+  const sourceTickerRef = useRef(null)
 
   // Navigate to the on-site article reader
   const goToArticle = useCallback((article) => {
@@ -94,21 +97,26 @@ function AllNewsPage({ category = null }) {
   const loadNews = async () => {
     setLoading(true)
     try {
-      console.log('[AllNewsPage] Loading news, filterContext:', filterContext)
-      const newsData = await fetchRSSNews(filterContext)
-      console.log('[AllNewsPage] Fetched data:', newsData?.length || 0, 'articles')
-      const normalizedNews = (Array.isArray(newsData) ? newsData : []).map(normalizeArticle)
-      console.log('[AllNewsPage] Normalized data:', normalizedNews?.length || 0, 'articles')
-
-      let filtered = normalizedNews
-      if (filterContext) {
-        console.log('[AllNewsPage] Filtering by category:', filterContext)
-        filtered = filterContentByCategory(normalizedNews, filterContext, 1, { strict: true })
-        console.log('[AllNewsPage] After filtering:', filtered?.length || 0, 'articles')
+      let newsData
+      if (hasActiveTopic && topic && topic.trim().length > 0) {
+        // Use the search endpoint so the server fetches topic-specific RSS content
+        console.log('[AllNewsPage] Searching by topic:', topic)
+        newsData = await searchRSSContent(topic)
+        console.log('[AllNewsPage] Search returned:', newsData?.length || 0, 'articles')
+      } else if (filterContext) {
+        console.log('[AllNewsPage] Loading by category:', filterContext)
+        const rawData = await fetchRSSNews(filterContext)
+        const normalizedRaw = (Array.isArray(rawData) ? rawData : []).map(normalizeArticle)
+        setNews(dedupeContentItems(filterContentByCategory(normalizedRaw, filterContext, 1, { strict: true })))
+        setLoading(false)
+        return
+      } else {
+        console.log('[AllNewsPage] Loading all news')
+        newsData = await fetchRSSNews()
       }
-
-      console.log('[AllNewsPage] Final news to display:', filtered?.length || 0)
-      setNews(filtered)
+      const normalizedNews = (Array.isArray(newsData) ? newsData : []).map(normalizeArticle)
+      console.log('[AllNewsPage] Final news to display:', normalizedNews.length)
+      setNews(dedupeContentItems(normalizedNews))
     } catch (error) {
       console.error('Error loading news:', error)
       setNews([])
@@ -122,23 +130,16 @@ function AllNewsPage({ category = null }) {
     ? news
     : news.filter((item) => item.source === selectedSource)
 
-  // Paginated ticker — shows TICKER_PAGE_SIZE pills at a time.
-  // 'ALL' is always pinned left; the remaining source names page independently.
-  const pagedSources = sources.filter(s => s !== 'ALL')
-  const totalPages = Math.ceil(pagedSources.length / TICKER_PAGE_SIZE)
-  const safeTickerPage = tickerPage % (totalPages || 1)
-  const visibleSources = [
-    'ALL',
-    ...pagedSources.slice(safeTickerPage * TICKER_PAGE_SIZE, safeTickerPage * TICKER_PAGE_SIZE + TICKER_PAGE_SIZE)
-  ]
-
   const handleSourceClick = (source) => {
     setSelectedSource(source)
-    setVisibleCount(8) // reset pagination when switching source
-    if (source !== 'ALL') {
-      // Advance to the next page so the user always sees fresh options
-      setTickerPage(prev => (prev + 1) % (totalPages || 1))
-    }
+    setVisibleCount(8)
+  }
+
+  const scrollTickerLeft = () => {
+    sourceTickerRef.current?.scrollBy({ left: -240, behavior: 'smooth' })
+  }
+  const scrollTickerRight = () => {
+    sourceTickerRef.current?.scrollBy({ left: 240, behavior: 'smooth' })
   }
 
   const contextLabel = formatContextLabel(filterContext)
@@ -192,25 +193,24 @@ function AllNewsPage({ category = null }) {
             {selectedSource === 'ALL' ? 'All sources active' : `${filteredNews.length} stories from ${selectedSource}`}
           </span>
         </div>
-        <div className="source-pills">
-          {visibleSources.map((source) => (
-            <button
-              key={source}
-              className={`source-pill ${selectedSource === source ? 'active' : ''}`}
-              onClick={() => handleSourceClick(source)}
-            >
-              {source}
-            </button>
-          ))}
-          {totalPages > 1 && (
-            <button
-              className="source-pill ticker-next-btn"
-              onClick={() => setTickerPage(prev => (prev + 1) % totalPages)}
-              title={`Page ${safeTickerPage + 1} of ${totalPages} — click to see next 5 sources`}
-            >
-              More sources ›
-            </button>
-          )}
+        <div className="source-ticker-row">
+          <button className="slider-btn ticker-btn" onClick={scrollTickerLeft} aria-label="Scroll sources left">
+            <FontAwesomeIcon icon={faChevronLeft} />
+          </button>
+          <div className="source-pills" ref={sourceTickerRef}>
+            {sources.map((source) => (
+              <button
+                key={source}
+                className={`source-pill ${selectedSource === source ? 'active' : ''}`}
+                onClick={() => handleSourceClick(source)}
+              >
+                {source}
+              </button>
+            ))}
+          </div>
+          <button className="slider-btn ticker-btn" onClick={scrollTickerRight} aria-label="Scroll sources right">
+            <FontAwesomeIcon icon={faChevronRight} />
+          </button>
         </div>
       </div>
 

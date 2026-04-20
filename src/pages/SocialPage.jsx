@@ -18,13 +18,15 @@ function SocialPage() {
     const loadSocialPosts = async () => {
       setLoading(true)
       try {
-        // TODO: Replace with real API calls when keys are available
-        // For now, use mock data
-        const posts = hasActiveTopic 
-          ? getRandomCategoryPosts(20) // Simulate topic-filtered posts
-          : await getRandomTrendingPosts(20)
-        
-        setSocialPosts(posts || getRandomCategoryPosts(20))
+        const activeTopic = hasActiveTopic ? topic : ''
+        let posts = await getRandomTrendingPosts(20, activeTopic)
+
+        // If topic feed is sparse, broaden to overall social feed before mock fallback.
+        if ((!posts || posts.length === 0) && activeTopic) {
+          posts = await getRandomTrendingPosts(20, '')
+        }
+
+        setSocialPosts(posts && posts.length > 0 ? posts : getRandomCategoryPosts(20))
       } catch (error) {
         console.error('Error loading social posts:', error)
         setSocialPosts(getRandomCategoryPosts(20))

@@ -4,6 +4,7 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getImageProps } from '../../utils/imageUtils'
 import { recordHistory } from '../../utils/savedArticles'
+import AdBreak from '../common/AdBreak'
 import './TopStories.css'
 
 function TopStories({ loading, topStories, activeStory, setActiveStory, categoryTitle, categorySources, categoryPath }) {
@@ -12,10 +13,61 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
   const navigate = useNavigate()
   const [descriptionLength, setDescriptionLength] = useState(150)
 
+  const getMediaOutlet = useCallback((story) => {
+    if (!story) return 'Unknown Source'
+
+    const domainMap = {
+      'nytimes.com': 'New York Times',
+      'bbc.com': 'BBC News',
+      'bbc.co.uk': 'BBC News',
+      'cnn.com': 'CNN',
+      'foxnews.com': 'Fox News',
+      'reuters.com': 'Reuters',
+      'theguardian.com': 'The Guardian',
+      'washingtonpost.com': 'Washington Post',
+      'wsj.com': 'Wall Street Journal',
+      'apnews.com': 'Associated Press',
+      'nbcnews.com': 'NBC News',
+      'abcnews.go.com': 'ABC News',
+      'cbsnews.com': 'CBS News',
+      'npr.org': 'NPR',
+      'politico.com': 'Politico',
+      'latimes.com': 'LA Times',
+      'usatoday.com': 'USA Today',
+      'nypost.com': 'New York Post',
+      'bloomberg.com': 'Bloomberg',
+      'cnbc.com': 'CNBC'
+    }
+
+    const sourceText = (story.source || '').trim()
+
+    if (story.url) {
+      try {
+        const hostname = new URL(story.url).hostname.replace(/^www\./, '')
+        if (domainMap[hostname]) return domainMap[hostname]
+
+        const matchingDomain = Object.keys(domainMap).find(domain => hostname === domain || hostname.endsWith(`.${domain}`))
+        if (matchingDomain) return domainMap[matchingDomain]
+      } catch {
+        // ignore URL parsing errors and fall through
+      }
+    }
+
+    return sourceText || 'Unknown Source'
+  }, [])
+
   const goToArticle = useCallback((article) => {
     recordHistory(article)
     navigate('/article', { state: { article } })
   }, [navigate])
+
+  const getOriginalUrl = useCallback((story) => {
+    if (!story) return ''
+    const candidate = (story.url || story.link || '').trim()
+    if (!candidate) return ''
+    if (/^https?:\/\//i.test(candidate)) return candidate
+    return ''
+  }, [])
 
   // Truncate text helper
   const truncateText = (text, maxLength) => {
@@ -46,6 +98,13 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
       };
     }
   }, [activeStory, topStories])
+
+  // Clamp activeStory if topStories reloads with fewer items
+  useEffect(() => {
+    if (topStories.length > 0 && activeStory >= topStories.length) {
+      setActiveStory(0)
+    }
+  }, [topStories, activeStory, setActiveStory])
 
   const nextStory = () => {
     setActiveStory((prev) => (prev + 1) % topStories.length)
@@ -105,7 +164,7 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
         <div className="loading-container">
           <p className="loading-text">Loading top stories...</p>
         </div>
-      ) : topStories.length > 0 ? (
+      ) : topStories.length > 0 && topStories[activeStory] ? (
         <>
           <div className="source-ticker-container">
             <button 
@@ -122,11 +181,10 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
                   key={index}
                   className={`source-pill ${index === activeStory ? 'active' : ''}`}
                   onClick={() => setActiveStory(index)}
-                  title={story.title}
+                  title={`Media outlet: ${getMediaOutlet(story)}`}
+                  aria-label={`Show stories from media outlet ${getMediaOutlet(story)}`}
                 >
-                  <span className="pill-source">{truncateText(story.source, 20)}</span>
-                  <span className="pill-divider">•</span>
-                  <span className="pill-title">{truncateText(story.title, 30)}</span>
+                  <span className="pill-source">{truncateText(getMediaOutlet(story), 20)}</span>
                 </button>
               ))}
             </div>
@@ -156,10 +214,25 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
                   <h3 className="story-card-headline">{topStories[activeStory].title}</h3>
                 </a>
                 <div className="story-card-meta">
-                  <span className="story-card-source">{topStories[activeStory].source}</span>
+                  <span className="story-card-source">{getMediaOutlet(topStories[activeStory])}</span>
                   <span className="story-card-time">{topStories[activeStory].time}</span>
                 </div>
                 <p className="story-card-description">{truncateText(topStories[activeStory].description, descriptionLength)}</p>
+                <div className="story-source-credit">
+                  <span className="story-source-label">Source:</span>
+                  {getOriginalUrl(topStories[activeStory]) ? (
+                    <a
+                      className="story-source-link"
+                      href={getOriginalUrl(topStories[activeStory])}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {getMediaOutlet(topStories[activeStory])}
+                    </a>
+                  ) : (
+                    <span className="story-source-name">{getMediaOutlet(topStories[activeStory])}</span>
+                  )}
+                </div>
                 <a 
                   href="#"
                   onClick={e => { e.preventDefault(); goToArticle(topStories[activeStory]) }}
@@ -171,9 +244,7 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
             </article>
             
             <div className="section-ad-sidebar">
-              <div className="ad-placeholder ad-dynamic">
-                <span>AD</span>
-              </div>
+              <AdBreak type="sidebar" />
             </div>
           </div>
         </>

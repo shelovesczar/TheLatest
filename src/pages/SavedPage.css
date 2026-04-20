@@ -5,7 +5,7 @@
 
 /* ── Hero ─────────────────────────────────────────────────────── */
 .saved-hero {
-  background: linear-gradient(135deg, #1a1533 0%, #0d0b1e 60%, #241e42 100%);
+  background: var(--gradient-surface);
   border-bottom: 1px solid var(--border-color);
   padding: 3rem 0 2rem;
 }
@@ -215,6 +215,7 @@
   color: var(--text-primary);
   margin: 0 0 0.5rem;
   display: -webkit-box;
+  line-clamp: 3;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;

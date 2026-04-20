@@ -7,6 +7,7 @@ import Podcasts from '../components/sections/Podcasts'
 
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
 import { filterContentByCategory } from '../utils/categoryFiltering'
+import { dedupeContentItems } from '../utils/contentDeduplication'
 import './CategoryPage.css'
 
 function CategoryPage({ 
@@ -215,10 +216,10 @@ function CategoryPage({
           // Filter by category keywords
           const filtered = filterContentByCategory(allNews, category, 1, { strict: true });
           console.log(`[CategoryPage] Filtered to ${filtered.length} ${category} articles`);
-          finalNews = filtered.slice(0, 15);
+          finalNews = dedupeContentItems(filtered).slice(0, 15);
         } else {
           // Top-stories: use all news
-          finalNews = allNews.slice(0, 15);
+          finalNews = dedupeContentItems(allNews).slice(0, 15);
         }
         
         setCategoryNews(finalNews)
@@ -229,9 +230,9 @@ function CategoryPage({
         if (category && category !== 'top-stories') {
           const filteredOpinions = filterContentByCategory(opinionData, category, 1, { strict: true })
           console.log(`[CategoryPage] Filtered ${filteredOpinions.length} opinions for ${category} from ${opinionData.length} total`);
-          setOpinions(filteredOpinions.slice(0, 6))
+          setOpinions(dedupeContentItems(filteredOpinions).slice(0, 6))
         } else {
-          setOpinions(opinionData.slice(0, 6))
+          setOpinions(dedupeContentItems(opinionData).slice(0, 6))
         }
         setLoadingOpinions(false)
 
@@ -240,9 +241,9 @@ function CategoryPage({
         if (category && category !== 'top-stories') {
           const filteredVideos = filterContentByCategory(videoData, category, 1, { strict: true })
           console.log(`[CategoryPage] Filtered ${filteredVideos.length} videos for ${category} from ${videoData.length} total`);
-          setVideos(filteredVideos.slice(0, 6))
+          setVideos(dedupeContentItems(filteredVideos).slice(0, 6))
         } else {
-          setVideos(videoData.slice(0, 6))
+          setVideos(dedupeContentItems(videoData).slice(0, 6))
         }
         setLoadingVideos(false)
 
@@ -251,9 +252,9 @@ function CategoryPage({
         if (category && category !== 'top-stories') {
           const filteredPodcasts = filterContentByCategory(podcastData, category, 1, { strict: true })
           console.log(`[CategoryPage] Filtered ${filteredPodcasts.length} podcasts for ${category} from ${podcastData.length} total`);
-          setPodcasts(filteredPodcasts.slice(0, 6))
+          setPodcasts(dedupeContentItems(filteredPodcasts).slice(0, 6))
         } else {
-          setPodcasts(podcastData.slice(0, 6))
+          setPodcasts(dedupeContentItems(podcastData).slice(0, 6))
         }
         setLoadingPodcasts(false)
 

@@ -1,6 +1,6 @@
 const Parser = require('rss-parser');
 const parser = new Parser({
-  timeout: 30000, // Increased to 30 seconds
+  timeout: 12000, // 12 seconds — fail fast on slow feeds
   customFields: {
     item: [
       ['media:content', 'media'],
@@ -23,18 +23,21 @@ let cache = {
 };
 
 let articleImageCache = new Map();
+let feedFailureCache = new Map();
 
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-const MAX_ITEMS_PER_FEED = 80;
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes — halves cold-start frequency
+const MAX_ITEMS_PER_FEED = 30;         // was 80 — we never render >30 per feed
 const ARTICLE_IMAGE_CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
-const MAX_IMAGE_ENRICH_ITEMS = 60;
-const IMAGE_ENRICH_CONCURRENCY = 6;
+const MAX_IMAGE_ENRICH_ITEMS = 20;     // was 60 — top 20 items only, much faster
+const IMAGE_ENRICH_CONCURRENCY = 5;
+const PERMANENT_FEED_FAILURE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+const TRANSIENT_FEED_FAILURE_TTL = 30 * 60 * 1000; // 30 minutes
 
 const FALLBACK_IMAGE_URLS = new Set([
-  'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=800&q=80',
-  'https://images.unsplash.com/photo-1586339949216-35c2747e98f8?w=800&q=80',
-  'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=800&q=80',
-  'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&q=80'
+  'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=1600&q=85',
+  'https://images.unsplash.com/photo-1586339949216-35c2747e98f8?w=1600&q=85',
+  'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=1600&q=85',
+  'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=1600&q=85'
 ]);
 
 function toPlainText(value) {
@@ -111,6 +114,145 @@ function getArticlePreviewImage(articleUrl) {
   const normalizedUrl = normalizeUrl(articleUrl);
   if (!normalizedUrl || !/^https?:\/\//i.test(normalizedUrl)) return null;
   return `https://image.thum.io/get/width/1200/noanimate/${encodeURIComponent(normalizedUrl)}`;
+}
+
+function toInt(value) {
+  const parsed = parseInt(String(value || '').trim(), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function getImageDimensionHints(url = '') {
+  const normalized = toPlainText(url).trim();
+  const hints = { width: 0, height: 0 };
+  if (!normalized) return hints;
+
+  const sizeSuffixMatch = normalized.match(/[-_](\d{2,4})x(\d{2,4})(?=\.(?:jpg|jpeg|png|webp|avif|gif))/i);
+  if (sizeSuffixMatch) {
+    hints.width = toInt(sizeSuffixMatch[1]);
+    hints.height = toInt(sizeSuffixMatch[2]);
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    const widthParam =
+      parsed.searchParams.get('width') ||
+      parsed.searchParams.get('w') ||
+      parsed.searchParams.get('max_width') ||
+      parsed.searchParams.get('imgw');
+    const heightParam =
+      parsed.searchParams.get('height') ||
+      parsed.searchParams.get('h') ||
+      parsed.searchParams.get('max_height') ||
+      parsed.searchParams.get('imgh');
+    const resizeParam = parsed.searchParams.get('resize') || parsed.searchParams.get('size');
+
+    hints.width = hints.width || toInt(widthParam);
+    hints.height = hints.height || toInt(heightParam);
+
+    if (resizeParam && (!hints.width || !hints.height)) {
+      const resizeMatch = String(resizeParam).match(/(\d{2,4})[^\d]+(\d{2,4})/);
+      if (resizeMatch) {
+        hints.width = hints.width || toInt(resizeMatch[1]);
+        hints.height = hints.height || toInt(resizeMatch[2]);
+      }
+    }
+  } catch {
+    // noop
+  }
+
+  return hints;
+}
+
+function enhanceImageUrl(rawUrl = '') {
+  const normalized = toPlainText(rawUrl).trim();
+  if (!normalized) return normalized;
+
+  let upgraded = normalized
+    .replace(/[-_](\d{2,4})x(\d{2,4})(?=\.(?:jpg|jpeg|png|webp|avif|gif))/i, '');
+
+  try {
+    const parsed = new URL(upgraded);
+    const widthKeys = ['w', 'width', 'max_width', 'imgw'];
+    const heightKeys = ['h', 'height', 'max_height', 'imgh'];
+
+    widthKeys.forEach((key) => {
+      const current = toInt(parsed.searchParams.get(key));
+      if (current > 0 && current < 900) {
+        parsed.searchParams.set(key, '1400');
+      }
+    });
+
+    heightKeys.forEach((key) => {
+      const current = toInt(parsed.searchParams.get(key));
+      if (current > 0 && current < 550) {
+        parsed.searchParams.set(key, '900');
+      }
+    });
+
+    const quality = toInt(parsed.searchParams.get('q') || parsed.searchParams.get('quality'));
+    if (quality > 0 && quality < 75) {
+      if (parsed.searchParams.has('q')) parsed.searchParams.set('q', '85');
+      if (parsed.searchParams.has('quality')) parsed.searchParams.set('quality', '85');
+    }
+
+    upgraded = parsed.toString();
+  } catch {
+    // noop
+  }
+
+  upgraded = upgraded
+    .replace(/=s(\d{2,4})(?:-[\w-]+)?(?=$|&|\?)/i, '=s1600')
+    .replace(/\/thumb\//i, '/');
+
+  return upgraded;
+}
+
+function scoreImageCandidate(url = '') {
+  const normalized = toPlainText(url).trim();
+  if (!normalized || !isValidImageUrl(normalized)) return -1000;
+
+  const lower = normalized.toLowerCase();
+  const { width, height } = getImageDimensionHints(normalized);
+  let score = 0;
+
+  if (width >= 1400) score += 12;
+  else if (width >= 1000) score += 8;
+  else if (width >= 700) score += 4;
+  else if (width > 0 && width < 500) score -= 8;
+
+  if (height >= 800) score += 6;
+  else if (height > 0 && height < 350) score -= 5;
+
+  if (width > 0 && height > 0) {
+    const area = width * height;
+    if (area >= 800000) score += 6;
+    else if (area < 180000) score -= 6;
+  }
+
+  if (/maxres|original|orig|2048|1600|full|large/i.test(lower)) score += 5;
+  if (/thumb|thumbnail|small|avatar|icon|sprite/i.test(lower)) score -= 7;
+  if (/\.(jpg|jpeg|png|webp|avif)(\?|$)/i.test(lower)) score += 1;
+
+  return score;
+}
+
+function pickBestImageCandidate(candidates = []) {
+  const unique = [];
+  const seen = new Set();
+
+  candidates.forEach((candidate) => {
+    const enhanced = enhanceImageUrl(candidate);
+    if (!enhanced || seen.has(enhanced)) return;
+    seen.add(enhanced);
+    unique.push(enhanced);
+  });
+
+  const scored = unique
+    .map((url) => ({ url, score: scoreImageCandidate(url) }))
+    .filter((entry) => entry.score > -900)
+    .sort((a, b) => b.score - a.score);
+
+  return scored[0]?.url || null;
 }
 
 function getDedupKey(item = {}) {
@@ -220,6 +362,56 @@ function cacheArticleImage(url, image) {
   articleImageCache.set(url, { image: image || '', timestamp: Date.now() });
 }
 
+function pruneFeedFailureCache() {
+  const now = Date.now();
+  for (const [key, value] of feedFailureCache.entries()) {
+    if (!value || now >= value.expiresAt) {
+      feedFailureCache.delete(key);
+    }
+  }
+}
+
+function getFeedFailureStatus(error) {
+  const directStatus = error?.statusCode || error?.status || error?.response?.status;
+  if (directStatus) return Number(directStatus);
+
+  const message = toPlainText(error?.message);
+  const match = message.match(/status code\s+(\d{3})/i);
+  return match ? Number(match[1]) : null;
+}
+
+function shouldCacheFeedFailure(status, error) {
+  if ([401, 403, 404, 406].includes(status)) {
+    return { shouldCache: true, ttl: PERMANENT_FEED_FAILURE_TTL };
+  }
+
+  const message = toPlainText(error?.message).toLowerCase();
+  if (message.includes('enotfound') || message.includes('eai_again')) {
+    return { shouldCache: true, ttl: TRANSIENT_FEED_FAILURE_TTL };
+  }
+
+  return { shouldCache: false, ttl: 0 };
+}
+
+function shouldSkipFeed(feedUrl) {
+  pruneFeedFailureCache();
+  const cachedFailure = feedFailureCache.get(feedUrl);
+  if (!cachedFailure) return false;
+  return Date.now() < cachedFailure.expiresAt;
+}
+
+function cacheFeedFailure(feedUrl, error) {
+  const status = getFeedFailureStatus(error);
+  const { shouldCache, ttl } = shouldCacheFeedFailure(status, error);
+  if (!shouldCache) return;
+
+  feedFailureCache.set(feedUrl, {
+    status,
+    message: toPlainText(error?.message),
+    expiresAt: Date.now() + ttl
+  });
+}
+
 function extractMetaImageCandidates(html = '') {
   const candidates = [];
   const add = (value) => {
@@ -275,7 +467,7 @@ async function fetchArticleImage(articleUrl) {
         }
       });
 
-    const bestImage = metaCandidates.find((candidate) => isValidImageUrl(candidate));
+    const bestImage = pickBestImageCandidate(metaCandidates);
     const resolvedImage = bestImage || getArticlePreviewImage(normalizedUrl);
     cacheArticleImage(normalizedUrl, resolvedImage || null);
     return resolvedImage || null;
@@ -515,9 +707,13 @@ const RSS_FEEDS = {
     { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCIRYBXDze5krPDzAEOxFGVA', source: 'The Guardian Video' },
     { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCrp_UI8XtuYfpiqluWLD7Lw', source: 'CNBC Television' },
     { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCIALMKvObZNtJ6AmdCLP7Lg', source: 'Bloomberg Television' },
-    // RSS APP feeds
-    { url: 'https://rss.app/feeds/wGtHhwQaOwup8JQs.xml', source: 'New York Post' },
-    { url: 'https://rss.app/feeds/_iIjbt3XTnFFpU0Cv.xml', source: 'The Latest' }
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCoMdktPbSTixAyNGwb-UYkQ', source: 'Sky News' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UC6ZFN9Tx6xh-skXCuRHCDpQ', source: 'PBS NewsHour' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCmh5gdwCx6lN7gEC20leNVA', source: 'Yahoo Finance' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCknLrEdhRCp1aegoMqRaCZg', source: 'DW News' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCNye-wNBqNL5ZzHSJj3l8Bg', source: 'Al Jazeera English' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCX3i5UvvT6cz8KJjbDwt1nA', source: 'Wall Street Journal' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UC8p1vwvWtl6T73JiExfWs1g', source: 'C-SPAN' },
   ],
   podcasts: [
     // News & Politics Podcasts
@@ -769,11 +965,13 @@ function extractImage(item) {
   };
   
   // Special handling for YouTube videos - extract video ID and construct thumbnail URL
-  if (item.link && item.link.includes('youtube.com/watch')) {
-    const videoIdMatch = item.link.match(/[?&]v=([^&]+)/);
-    if (videoIdMatch && videoIdMatch[1]) {
-      // Use high quality thumbnail (maxresdefault), fall back to medium quality if not available
-      return `https://i.ytimg.com/vi/${videoIdMatch[1]}/hqdefault.jpg`;
+  if (item.link) {
+    // Handle both youtube.com and youtu.be formats
+    const youtubeMatch = item.link.match(/(?:youtube\.com\/watch\?.*v=|youtu\.be\/)([^&?/]+)/);
+    if (youtubeMatch && youtubeMatch[1]) {
+      const videoId = youtubeMatch[1];
+      // Use high quality thumbnail (maxresdefault), fall back to mq quality if not available
+      return `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
     }
   }
   
@@ -781,10 +979,21 @@ function extractImage(item) {
   if (item.itunes && item.itunes.image) {
     if (typeof item.itunes.image === 'string') return item.itunes.image;
     if (item.itunes.image.$ && item.itunes.image.$.href) return item.itunes.image.$.href;
+    if (item.itunes.image._ && item.itunes.image._) return item.itunes.image._;
   }
 
   if (item.itunesImage) {
     addFromObject(item.itunesImage);
+  }
+
+  // Direct iTunes image URL (sometimes it's a direct string property)
+  if (typeof item['itunes:image'] === 'string') {
+    addCandidate(item['itunes:image']);
+  } else if (item['itunes:image'] && typeof item['itunes:image'] === 'object') {
+    if (item['itunes:image'].$ && item['itunes:image'].$.href) {
+      addCandidate(item['itunes:image'].$.href);
+    }
+    addFromObject(item['itunes:image']);
   }
 
   if (item.imageField) {
@@ -826,10 +1035,10 @@ function extractImage(item) {
       if (sortedMedia.length > 0) {
         const bestImage = sortedMedia[0];
         const width = parseInt(bestImage.$.width) || 0;
-        // Only use if width is reasonable (prefer images >= 400px, but accept unknowns)
-        if (width >= 400 || width === 0) {
+        // Only use if width is reasonable (prefer images >= 700px, but accept unknowns)
+        if (width >= 700 || width === 0) {
           imageUrl = bestImage.$.url;
-          if (isValidImageUrl(imageUrl)) return imageUrl;
+          if (isValidImageUrl(imageUrl)) return enhanceImageUrl(imageUrl);
         }
       }
       
@@ -879,10 +1088,10 @@ function extractImage(item) {
       if (sortedThumbs.length > 0) {
         const bestThumb = sortedThumbs[0];
         const width = parseInt(bestThumb.$.width) || 0;
-        // Prefer thumbnails >= 400px wide
-        if (width >= 400 || width === 0) {
+        // Prefer thumbnails >= 700px wide
+        if (width >= 700 || width === 0) {
           imageUrl = bestThumb.$.url;
-          if (isValidImageUrl(imageUrl)) return imageUrl;
+          if (isValidImageUrl(imageUrl)) return enhanceImageUrl(imageUrl);
         }
       }
     } else if (item['media:thumbnail'].$ && item['media:thumbnail'].$.url) {
@@ -932,7 +1141,7 @@ function extractImage(item) {
   }
 
   for (const candidateUrl of candidateUrls) {
-    if (isValidImageUrl(candidateUrl)) return candidateUrl;
+    if (isValidImageUrl(candidateUrl)) return enhanceImageUrl(candidateUrl);
   }
   
   // Try to extract from content/description HTML
@@ -953,7 +1162,7 @@ function extractImage(item) {
         const widthMatch = imgTag.match(/width=["']?(\d+)/i);
         const width = widthMatch ? parseInt(widthMatch[1]) : 0;
         
-        if (width >= 300 || width === 0) {
+        if (width >= 700 || width === 0) {
           imgUrls.push({ url, width });
         }
       }
@@ -972,8 +1181,8 @@ function extractImage(item) {
     // Sort by width and return largest
     if (imgUrls.length > 0) {
       imgUrls.sort((a, b) => b.width - a.width);
-      imageUrl = imgUrls[0].url;
-      if (isValidImageUrl(imageUrl)) return imageUrl;
+      const bestCandidate = pickBestImageCandidate(imgUrls.map((entry) => entry.url));
+      if (bestCandidate && isValidImageUrl(bestCandidate)) return bestCandidate;
     }
   }
   
@@ -987,19 +1196,19 @@ function extractImage(item) {
   }
   
   if (title.includes('podcast') || description.includes('podcast')) {
-    return 'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=800&q=80'; // Podcast microphone
+    return 'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=1600&q=85'; // Podcast microphone
   }
   
   if (title.includes('opinion') || title.includes('editorial')) {
-    return 'https://images.unsplash.com/photo-1586339949216-35c2747e98f8?w=800&q=80'; // Opinion/writing
+    return 'https://images.unsplash.com/photo-1586339949216-35c2747e98f8?w=1600&q=85'; // Opinion/writing
   }
   
   if (title.includes('video') || description.includes('video')) {
-    return 'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=800&q=80'; // Video
+    return 'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=1600&q=85'; // Video
   }
   
   // Default fallback image
-  return 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&q=80';
+  return 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=1600&q=85';
 }
 
 // Helper function to validate image URLs
@@ -1019,15 +1228,17 @@ function isValidImageUrl(url) {
   return true;
 }
 
+function extractAuthor(item) {
+  if (item.creator) return toPlainText(item.creator); // dc:creator
+  if (item.author) return toPlainText(item.author); // author field
+  return '';
+}
+
 // Helper to extract the actual source from RSS item (for bundled feeds)
 function extractSource(item, defaultSource) {
-  // Try to get source from various RSS fields
-  if (item.creator) return item.creator; // dc:creator
-  if (item.author) return item.author; // author field
-  
   // Check for source in custom fields
-  if (item.source && item.source.title) return item.source.title;
-  if (item.source && typeof item.source === 'string') return item.source;
+  if (item.source && item.source.title) return toPlainText(item.source.title);
+  if (item.source && typeof item.source === 'string') return toPlainText(item.source);
   
   // Try to extract from link domain
   if (item.link) {
@@ -1090,11 +1301,15 @@ function extractSource(item, defaultSource) {
   }
   
   // Fall back to provided source
-  return defaultSource;
+  return toPlainText(defaultSource);
 }
 
 // Parse a single RSS feed
 async function parseFeed(feedConfig) {
+  if (shouldSkipFeed(feedConfig.url)) {
+    return [];
+  }
+
   try {
     const feed = await parser.parseURL(feedConfig.url);
     const rawItems = Array.isArray(feed.items) ? feed.items.slice(0, MAX_ITEMS_PER_FEED) : [];
@@ -1107,7 +1322,8 @@ async function parseFeed(feedConfig) {
         url: toPlainText(item.link), // Use 'url' instead of 'link' for consistency with components
         link: toPlainText(item.link), // Keep 'link' for backward compatibility
         image: extractImage(item),
-        source: extractSource(item, feedConfig.source), // Dynamic source extraction
+        source: extractSource(item, feedConfig.source), // Outlet / publisher source
+        author: extractAuthor(item),
         publishedAt: item.pubDate ? new Date(item.pubDate).toLocaleString() : 'Recently',
         category: toPlainText(item.categories ? item.categories[0] : 'News') || 'News'
       }));
@@ -1115,7 +1331,11 @@ async function parseFeed(feedConfig) {
     console.log(`${feedConfig.source}: ${rawItems.length} sampled, ${filteredItems.length} after filtering`);
     return filteredItems;
   } catch (error) {
-    console.error(`Error parsing feed ${feedConfig.source}:`, error.message);
+    cacheFeedFailure(feedConfig.url, error);
+
+    const status = getFeedFailureStatus(error);
+    const prefix = status && [401, 403, 404, 406].includes(status) ? 'Skipped feed' : 'Error parsing feed';
+    console.warn(`${prefix} ${feedConfig.source}:`, error.message);
     return [];
   }
 }
@@ -1181,15 +1401,23 @@ exports.handler = async (event, context) => {
       // ── Step 1: Collect all cached data (instant, no network) ──────────────
       const allData = [];
       const staleCacheKeys = [];
-      Object.keys(cache).forEach(key => {
-        if (cache[key].data && Array.isArray(cache[key].data)) {
-          allData.push(...cache[key].data);
+      const searchBuckets = Array.from(new Set([
+        ...Object.keys(cache),
+        ...Object.keys(RSS_FEEDS)
+      ]));
+
+      searchBuckets.forEach(key => {
+        if (!RSS_FEEDS[key] && !cache[key]) return;
+        const cachedBucket = cache[key];
+
+        if (cachedBucket && cachedBucket.data && Array.isArray(cachedBucket.data)) {
+          allData.push(...cachedBucket.data);
           if (!isCacheValid(key)) staleCacheKeys.push(key);  // stale but still usable
         } else {
           staleCacheKeys.push(key); // empty
         }
       });
-      console.log(`[SEARCH] ${allData.length} items in cache; ${staleCacheKeys.length} stale/empty buckets`);
+      console.log(`[SEARCH] ${allData.length} items in cache; ${staleCacheKeys.length} stale/empty buckets across ${searchBuckets.length} feed groups`);
 
       // ── Step 2: Only fetch categories that are NOT already cached ─────────
       // This prevents the timeout that caused 500 errors when all categories
@@ -1197,18 +1425,20 @@ exports.handler = async (event, context) => {
       // Future-proof: any new category added to RSS_FEEDS is automatically included.
       if (staleCacheKeys.length > 0) {
         // Tightly limited sources per category specifically for search-triggered fetches
-        const SEARCH_SOURCES_LIMIT = 5; // keeps each category fetch under ~2s
-        const GLOBAL_SEARCH_TIMEOUT = 7500; // 7.5s stays under the 10s Netlify limit
+        const SEARCH_SOURCES_LIMIT = 8; // broader source coverage while still bounded
+        const SEARCH_VIDEO_SOURCES_LIMIT = 16; // prioritize richer media retrieval
+        const GLOBAL_SEARCH_TIMEOUT = 8500; // keep below common function hard limits
 
         const fetchCategoryWithTimeout = async (catKey) => {
           try {
             const feedList = RSS_FEEDS[catKey] || [];
-            const sourcesToFetch = feedList.slice(0, SEARCH_SOURCES_LIMIT);
+            const sourceLimit = catKey === 'videos' ? SEARCH_VIDEO_SOURCES_LIMIT : SEARCH_SOURCES_LIMIT;
+            const sourcesToFetch = feedList.slice(0, sourceLimit);
             if (sourcesToFetch.length === 0) return [];
             console.log(`[SEARCH] Fetching stale/empty category "${catKey}": ${sourcesToFetch.length} sources`);
 
             const perCategoryTimeout = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error(`Timeout: ${catKey}`)), 3000)
+              setTimeout(() => reject(new Error(`Timeout: ${catKey}`)), catKey === 'videos' ? 4500 : 3500)
             );
             return await Promise.race([fetchFeeds(sourcesToFetch), perCategoryTimeout]);
           } catch (err) {
@@ -1389,7 +1619,6 @@ exports.handler = async (event, context) => {
     }
 
     // Fetch fresh data
-    console.log(`Fetching fresh data for ${cacheKey}`);    // Fetch fresh data
     console.log(`Fetching fresh data for ${cacheKey}`);
     data = await fetchFeeds(feedsToFetch);
 

@@ -27,7 +27,7 @@ const BottomDock = () => {
       path: '/podcasts', 
       icon: faPlay, 
       label: 'Media',
-      color: '#667eea'
+      color: 'var(--accent-color)'
     },
     { 
       path: '/following', 

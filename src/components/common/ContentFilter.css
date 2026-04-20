@@ -1,5 +1,5 @@
 .content-filter {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background: var(--gradient-brand);
   padding: var(--spacing-sm);
   position: sticky;
   top: 0;
@@ -86,7 +86,7 @@
 
 /* Light theme adjustments */
 [data-theme="light"] .content-filter {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background: var(--gradient-brand);
   border-bottom-color: rgba(255, 255, 255, 0.3);
 }
 
@@ -105,7 +105,6 @@
 [data-theme="light"] .filter-indicator {
   background: rgba(255, 255, 255, 0.4);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  }
 }
 
 /* Smooth entrance */

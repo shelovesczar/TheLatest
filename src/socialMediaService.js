@@ -1,131 +1,115 @@
 import axios from 'axios'
 
-// Real viral/trending social media post URLs
-// Update these regularly with currently trending content
-export const trendingPostUrls = {
-  twitter: [
-    'https://twitter.com/NASA/status/1745123456789012345',
-    'https://twitter.com/elonmusk/status/1745987654321098765',
-    'https://twitter.com/POTUS/status/1745111222333444555',
-    'https://twitter.com/BarackObama/status/1745666777888999000'
-  ],
-  // Note: Instagram and TikTok embeds require iframes
-  instagram: [
-    'https://www.instagram.com/p/C12345AbCdE/',
-    'https://www.instagram.com/p/C67890FgHiJ/'
-  ],
-  tiktok: [
-    'https://www.tiktok.com/@user/video/1234567890123456789',
-    'https://www.tiktok.com/@user2/video/9876543210987654321'
-  ]
+const SOCIAL_FEEDS_API = '/.netlify/functions/fetchSocialFeeds'
+const CACHE_PREFIX = 'social_rss_posts_'
+const FRESH_CACHE_DURATION = 15 * 60 * 1000
+const STALE_CACHE_DURATION = 24 * 60 * 60 * 1000
+let socialFeedsAvailable = true
+
+const shouldDisableSocialFeeds = (error) => {
+  const code = error?.code
+  const status = error?.response?.status
+  return code === 'ERR_NETWORK' || code === 'ECONNABORTED' || status === 404 || status === 502 || status === 503 || status === 504
 }
 
-// Fetch real Twitter posts using oEmbed API
-export const fetchTwitterPost = async (tweetUrl) => {
+const shuffle = (items) => [...items].sort(() => Math.random() - 0.5)
+
+const getCacheKey = (topic = '', limit = 12) => `${CACHE_PREFIX}${(topic || 'all').toLowerCase()}_${limit}`
+
+export const getCachedSocialPosts = (topic = '', limit = 12, allowStale = false) => {
+  const cacheKey = getCacheKey(topic, limit)
+  const cached = localStorage.getItem(cacheKey)
+
+  if (!cached) return null
+
   try {
-    const response = await axios.get('https://publish.twitter.com/oembed', {
-      params: {
-        url: tweetUrl,
-        omit_script: true
-      }
-    })
-    return {
-      platform: 'X',
-      html: response.data.html,
-      url: tweetUrl,
-      author: response.data.author_name || 'Twitter User',
-      success: true
+    const data = JSON.parse(cached)
+    const age = Date.now() - data.timestamp
+    const maxAge = allowStale ? STALE_CACHE_DURATION : FRESH_CACHE_DURATION
+
+    if (age <= maxAge) {
+      return data.posts || []
     }
   } catch (error) {
-    // Silently fail - expected without proper API authentication
-    return null
+    console.error('Error reading cached social posts:', error)
+  }
+
+  return null
+}
+
+export const cacheSocialPosts = (topic = '', limit = 12, posts = []) => {
+  const cacheKey = getCacheKey(topic, limit)
+
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify({
+      posts,
+      timestamp: Date.now()
+    }))
+  } catch (error) {
+    console.error('Error caching social posts:', error)
   }
 }
 
-// Fetch Instagram post using oEmbed API
-export const fetchInstagramPost = async (postUrl) => {
-  try {
-    const response = await axios.get(`https://graph.facebook.com/v12.0/instagram_oembed`, {
-      params: {
-        url: postUrl,
-        omitscript: true
-      }
-    })
-    return {
-      platform: 'Instagram',
-      html: response.data.html,
-      url: postUrl,
-      author: response.data.author_name || 'Instagram User',
-      success: true
-    }
-  } catch (error) {
-    // Silently fail - expected without proper API authentication
-    return null
-  }
-}
-
-// Fetch TikTok video using oEmbed API
-export const fetchTikTokPost = async (videoUrl) => {
-  try {
-    const response = await axios.get('https://www.tiktok.com/oembed', {
-      params: {
-        url: videoUrl
-      }
-    })
-    return {
-      platform: 'TikTok',
-      html: response.data.html,
-      url: videoUrl,
-      author: response.data.author_name || 'TikTok User',
-      success: true
-    }
-  } catch (error) {
-    // Silently fail - expected without CORS/API authentication
-    return null
-  }
-}
-
-// Fetch a mix of real social media posts
-export const fetchRealSocialPosts = async () => {
-  try {
-    const promises = []
-    
-    // Get 2 Twitter posts
-    promises.push(fetchTwitterPost(trendingPostUrls.twitter[0]))
-    promises.push(fetchTwitterPost(trendingPostUrls.twitter[1]))
-    
-    // Get 2 Instagram posts
-    promises.push(fetchInstagramPost(trendingPostUrls.instagram[0]))
-    promises.push(fetchInstagramPost(trendingPostUrls.instagram[1]))
-    
-    // Get 2 TikTok posts
-    promises.push(fetchTikTokPost(trendingPostUrls.tiktok[0]))
-    promises.push(fetchTikTokPost(trendingPostUrls.tiktok[1]))
-    
-    const results = await Promise.all(promises)
-    
-    // Filter out failed requests and return successful ones
-    return results.filter(post => post && post.success)
-  } catch (error) {
-    console.error('Failed to fetch social media posts:', error)
+export const fetchSocialFeedPosts = async (topic = '', limit = 12) => {
+  if (!socialFeedsAvailable) {
     return []
   }
-}
 
-// Get random selection of posts
-export const getRandomTrendingPosts = async (count = 6) => {
   try {
-    const allPosts = await fetchRealSocialPosts()
-    
-    if (allPosts.length === 0) {
+    const response = await axios.get(SOCIAL_FEEDS_API, {
+      params: {
+        topic: topic || undefined,
+        limit
+      },
+      timeout: 25000
+    })
+
+    return response?.data?.data || []
+  } catch (error) {
+    if (shouldDisableSocialFeeds(error)) {
+      socialFeedsAvailable = false
+      console.warn(`[Social] Social feeds unavailable (${error?.code || 'request-failed'}). Falling back to cache.`)
       return []
     }
-    
-    // Shuffle and return requested count
-    const shuffled = allPosts.sort(() => 0.5 - Math.random())
-    return shuffled.slice(0, count)
-  } catch (error) {
-    console.error('Error getting random posts:', error)
-    return []
+
+    throw error
   }
+}
+
+export const getRandomTrendingPosts = async (count = 6, topic = '') => {
+  const freshCached = getCachedSocialPosts(topic, count)
+  if (freshCached && freshCached.length > 0) {
+    return shuffle(freshCached).slice(0, count)
+  }
+
+  try {
+    let posts = await fetchSocialFeedPosts(topic, Math.max(count, 12))
+
+    // If a topic-specific social query is sparse, broaden to all configured feeds.
+    if (topic && posts.length < Math.min(count, 3)) {
+      const broaderPosts = await fetchSocialFeedPosts('', Math.max(count, 12))
+      posts = broaderPosts.length > 0 ? broaderPosts : posts
+    }
+
+    if (posts.length > 0) {
+      cacheSocialPosts(topic, Math.max(count, 12), posts)
+      return shuffle(posts).slice(0, count)
+    }
+  } catch (error) {
+    console.warn(`[Social] Error getting social RSS posts: ${error?.message || 'Unknown error'}`)
+  }
+
+  const staleCached = getCachedSocialPosts(topic, Math.max(count, 12), true)
+  if (staleCached && staleCached.length > 0) {
+    return shuffle(staleCached).slice(0, count)
+  }
+
+  if (topic) {
+    const staleBroad = getCachedSocialPosts('', Math.max(count, 12), true)
+    if (staleBroad && staleBroad.length > 0) {
+      return shuffle(staleBroad).slice(0, count)
+    }
+  }
+
+  return []
 }

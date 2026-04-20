@@ -14,20 +14,8 @@ function OpinionsPage() {
     const loadOpinions = async () => {
       setLoading(true)
       try {
-        let opinionData = []
-        
-        if (hasActiveTopic) {
-          // Fetch opinions filtered by current topic
-          const allOpinions = await fetchOpinions()
-          opinionData = allOpinions.filter(opinion => {
-            const content = `${opinion.title} ${opinion.description || ''} ${opinion.source || ''}`.toLowerCase()
-            return content.includes(topic.toLowerCase())
-          })
-        } else {
-          // Show all opinions if no topic selected
-          opinionData = await fetchOpinions()
-        }
-        
+        const activeTopic = hasActiveTopic ? topic : ''
+        const opinionData = await fetchOpinions(null, activeTopic)
         setOpinions(opinionData)
       } catch (error) {
         console.error('Error loading opinions:', error)

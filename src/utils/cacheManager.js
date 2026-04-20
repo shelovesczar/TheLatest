@@ -8,6 +8,7 @@ const DB_NAME = 'TheLatestCache';
 const DB_VERSION = 1;
 const STORE_NAME = 'contentCache';
 const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+const STALE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 class CacheManager {
   constructor() {
@@ -60,7 +61,6 @@ class CacheManager {
           const age = Date.now() - result.timestamp;
           if (age > CACHE_DURATION) {
             console.log(`[Cache] ${key} expired (age: ${Math.round(age / 1000)}s)`);
-            this.delete(key); // Clean up expired cache
             resolve(null);
             return;
           }
@@ -73,6 +73,40 @@ class CacheManager {
       });
     } catch (error) {
       console.error('[Cache] Error getting from cache:', error);
+      return null;
+    }
+  }
+
+  async getStale(key, maxAge = STALE_CACHE_DURATION) {
+    try {
+      const db = await this.ensureDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.get(key);
+
+        request.onsuccess = () => {
+          const result = request.result;
+          if (!result) {
+            resolve(null);
+            return;
+          }
+
+          const age = Date.now() - result.timestamp;
+          if (age > maxAge) {
+            console.log(`[Cache] STALE MISS for ${key} (age: ${Math.round(age / 1000)}s)`);
+            resolve(null);
+            return;
+          }
+
+          console.log(`[Cache] STALE HIT for ${key} (age: ${Math.round(age / 1000)}s)`);
+          resolve(result.data);
+        };
+
+        request.onerror = () => reject(request.error);
+      });
+    } catch (error) {
+      console.error('[Cache] Error getting stale cache:', error);
       return null;
     }
   }

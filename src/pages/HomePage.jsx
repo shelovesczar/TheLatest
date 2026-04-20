@@ -1,16 +1,17 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect, lazy, Suspense, useRef } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import { useSearch } from '../context/SearchContext'
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
-import { searchRSSContent } from '../rssService'
+import { searchRSSContent, fetchRSSVideos } from '../rssService'
 import { getRandomTrendingPosts } from '../socialMediaService'
-import { getRandomCategoryPosts } from '../socialMediaPosts'
-import { findClosestMatch, COMMON_KEYWORDS } from '../utils/fuzzySearch'
+import { dedupeContentItems } from '../utils/contentDeduplication'
+import { matchesTopicQuery } from '../utils/topicFiltering'
 import './HomePage.css'
 import Hero from '../components/sections/Hero'
 import TopStories from '../components/sections/TopStories'
 import DateTicker from '../components/layout/DateTicker'
 import TrendingStories from '../components/sections/TrendingStories'
-import LeadStory from '../components/sections/LeadStory'
 import AdBreak from '../components/common/AdBreak'
 
 // Lazy load below-the-fold components
@@ -23,9 +24,9 @@ const Search = lazy(() => import('../components/sections/Search'))
 
 // Loading component
 const SectionLoader = () => (
-  <div style={{ 
-    padding: '3rem', 
-    textAlign: 'center', 
+  <div style={{
+    padding: '3rem',
+    textAlign: 'center',
     color: '#666',
     minHeight: '200px',
     display: 'flex',
@@ -34,7 +35,7 @@ const SectionLoader = () => (
   }}>
     <div className="spinner" style={{
       border: '3px solid #f3f3f3',
-      borderTop: '3px solid #667eea',
+      borderTop: '3px solid var(--accent-color)',
       borderRadius: '50%',
       width: '40px',
       height: '40px',
@@ -49,11 +50,24 @@ function HomePage({
   hotTopics,
   handleSubscribe
 }) {
-  const { topic, setTopic, hasActiveTopic } = useSearch()
+  const ensureTopicCoverage = (primaryItems, backupPool, topicValue, minItems) => {
+    const primary = Array.isArray(primaryItems) ? primaryItems : []
+    const backup = Array.isArray(backupPool) ? backupPool : []
+
+    const topicMatchedBackup = backup.filter((item) => matchesTopicQuery(item, topicValue))
+    const merged = dedupeContentItems([...primary, ...topicMatchedBackup])
+
+    if (merged.length < minItems) {
+      console.log(`[HomePage] Topic "${topicValue}" has limited matches (${merged.length}/${minItems})`)
+    }
+
+    return merged
+  }
+
+  const { topic, setTopic, clearTopic, hasActiveTopic } = useSearch()
   const [activeStory, setActiveStory] = useState(0)
   const [suggestedTopic, setSuggestedTopic] = useState(null)
-  const [contentFilter, setContentFilter] = useState('all')
-  
+
   // Content state - filters based on current topic
   const [topStories, setTopStories] = useState([])
   const [loading, setLoading] = useState(true)
@@ -65,7 +79,7 @@ function HomePage({
   const [loadingVideos, setLoadingVideos] = useState(true)
   const [loadingPodcasts, setLoadingPodcasts] = useState(true)
   const [loadingSocial, setLoadingSocial] = useState(true)
-  
+
   // Track which sections are visible (for lazy loading)
   const [visibleSections, setVisibleSections] = useState({
     opinions: false,
@@ -73,33 +87,89 @@ function HomePage({
     podcasts: false,
     social: false
   })
+  const topicTickerRef = useRef(null)
+  const lastSocialQueryRef = useRef(null)
+  const sectionPrefetchRef = useRef({
+    opinions: false,
+    videos: false,
+    podcasts: false
+  })
 
-  const handleSearch = (e) => {
-    e.preventDefault()
-    // Topic is already set via context
+  const handleTopicClick = (newTopic, shouldScrollToNews = true) => {
+    setTopic(newTopic)
+    if (shouldScrollToNews) {
+      setTimeout(() => {
+        document.getElementById('news')?.scrollIntoView({ behavior: 'smooth' })
+      }, 100)
+    }
   }
 
-  const handleTopicClick = (newTopic) => {
-    setTopic(newTopic)
-    // Scroll to top stories section
-    setTimeout(() => {
-      document.getElementById('news')?.scrollIntoView({ behavior: 'smooth' })
-    }, 100)
+  const handleAllTopicsClick = (shouldScrollToNews = true) => {
+    clearTopic()
+    if (shouldScrollToNews) {
+      setTimeout(() => {
+        document.getElementById('news')?.scrollIntoView({ behavior: 'smooth' })
+      }, 100)
+    }
+  }
+
+  /*Filter by topic:
+  Allows the for the  manpulations of how many topics to display to the user*/
+  const topicFilters = (hotTopics || []).slice(0, 9)
+
+  const scrollTopicIntoView = (topicValue) => {
+    if (!topicTickerRef.current) return
+    const chipSelector = topicValue === '__all__'
+      ? '[data-topic-value="__all__"]'
+      : `[data-topic-value="${topicValue}"]`
+    const chip = topicTickerRef.current.querySelector(chipSelector)
+    if (chip) {
+      chip.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+    }
+  }
+
+  const scrollTopicTicker = (direction) => {
+    const topicOptions = ['__all__', ...topicFilters]
+    if (topicOptions.length === 0) return
+
+    const currentIndex = !hasActiveTopic
+      ? 0
+      : Math.max(0, topicOptions.indexOf(topic))
+
+    const nextIndex = direction === 'left'
+      ? (currentIndex - 1 + topicOptions.length) % topicOptions.length
+      : (currentIndex + 1) % topicOptions.length
+
+    const nextTopic = topicOptions[nextIndex]
+
+    if (nextTopic === '__all__') {
+      handleAllTopicsClick(false)
+      setTimeout(() => scrollTopicIntoView('__all__'), 120)
+      return
+    }
+
+    handleTopicClick(nextTopic, false)
+    setTimeout(() => scrollTopicIntoView(nextTopic), 120)
   }
 
   // Load initial content (top stories only)
   useEffect(() => {
+    let isCancelled = false
+
     const loadInitialContent = async () => {
       setLoading(true)
+      setLoadingOpinions(true)
+      setLoadingVideos(true)
+      setLoadingPodcasts(true)
 
       try {
         console.log('Loading initial content, hasActiveTopic:', hasActiveTopic, 'topic:', topic)
-        
+
         if (hasActiveTopic && topic && topic.trim().length > 0) {
           console.log(`[HomePage] Using comprehensive search for: "${topic}"`)
           const searchResults = await searchRSSContent(topic)
           console.log(`[HomePage] Search returned ${searchResults.length} results`)
-          
+
           // Categorize search results
           const categorizedResults = {
             news: [],
@@ -107,12 +177,12 @@ function HomePage({
             videos: [],
             podcasts: []
           }
-          
+
           searchResults.forEach(item => {
             const type = (item.type || '').toLowerCase()
             const category = (item.category || '').toLowerCase()
             const source = (item.source || '').toLowerCase()
-            
+
             if (type === 'video' || source.includes('youtube') || category.includes('video')) {
               categorizedResults.videos.push(item)
             } else if (type === 'podcast' || category.includes('podcast') || source.includes('podcast')) {
@@ -123,35 +193,125 @@ function HomePage({
               categorizedResults.news.push(item)
             }
           })
-          
-          setTopStories(categorizedResults.news)
-          setOpinions(categorizedResults.opinions)
-          setVideos(categorizedResults.videos)
-          setPodcasts(categorizedResults.podcasts)
-          
+
+          // Ensure all sections have live content by pulling broader pools and backfilling.
+          const [opinionsPoolResult, videosPoolResult, podcastsPoolResult, newsPoolResult, rssVideoPoolResult] = await Promise.allSettled([
+            fetchOpinions(),
+            fetchVideos(),
+            fetchTrendingContent(),
+            fetchRSSNews(),
+            fetchRSSVideos()
+          ])
+
+          const opinionsPool = opinionsPoolResult.status === 'fulfilled' ? (opinionsPoolResult.value || []) : []
+          const videosPool = videosPoolResult.status === 'fulfilled' ? (videosPoolResult.value || []) : []
+          const podcastsPool = podcastsPoolResult.status === 'fulfilled' ? (podcastsPoolResult.value || []) : []
+          const newsPool = newsPoolResult.status === 'fulfilled' ? (newsPoolResult.value || []) : []
+          const rssVideosPool = rssVideoPoolResult.status === 'fulfilled' ? (rssVideoPoolResult.value || []) : []
+
+          const MIN_TOPIC_NEWS = 10
+          const MIN_TOPIC_OPINIONS = 8
+          const MIN_TOPIC_VIDEOS = 12
+          const MIN_TOPIC_PODCASTS = 12
+
+          const guaranteedNews = ensureTopicCoverage(categorizedResults.news, newsPool, topic, MIN_TOPIC_NEWS)
+          const guaranteedOpinions = ensureTopicCoverage(categorizedResults.opinions, opinionsPool, topic, MIN_TOPIC_OPINIONS)
+          const guaranteedVideos = ensureTopicCoverage(
+            categorizedResults.videos,
+            dedupeContentItems([...(videosPool || []), ...(rssVideosPool || [])]),
+            topic,
+            MIN_TOPIC_VIDEOS
+          )
+          const guaranteedPodcasts = ensureTopicCoverage(categorizedResults.podcasts, podcastsPool, topic, MIN_TOPIC_PODCASTS)
+
+          if (isCancelled) return
+
+          setTopStories(dedupeContentItems(guaranteedNews))
+          setOpinions(dedupeContentItems(guaranteedOpinions))
+          setVideos(dedupeContentItems(guaranteedVideos))
+          setPodcasts(dedupeContentItems(guaranteedPodcasts))
+          setLoadingOpinions(false)
+          setLoadingVideos(false)
+          setLoadingPodcasts(false)
+
           setSuggestedTopic(null)
-          
+
         } else {
-          // Load only top stories initially
+          // Load top stories first, then prefetch other sections in parallel.
           const newsData = await fetchRSSNews()
-          setTopStories(newsData || [])
+          if (isCancelled) return
+
+          setTopStories(dedupeContentItems(newsData || []))
           setSuggestedTopic(null)
+
+          sectionPrefetchRef.current.opinions = true
+          sectionPrefetchRef.current.videos = true
+          sectionPrefetchRef.current.podcasts = true
+
+          Promise.allSettled([
+            fetchOpinions(),
+            fetchVideos(),
+            fetchTrendingContent()
+          ]).then(([opinionsResult, videosResult, podcastsResult]) => {
+            sectionPrefetchRef.current.opinions = false
+            sectionPrefetchRef.current.videos = false
+            sectionPrefetchRef.current.podcasts = false
+
+            if (isCancelled || hasActiveTopic) return
+
+            if (opinionsResult.status === 'fulfilled') {
+              setOpinions(dedupeContentItems(opinionsResult.value || []))
+            }
+            if (videosResult.status === 'fulfilled') {
+              setVideos(dedupeContentItems(videosResult.value || []))
+            }
+            if (podcastsResult.status === 'fulfilled') {
+              setPodcasts(dedupeContentItems(podcastsResult.value || []))
+            }
+
+            setLoadingOpinions(false)
+            setLoadingVideos(false)
+            setLoadingPodcasts(false)
+          }).catch(() => {
+            sectionPrefetchRef.current.opinions = false
+            sectionPrefetchRef.current.videos = false
+            sectionPrefetchRef.current.podcasts = false
+
+            if (isCancelled) return
+            setLoadingOpinions(false)
+            setLoadingVideos(false)
+            setLoadingPodcasts(false)
+          })
         }
       } catch (error) {
         console.error('Error loading initial content:', error)
+        if (isCancelled) return
+
         setTopStories([])
+        setLoadingOpinions(false)
+        setLoadingVideos(false)
+        setLoadingPodcasts(false)
       } finally {
-        setLoading(false)
+        if (!isCancelled) {
+          setLoading(false)
+        }
       }
     }
 
     loadInitialContent()
+
+    return () => {
+      isCancelled = true
+      sectionPrefetchRef.current.opinions = false
+      sectionPrefetchRef.current.videos = false
+      sectionPrefetchRef.current.podcasts = false
+    }
   }, [topic, hasActiveTopic])
 
   // Load additional sections when they become visible
   useEffect(() => {
     const loadOpinions = async () => {
-      if (!visibleSections.opinions || opinions.length > 0) return
+      if (!visibleSections.opinions || opinions.length > 0 || sectionPrefetchRef.current.opinions) return
       setLoadingOpinions(true)
       try {
         if (!hasActiveTopic) {
@@ -169,7 +329,7 @@ function HomePage({
 
   useEffect(() => {
     const loadVideos = async () => {
-      if (!visibleSections.videos || videos.length > 0) return
+      if (!visibleSections.videos || videos.length > 0 || sectionPrefetchRef.current.videos) return
       setLoadingVideos(true)
       try {
         if (!hasActiveTopic) {
@@ -187,7 +347,7 @@ function HomePage({
 
   useEffect(() => {
     const loadPodcasts = async () => {
-      if (!visibleSections.podcasts || podcasts.length > 0) return
+      if (!visibleSections.podcasts || podcasts.length > 0 || sectionPrefetchRef.current.podcasts) return
       setLoadingPodcasts(true)
       try {
         if (!hasActiveTopic) {
@@ -205,22 +365,19 @@ function HomePage({
 
   useEffect(() => {
     const loadSocial = async () => {
-      if (!visibleSections.social || socialPosts.length > 0) return
+      const socialQuery = hasActiveTopic ? (topic || '').trim().toLowerCase() : '__all__'
+      if (!visibleSections.social) return
+      if (socialPosts.length > 0 && lastSocialQueryRef.current === socialQuery) return
+
       setLoadingSocial(true)
       try {
-        const socialData = await getRandomTrendingPosts(12)
-        if (hasActiveTopic && topic) {
-          const filteredSocial = socialData.filter(post => {
-            const content = `${post.title || ''} ${post.description || ''} ${post.content || ''}`.toLowerCase()
-            return content.includes(topic.toLowerCase())
-          })
-          setSocialPosts(filteredSocial.length > 0 ? filteredSocial : getRandomCategoryPosts(12))
-        } else {
-          setSocialPosts(socialData.length > 0 ? socialData : getRandomCategoryPosts(12))
-        }
+        const socialData = await getRandomTrendingPosts(12, hasActiveTopic ? topic : '')
+        lastSocialQueryRef.current = socialQuery
+        setSocialPosts(socialData || [])
       } catch (error) {
         console.error('Error loading social:', error)
-        setSocialPosts(getRandomCategoryPosts(12))
+        lastSocialQueryRef.current = socialQuery
+        setSocialPosts([])
       } finally {
         setLoadingSocial(false)
       }
@@ -260,7 +417,7 @@ function HomePage({
   }, [])
 
   return (
-    <main className="main-content">
+    <main className="main-content home-main-content">
 
       {/* ── Breaking news ticker ── */}
       <DateTicker breakingNews={topStories.slice(0, 10).map(s => s.title).filter(Boolean)} />
@@ -268,7 +425,7 @@ function HomePage({
       {/* ── Fuzzy-match suggestion banner ── */}
       {suggestedTopic && (
         <div style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          background: 'var(--gradient-brand-soft)',
           color: 'white',
           padding: '1rem',
           textAlign: 'center',
@@ -295,19 +452,13 @@ function HomePage({
         </div>
       )}
 
-      {/* ── 1. Hero — search + typewriter ── */}
+      {/* ── 1. Hero — search + hot topics ── */}
       <Hero
         visibleTopics={hotTopics}
         handleTopicClick={handleTopicClick}
       />
 
-      {/* ── 2. Lead Story — single dominant editorial card ── */}
-      <LeadStory story={topStories[0]} loading={loading} />
-
-      {/* ── 3. Trending numbered list ── */}
-      <TrendingStories stories={topStories} loading={loading} />
-
-      {/* ── 4. AI Summary — now contextualises stories the reader just saw ── */}
+      {/* ── 2. AI Summary — editorial lead-in ── */}
       <Suspense fallback={<SectionLoader />}>
         <AISummary
           category="general"
@@ -315,20 +466,44 @@ function HomePage({
         />
       </Suspense>
 
-      {/* ── 5. Topic filter strip + Top Stories ── */}
+      {/* ── 2. Topic filter strip + Top Stories ── */}
       {hotTopics && hotTopics.length > 0 && (
         <div className="topic-filter-strip">
           <span className="topic-filter-label">FILTER BY TOPIC</span>
-          <div className="topic-filter-chips">
-            {hotTopics.map((t, i) => (
+          <div className="topic-filter-row">
+            <button
+              className="slider-btn topic-filter-btn"
+              onClick={() => scrollTopicTicker('left')}
+              aria-label="Scroll topics left"
+            >
+              <FontAwesomeIcon icon={faChevronLeft} />
+            </button>
+            <div className="topic-filter-chips" ref={topicTickerRef}>
               <button
-                key={i}
-                className={`topic-chip ${topic === t ? 'active' : ''}`}
-                onClick={() => handleTopicClick(t)}
+                data-topic-value="__all__"
+                className={`topic-chip ${!hasActiveTopic ? 'active' : ''}`}
+                onClick={handleAllTopicsClick}
               >
-                {t}
+                ALL
               </button>
-            ))}
+              {topicFilters.map((t, i) => (
+                <button
+                  key={i}
+                  data-topic-value={t}
+                  className={`topic-chip ${topic === t ? 'active' : ''}`}
+                  onClick={() => handleTopicClick(t)}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            <button
+              className="slider-btn topic-filter-btn"
+              onClick={() => scrollTopicTicker('right')}
+              aria-label="Scroll topics right"
+            >
+              <FontAwesomeIcon icon={faChevronRight} />
+            </button>
           </div>
         </div>
       )}
@@ -339,6 +514,9 @@ function HomePage({
         activeStory={activeStory}
         setActiveStory={setActiveStory}
       />
+
+      {/* ── 3. Trending Stories — visual follow-on ── */}
+      {/* <TrendingStories stories={topStories} loading={loading} limit={6} /> */}
 
       {/* ── Single strategic ad placement ── */}
       <AdBreak type="standard" />
@@ -353,6 +531,8 @@ function HomePage({
         </Suspense>
       </div>
 
+      <AdBreak type="compact" />
+
       {/* ── 7. Videos ── */}
       <div data-section="videos">
         <Suspense fallback={<SectionLoader />}>
@@ -362,6 +542,8 @@ function HomePage({
           />
         </Suspense>
       </div>
+
+      <AdBreak type="compact" />
 
       {/* ── 8. Podcasts ── */}
       <div data-section="podcasts">
@@ -373,7 +555,9 @@ function HomePage({
         </Suspense>
       </div>
 
-      {/* ── 9. Social Media — lowest editorial priority, moved to bottom ── */}
+      <AdBreak type="compact" />
+
+      {/* ── 9. Social Media ── */}
       <div data-section="social">
         <Suspense fallback={<SectionLoader />}>
           <SocialMedia

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { dedupeContentItems } from './utils/contentDeduplication'
 import './App.css'
 
 /**
@@ -98,8 +99,8 @@ const RouteLoader = () => (
   }}>
     <div style={{
       width: 44, height: 44,
-      border: '3px solid rgba(102,126,234,0.2)',
-      borderTop: '3px solid #667eea',
+      border: '3px solid rgba(43,107,168,0.2)',
+      borderTop: '3px solid var(--accent-color)',
       borderRadius: '50%',
       animation: 'spin 0.8s linear infinite'
     }} />
@@ -209,9 +210,10 @@ function App() {
       try {
         const news = await fetchRSSNews()
         if (news && news.length > 0) {
-          setTopStories(news)
+          const uniqueNews = dedupeContentItems(news)
+          setTopStories(uniqueNews)
           // Derive hot topics directly from what's in today's headlines
-          const extracted = extractTopicsFromHeadlines(news, 12)
+          const extracted = extractTopicsFromHeadlines(uniqueNews, 12)
           if (extracted.length >= 4) {
             setVisibleTopics(extracted)
           }
@@ -230,7 +232,7 @@ function App() {
       setLoadingOpinions(true)
       try {
         const opinionData = await fetchOpinions()
-        setOpinions(opinionData)
+        setOpinions(dedupeContentItems(opinionData))
       } catch (error) {
         console.error('Failed to load opinions:', error)
         setOpinions([])
@@ -239,54 +241,71 @@ function App() {
       }
     }
 
-    const loadVideos = async () => {
+    // Load videos and podcasts together so we can cross-deduplicate
+    const loadMedia = async () => {
       setLoadingVideos(true)
-      try {
-        const videoData = await fetchVideos()
-        setVideos(videoData)
-      } catch (error) {
-        console.error('Failed to load videos:', error)
-        setVideos([])
-      } finally {
-        setLoadingVideos(false)
-      }
-    }
-
-    const loadPodcasts = async () => {
       setLoadingPodcasts(true)
       try {
-        const podcastData = await fetchTrendingContent()
-        setPodcasts(podcastData)
+        const [rawVideos, rawPodcasts] = await Promise.all([
+          fetchVideos().catch(() => []),
+          fetchTrendingContent().catch(() => [])
+        ])
+        const dedupedVideos   = dedupeContentItems(rawVideos   || [])
+        const dedupedPodcasts = dedupeContentItems(rawPodcasts || [])
+
+        // Remove any podcast item whose URL/title already appears in videos
+        const videoKeys = new Set(
+          dedupedVideos.map(v => (v.url || v.link || v.title || '').toLowerCase()).filter(Boolean)
+        )
+        const uniquePodcasts = dedupedPodcasts.filter(p => {
+          const key = (p.url || p.link || p.title || '').toLowerCase()
+          return key && !videoKeys.has(key)
+        })
+
+        setVideos(dedupedVideos)
+        setPodcasts(uniquePodcasts)
       } catch (error) {
-        console.error('Failed to load podcasts:', error)
+        console.error('Failed to load media:', error)
+        setVideos([])
         setPodcasts([])
       } finally {
+        setLoadingVideos(false)
         setLoadingPodcasts(false)
       }
     }
 
+    // ── Priority-ordered loading ──────────────────────────────────────────────
+    // 1. News first — above-the-fold, user sees it immediately
     loadNews()
-    loadOpinions()
-    loadVideos()
-    loadPodcasts()
-    
-    // Load initial social media posts
-    rotateSocialPosts()
 
-    // Auto-refresh news content every 10 minutes
+    // 2. Opinions + media slightly deferred — they're below the fold on first
+    //    paint; yielding a tick lets the browser finish painting news cards
+    //    before kicking off 2 more network requests.
+    const belowFoldTimer = setTimeout(() => {
+      loadOpinions()
+      loadMedia()
+    }, 150)
+
+    // 3. Social posts last — furthest below the fold; 800 ms is enough time
+    //    for above-fold content to paint before we start fetching social feeds.
+    const socialTimer = setTimeout(() => {
+      rotateSocialPosts()
+    }, 800)
+
+    // Auto-refresh every 10 minutes
     const newsInterval = setInterval(() => {
       loadNews()
       loadOpinions()
-      loadVideos()
-      loadPodcasts()
+      loadMedia()
     }, 10 * 60 * 1000)
 
-    // Rotate social media posts every 10 minutes
     const socialInterval = setInterval(() => {
       rotateSocialPosts()
     }, 10 * 60 * 1000)
 
     return () => {
+      clearTimeout(belowFoldTimer)
+      clearTimeout(socialTimer)
       clearInterval(newsInterval)
       clearInterval(socialInterval)
     }

@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSun, faMoon, faChevronLeft, faSearch } from '@fortawesome/free-solid-svg-icons'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useSearch } from '../../context/SearchContext'
 import LoginModal from './LoginModal'
 import './Header.css'
@@ -11,6 +11,29 @@ function Header({ menuOpen, toggleMenu, darkMode, toggleTheme, newsDropdownOpen,
   const { clearTopic } = useSearch()
   const [searchQuery, setSearchQuery] = useState('')
   const [loginModalOpen, setLoginModalOpen] = useState(false)
+  const dropdownRef = useRef(null)
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (!dropdownRef.current) return
+      if (dropdownRef.current.contains(event.target)) return
+      setNewsDropdownOpen(false)
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setNewsDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [setNewsDropdownOpen])
 
   const handleLogoClick = () => {
     setSearchQuery('')   // clear the header search bar
@@ -85,11 +108,22 @@ function Header({ menuOpen, toggleMenu, darkMode, toggleTheme, newsDropdownOpen,
           
           <div 
             className="nav-item-dropdown"
-            onClick={() => setNewsDropdownOpen(!newsDropdownOpen)}
+            ref={dropdownRef}
+            onMouseEnter={() => setNewsDropdownOpen(true)}
+            onMouseLeave={() => setNewsDropdownOpen(false)}
           >
-            <span className="nav-link">
-              NEWS <FontAwesomeIcon icon={faChevronLeft} rotation={270} className="dropdown-arrow" />
-            </span>
+            <button
+              type="button"
+              className="nav-link nav-link-trigger"
+              onClick={(e) => {
+                e.stopPropagation()
+                setNewsDropdownOpen(!newsDropdownOpen)
+              }}
+              aria-expanded={newsDropdownOpen}
+              aria-haspopup="menu"
+            >
+              NEWS <FontAwesomeIcon icon={faChevronLeft} rotation={270} className={`dropdown-arrow ${newsDropdownOpen ? 'active' : ''}`} />
+            </button>
             <div className={`dropdown-menu ${newsDropdownOpen ? 'active' : ''}`}>
               <Link to="/category/top-stories" onClick={() => handleCategoryClick('/category/top-stories')}>Top Stories</Link>
               <Link to="/category/business-tech" onClick={() => handleCategoryClick('/category/business-tech')}>Business/Tech</Link>
@@ -102,7 +136,7 @@ function Header({ menuOpen, toggleMenu, darkMode, toggleTheme, newsDropdownOpen,
           
           {/* Navigate to Following page for sections */}
           <Link to="/following" className="nav-link-button following-link">
-            FOLLOWING
+            MORE
           </Link>
           
           <button 
