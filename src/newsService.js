@@ -7,6 +7,7 @@ import {
 } from './rssService';
 import { dedupeContentItems } from './utils/contentDeduplication';
 import { filterItemsByTopic } from './utils/topicFiltering';
+import { isVideoItem, isPodcastItem, dedupeByMediaKey, removeCrossDuplicates } from './utils/mediaClassification';
 
 // Check if running in development mode
 const isDevelopment = import.meta.env.DEV;
@@ -1046,13 +1047,13 @@ export const fetchVideos = async (category = null, topic = '') => {
   try {
     console.log(`Fetching videos from RSS feeds${category ? ` (${category})` : ''}...`);
 
-    const scopedVideos = applyTopicFilter(await getRSSVideos(category), topic);
+    const scopedVideos = dedupeByMediaKey(applyTopicFilter(await getRSSVideos(category), topic).filter(isVideoItem));
     if (scopedVideos && scopedVideos.length > 0) {
       console.log(`Successfully fetched ${scopedVideos.length} scoped videos from RSS`);
       return scopedVideos;
     }
 
-    const generalVideos = applyTopicFilter(await getRSSVideos(null), topic);
+    const generalVideos = dedupeByMediaKey(applyTopicFilter(await getRSSVideos(null), topic).filter(isVideoItem));
     if (generalVideos && generalVideos.length > 0) {
       console.log(`Scoped videos empty; using ${generalVideos.length} general video items`);
       return generalVideos;
@@ -1061,14 +1062,11 @@ export const fetchVideos = async (category = null, topic = '') => {
     // Live failover: only items with a real YouTube URL qualify as videos.
     // Returning generic news articles here would cause videos & podcasts to show identical content.
     const newsPool = await fetchTopNews(category, topic);
-    const derivedVideos = (newsPool || []).filter((item) => {
-      const url = `${item?.url || item?.link || ''}`.toLowerCase();
-      return url.includes('youtube.com') || url.includes('youtu.be');
-    }).map((item) => ({
+    const derivedVideos = dedupeByMediaKey((newsPool || []).filter(isVideoItem).map((item) => ({
       ...item,
       thumbnail: item?.thumbnail || item?.image,
       duration: item?.duration || '5:30'
-    }));
+    })));
 
     return derivedVideos;
   } catch (error) {
@@ -1082,13 +1080,13 @@ export const fetchTrendingContent = async (category = null, topic = '') => {
   try {
     console.log(`Fetching podcasts from RSS feeds${category ? ` (${category})` : ''}...`);
 
-    const scopedPodcasts = applyTopicFilter(await getRSSPodcasts(category), topic);
+    const scopedPodcasts = dedupeByMediaKey(applyTopicFilter(await getRSSPodcasts(category), topic).filter(isPodcastItem));
     if (scopedPodcasts && scopedPodcasts.length > 0) {
       console.log(`Successfully fetched ${scopedPodcasts.length} scoped podcasts from RSS`);
       return scopedPodcasts;
     }
 
-    const generalPodcasts = applyTopicFilter(await getRSSPodcasts(null), topic);
+    const generalPodcasts = dedupeByMediaKey(applyTopicFilter(await getRSSPodcasts(null), topic).filter(isPodcastItem));
     if (generalPodcasts && generalPodcasts.length > 0) {
       console.log(`Scoped podcasts empty; using ${generalPodcasts.length} general podcast items`);
       return generalPodcasts;
@@ -1097,23 +1095,15 @@ export const fetchTrendingContent = async (category = null, topic = '') => {
     // Live failover: only items from known podcast/audio sources qualify as podcasts.
     // Never return generic news articles here — they would duplicate the videos feed.
     const newsPool = await fetchTopNews(category, topic);
-    const derivedPodcasts = (newsPool || []).filter((item) => {
-      const url   = `${item?.url || item?.link || ''}`.toLowerCase();
-      const src   = `${item?.source || ''}`.toLowerCase();
-      const isPodcastUrl = url.includes('podcast') || url.includes('megaphone.fm') ||
-                           url.includes('simplecast') || url.includes('omnycontent') ||
-                           url.includes('feeds.npr') || url.includes('art19.com') ||
-                           url.includes('acast.com');
-      const isPodcastSrc = src.includes('podcast') || src.includes('npr') ||
-                           src.includes('radio hour') || src.includes('daily') ||
-                           src.includes('morning') || src.includes('show');
-      return isPodcastUrl || isPodcastSrc;
-    }).map((item) => ({
+    const rawPodcasts = (newsPool || []).filter(isPodcastItem).map((item) => ({
       ...item,
       thumbnail: item?.thumbnail || item?.image,
       hosts: item?.hosts || item?.source,
       date: item?.date || item?.publishedAt || item?.time || 'Recently'
     }));
+
+    const rawVideos = (newsPool || []).filter(isVideoItem);
+    const derivedPodcasts = dedupeByMediaKey(removeCrossDuplicates(rawPodcasts, rawVideos));
 
     return derivedPodcasts;
   } catch (error) {

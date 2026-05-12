@@ -12,6 +12,7 @@ import { filterContentByCategory } from '../utils/categoryFiltering'
 import { dedupeContentItems } from '../utils/contentDeduplication'
 import { deriveMediaOutlet } from '../utils/sourceUtils'
 import { matchesTopicQuery } from '../utils/topicFiltering'
+import { isVideoItem, isPodcastItem, dedupeByMediaKey, removeCrossDuplicates } from '../utils/mediaClassification'
 import './AllNewsPage.css'
 
 function AllVideosPage({ category = null }) {
@@ -78,39 +79,31 @@ function AllVideosPage({ category = null }) {
       if (hasActiveTopic && topic && topic.trim().length > 0) {
         const searchResults = await searchRSSContent(topic)
         const normalizedResults = (Array.isArray(searchResults) ? searchResults : []).map(normalizeVideoItem)
-        let topicVideos = dedupeContentItems(normalizedResults.filter((item) => {
-          const typeText = toStr(item?.type).toLowerCase()
-          const categoryText = toStr(item?.category).toLowerCase()
-          const sourceText = toStr(item?.source).toLowerCase()
-          const linkText = toStr(item?.link).toLowerCase()
-          return (
-            typeText === 'video' ||
-            categoryText.includes('video') ||
-            sourceText.includes('youtube') ||
-            linkText.includes('youtube.com')
-          )
-        }))
+        const searchVideos = normalizedResults.filter(isVideoItem)
+        const searchPodcasts = normalizedResults.filter(isPodcastItem)
+        let topicVideos = dedupeByMediaKey(removeCrossDuplicates(searchVideos, searchPodcasts))
 
         const MIN_TOPIC_VIDEOS = 20
         if (topicVideos.length < MIN_TOPIC_VIDEOS) {
           const videoPool = await fetchRSSVideos()
           const supplemental = (Array.isArray(videoPool) ? videoPool : [])
             .map(normalizeVideoItem)
+            .filter(isVideoItem)
             .filter((item) => matchesTopicQuery(item, topic))
-          topicVideos = dedupeContentItems([...topicVideos, ...supplemental])
+          topicVideos = dedupeByMediaKey([...topicVideos, ...supplemental])
         }
 
-        setVideos(dedupeContentItems(topicVideos))
+        setVideos(dedupeByMediaKey(topicVideos))
       } else {
         const videosData = await fetchVideos(filterContext)
-        const normalizedVideos = (Array.isArray(videosData) ? videosData : []).map(normalizeVideoItem)
+        const normalizedVideos = (Array.isArray(videosData) ? videosData : []).map(normalizeVideoItem).filter(isVideoItem)
 
         let filtered = normalizedVideos
         if (filterContext) {
           filtered = filterContentByCategory(normalizedVideos, filterContext, 1, { strict: true })
         }
 
-        setVideos(dedupeContentItems(filtered))
+        setVideos(dedupeByMediaKey(filtered))
       }
     } catch (error) {
       console.error('Error loading videos:', error)

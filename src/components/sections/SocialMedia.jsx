@@ -6,6 +6,9 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import './SocialMedia.css'
 
+// Placeholder for Truth Social icon (using a generic social icon)
+const faTruthSocial = faXTwitter
+
 function SocialMedia({ socialPosts, loadingSocial }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const itemsPerPage = 3
@@ -49,6 +52,8 @@ function SocialMedia({ socialPosts, loadingSocial }) {
       case 'X':
         return faXTwitter
       case 'Instagram':
+      case 'Truth Social':
+        return faTruthSocial
         return faInstagram
       case 'TikTok':
         return faTiktok
@@ -131,7 +136,7 @@ function SocialMedia({ socialPosts, loadingSocial }) {
         <p className="no-content">No trending content available at this time.</p>
       )}
       
-      <button className="see-more-btn">See More Posts</button>
+      <Link to="/social" className="see-more-btn">See More Posts</Link>
     </section>
   )
 }

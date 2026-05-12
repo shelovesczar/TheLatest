@@ -15,6 +15,30 @@ const truncate = (text, max) => {
   return text.length <= max ? text : `${text.substring(0, max).trim()}...`
 }
 
+const formatPublishedDate = (dateString) => {
+  if (!dateString) return 'Recently'
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'Recently'
+    
+    const now = new Date()
+    const diffMs = now - date
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+    
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    
+    // For older dates, show month and day
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return 'Recently'
+  }
+}
+
 function SearchResults() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -30,9 +54,16 @@ function SearchResults() {
   const [loading, setLoading]             = useState(false)
   const [feedLoading, setFeedLoading]     = useState(true)
   const [selectedSource, setSelectedSource] = useState('ALL')
+  const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280))
 
   // Keep input in sync when the URL query changes (e.g. back button)
   useEffect(() => { setInputValue(query) }, [query])
+
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   // Fetch default news feed (shown when no query)
   useEffect(() => {
@@ -50,13 +81,33 @@ function SearchResults() {
       return
     }
     setLoading(true)
+    console.log('[SearchResults] Initiating search for:', query)
     searchRSSContent(query)
-      .then(data => setResults(Array.isArray(data) ? data : []))
-      .catch(() => setResults([]))
+      .then(data => {
+        const items = Array.isArray(data) ? data : []
+        console.log('[SearchResults] Got results:', items.length, 'items')
+        // Sort by most recent first - parse dates with fallback to epoch for invalid dates
+        const sorted = items.sort((a, b) => {
+          let dateA = new Date(a.publishedAt || 0)
+          let dateB = new Date(b.publishedAt || 0)
+          // Handle invalid dates - treat as epoch (oldest)
+          if (isNaN(dateA.getTime())) dateA = new Date(0)
+          if (isNaN(dateB.getTime())) dateB = new Date(0)
+          return dateB - dateA
+        })
+        setResults(sorted)
+        console.log('[SearchResults] Results state updated with', sorted.length, 'items')
+      })
+      .catch(err => {
+        console.error('[SearchResults] Search error:', err)
+        setResults([])
+      })
       .finally(() => setLoading(false))
 
     // Also search saved + history archive
-    setArchiveResults(searchArchive(query))
+    const archiveResults = searchArchive(query)
+    console.log('[SearchResults] Archive results:', archiveResults.length, 'items')
+    setArchiveResults(archiveResults)
   }, [query])
 
   const handleSubmit = (e) => {
@@ -75,6 +126,14 @@ function SearchResults() {
     setInputValue('')
     navigate('/search')
     inputRef.current?.focus()
+  }
+
+  const getDescriptionLimit = () => {
+    if (viewportWidth >= 1500) return 320
+    if (viewportWidth >= 1280) return 260
+    if (viewportWidth >= 1024) return 220
+    if (viewportWidth >= 768) return 180
+    return 130
   }
 
   // ── Default feed layout helpers ──────────────────────────────
@@ -111,7 +170,9 @@ function SearchResults() {
 
   const hasQuery   = !!query.trim()
   const isSearching = hasQuery && loading
-  const noResults   = hasQuery && !loading && results.length === 0
+  const hasLiveResults = results.length > 0
+  const hasArchiveMatches = archiveResults.length > 0
+  const noResults   = hasQuery && !loading && !hasLiveResults && !hasArchiveMatches
 
   return (
     <div className="search-results-page">
@@ -175,38 +236,46 @@ function SearchResults() {
             </div>
           ) : (
             <>
-              <div className="sr-results-header">
-                <span className="sr-count">{results.length} articles found</span>
-              </div>
-              <div className="results-grid">
-                {results.map((article, index) => (
-                  <a
-                    key={index}
-                    href="#"
-                    onClick={e => { e.preventDefault(); goToArticle(article) }}
-                    className="result-card"
-                  >
-                    {article.image && (
-                      <div className="result-image">
-                        <img {...getImageProps(article.image, article.title, 'news')} />
-                      </div>
-                    )}
-                    <div className="result-content">
-                      <h3 className="result-title">{article.title}</h3>
-                      <p className="result-description">
-                        {truncate(article.description, 150)}
-                      </p>
-                      <div className="result-meta">
-                        <span className="result-source">{article.source}</span>
-                        <span className="result-date">{article.publishedAt || article.date}</span>
-                      </div>
-                    </div>
-                  </a>
-                ))}
-              </div>
+              {hasLiveResults && (
+                <>
+                  <div className="sr-results-header">
+                    <span className="sr-count">{results.length} articles found</span>
+                  </div>
+                  <div className="results-grid">
+                    {results.map((article, index) => (
+                      <a
+                        key={index}
+                        href="#"
+                        onClick={e => { e.preventDefault(); goToArticle(article) }}
+                        className="result-card"
+                      >
+                        {article.image && (
+                          <div className="result-image">
+                            <img {...getImageProps(article.image, article.title, 'news')} />
+                          </div>
+                        )}
+                        <div className="result-content">
+                          <div className="result-content-body">
+                            <h3 className="result-title">{article.title}</h3>
+                            <p className="result-description">
+                              {truncate(article.description, getDescriptionLimit())}
+                            </p>
+                          </div>
+                          <div className="result-content-footer">
+                            <div className="result-meta">
+                              <span className="result-source">{article.source}</span>
+                              <span className="result-date">{formatPublishedDate(article.publishedAt)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </>
+              )}
 
               {/* Archive results */}
-              {archiveResults.length > 0 && (
+              {hasArchiveMatches && (
                 <div className="sr-archive-section">
                   <div className="sr-archive-header">
                     <span className="panel-kicker">Your Archive</span>
@@ -226,16 +295,26 @@ function SearchResults() {
                           </div>
                         )}
                         <div className="result-content">
-                          <h3 className="result-title">{article.title}</h3>
-                          <p className="result-description">{truncate(article.description, 150)}</p>
-                          <div className="result-meta">
-                            <span className="result-source">{article.source}</span>
-                            <span className="result-date">{article.publishedAt || article.date}</span>
+                          <div className="result-content-body">
+                            <h3 className="result-title">{article.title}</h3>
+                            <p className="result-description">{truncate(article.description, getDescriptionLimit())}</p>
+                          </div>
+                          <div className="result-content-footer">
+                            <div className="result-meta">
+                              <span className="result-source">{article.source}</span>
+                              <span className="result-date">{formatPublishedDate(article.publishedAt)}</span>
+                            </div>
                           </div>
                         </div>
                       </a>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {!hasLiveResults && hasArchiveMatches && (
+                <div className="sr-results-header">
+                  <span className="sr-count">No live matches, showing {archiveResults.length} archive result{archiveResults.length !== 1 ? 's' : ''}</span>
                 </div>
               )}
             </>

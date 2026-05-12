@@ -163,9 +163,10 @@
 }
 
 .source-pill:hover {
-  background-color: var(--accent-color);
-  color: #ffffff;
-  transform: translateY(-2px);
+  background-color: color-mix(in srgb, var(--accent-color) 14%, transparent);
+  color: var(--accent-color);
+  border-color: var(--accent-color);
+  transform: translateY(-1px);
 }
 
 .source-pill.active {
@@ -182,7 +183,7 @@
 
 .all-news-top-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 360px);
+  grid-template-columns: 1fr;
   gap: var(--spacing-lg);
   align-items: start;
   margin-bottom: var(--spacing-xl);
@@ -202,8 +203,8 @@
 
 .lead-story-card {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-  min-height: 100%;
+  grid-template-columns: minmax(340px, 1fr) minmax(280px, 1fr);
+  min-height: clamp(300px, 34vw, 420px);
   transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
@@ -221,6 +222,9 @@
 .lead-story-image {
   min-height: 100%;
   background: var(--bg-tertiary);
+  aspect-ratio: 16 / 10;
+  flex-shrink: 0;
+  width: 100%;
 }
 
 .lead-story-image img {
@@ -234,6 +238,7 @@
 .lead-story-content {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   gap: 1rem;
   padding: clamp(1.25rem, 2.6vw, 2rem);
 }
@@ -310,6 +315,12 @@
   flex-direction: column;
 }
 
+.most-read-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0;
+}
+
 .most-read-item,
 .quick-update-item {
   display: grid;
@@ -326,6 +337,7 @@
 .most-read-item {
   grid-template-columns: 48px minmax(0, 1fr);
   align-items: start;
+  min-height: 100%;
 }
 
 .most-read-rank {
@@ -562,9 +574,17 @@
 }
 
 @media (max-width: 1200px) {
-  .all-news-top-grid,
   .latest-news-layout {
     grid-template-columns: 1fr;
+  }00px, 1fr) minmax(200px, 1
+
+  .lead-story-card {
+    grid-template-columns: minmax(320px, 1.1fr) minmax(0, 0.9fr);
+    min-height: clamp(280px, 38vw, 380px);
+  }
+
+  .most-read-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .secondary-stories-grid {
@@ -595,8 +615,13 @@
     grid-template-columns: 1fr;
   }
 
+  .most-read-list {
+    grid-template-columns: 1fr;
+  }
+
   .lead-story-image {
     min-height: 260px;
+    aspect-ratio: 16 / 9;
   }
 
   .latest-story-image {

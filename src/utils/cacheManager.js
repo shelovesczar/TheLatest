@@ -7,7 +7,8 @@
 const DB_NAME = 'TheLatestCache';
 const DB_VERSION = 1;
 const STORE_NAME = 'contentCache';
-const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes — matches backend cache TTL
+const SEARCH_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes — search results freshen more often
 const STALE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 class CacheManager {

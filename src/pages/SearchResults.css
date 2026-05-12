@@ -156,7 +156,7 @@
 
 .results-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: var(--spacing-lg);
 }
 
@@ -170,6 +170,7 @@
   color: inherit;
   display: flex;
   flex-direction: column;
+  min-height: clamp(390px, 45vw, 520px);
 }
 
 .result-card:hover {
@@ -180,7 +181,7 @@
 
 .result-image {
   width: 100%;
-  height: 200px;
+  height: clamp(190px, 18vw, 250px);
   overflow: hidden;
   background-color: var(--bg-tertiary);
 }
@@ -201,22 +202,45 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.result-content-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  flex: 1;
+}
+
+.result-content-footer {
+  margin-top: auto;
 }
 
 .result-title {
-  font-size: 1.1rem;
+  font-size: clamp(1.02rem, 1.2vw, 1.22rem);
   font-weight: 700;
-  margin-bottom: 0.6rem;
+  margin-bottom: 0;
   color: var(--text-primary);
   line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
 }
 
 .result-description {
-  font-size: 0.9rem;
+  font-size: clamp(0.86rem, 0.95vw, 0.96rem);
   color: var(--text-secondary);
-  line-height: 1.6;
-  margin-bottom: 0.8rem;
+  line-height: 1.55;
+  margin-bottom: 0;
   flex: 1;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+  overflow: hidden;
 }
 
 .result-meta {
@@ -318,6 +342,15 @@
 
   .result-image {
     height: 180px;
+  }
+
+  .result-card {
+    min-height: clamp(330px, 78vw, 430px);
+  }
+
+  .result-description {
+    -webkit-line-clamp: 5;
+    line-clamp: 5;
   }
 }
 

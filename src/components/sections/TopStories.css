@@ -218,23 +218,40 @@
   padding: clamp(8px, 1.1vw, 12px);
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   min-width: 0;
   overflow: hidden;
+  min-height: 100%;
+  gap: clamp(0.4rem, 0.9vw, 0.8rem);
+}
+
+.story-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.story-card-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: clamp(0.25rem, 0.8vw, 0.7rem);
 }
 
 .story-card-headline {
   font-size: clamp(0.98rem, 1.8vw, 1.4rem);
   font-weight: 800;
-  line-height: 1.3;
+  line-height: 1.42;
   color: var(--text-primary);
   margin-bottom: var(--spacing-sm);
   word-wrap: break-word;
   overflow-wrap: break-word;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  line-clamp: 2;
-  -webkit-line-clamp: 2;
+  line-clamp: 3;
+  -webkit-line-clamp: 3;
   overflow: hidden;
 }
 
@@ -260,16 +277,16 @@
 
 .story-card-description {
   color: var(--text-secondary);
-  line-height: 1.35;
+  line-height: 1.58;
   font-size: clamp(0.82rem, 1vw, 0.92rem);
-  margin-bottom: 0.35rem;
+  margin-bottom: 0;
   font-weight: bold;
   word-wrap: break-word;
   overflow-wrap: break-word;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  line-clamp: 2;
-  -webkit-line-clamp: 2;
+  line-clamp: 5;
+  -webkit-line-clamp: 5;
   overflow: hidden;
 }
 
@@ -315,6 +332,20 @@
   transform: translateX(5px);
 }
 
+/* Ultra-wide desktop: use more card space for readable copy density */
+@media (min-width: 1400px) {
+  .story-card-headline {
+    line-clamp: 4;
+    -webkit-line-clamp: 4;
+  }
+
+  .story-card-description {
+    line-clamp: 6;
+    -webkit-line-clamp: 6;
+    line-height: 1.62;
+  }
+}
+
 /* Responsive Styles - 1200px Breakpoint */
 @media (max-width: 1200px) {
   .story-with-ad-container {
@@ -353,6 +384,8 @@
   
   .story-card-description {
     font-size: clamp(0.85rem, 1.6vw, 0.95rem);
+    line-clamp: 4;
+    -webkit-line-clamp: 4;
   }
 }
 
@@ -398,6 +431,9 @@
   
   .story-card-description {
     font-size: 0.9rem;
+    line-height: 1.5;
+    line-clamp: 3;
+    -webkit-line-clamp: 3;
   }
   
   .story-card-source,
@@ -463,7 +499,9 @@
   
   .story-card-description {
     font-size: 0.85rem;
-    line-height: 1.5;
+    line-height: 1.45;
+    line-clamp: 3;
+    -webkit-line-clamp: 3;
   }
   
   .story-card-image {
@@ -546,6 +584,14 @@
   
   .story-card-content {
     padding: 0.95rem;
+  }
+
+  .story-card-body {
+    gap: 0.35rem;
+  }
+
+  .story-card-footer {
+    gap: 0.35rem;
   }
 
   .story-card-meta {

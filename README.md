@@ -17,6 +17,22 @@ Instead of opening 10+ websites, you can browse everything in one feed.
 
 ## What was recently fixed and improved
 
+### 0) RSS bundle is now centralized and prioritized
+The RSS aggregator can now prepend one RSS.app bundle feed across key feed groups (news, opinions, videos, podcasts, and category feeds) without duplicating URLs.
+
+Environment variables:
+- `RSS_APP_BUNDLE_FEED_URL`
+- `RSS_APP_BUNDLE_SOURCE`
+
+### 0) Videos and podcasts can now run from one RSS feed
+The aggregator now supports using a single RSS source as the sole feed for both Videos and Podcasts.
+
+Current configured feed:
+- https://rss.app/feeds/_D52QE16IQULFQQkk.xml
+
+### 0.1) Image URL filtering in RSS fetch was removed
+Image extraction now accepts all discovered image URLs from feed fields and embedded HTML image tags, instead of filtering by tracking/size keywords.
+
 ### 1) Topic filtering now works across the whole app
 When you select a topic (not `ALL`), sections now properly load topic-related content.
 
@@ -47,6 +63,28 @@ The app now leans on:
 - Stale cache reuse for short outages
 
 This helps prevent blank sections during feed instability.
+
+### 7) Source contribution diagnostics for feed quality
+You can now inspect which outlets are actually contributing items.
+
+Use:
+- `/.netlify/functions/rss-aggregator?type=news&sourceStats=1`
+- `/.netlify/functions/rss-aggregator?type=news&category=business&sourceStats=1`
+- `/.netlify/functions/rss-aggregator?search=giuliani&sourceStats=1`
+
+Responses include:
+- `sourceStats.totalItems`
+- `sourceStats.uniqueSources`
+- `sourceStats.topSources` (source + count)
+
+### 8) Strict video vs podcast separation and de-duplication
+Media classification is now shared across service and page layers so users do not see video/podcast duplicates.
+
+Rules applied:
+- Video and podcast items are classified from URL/type/category/source/title/description signals.
+- Items are de-duplicated within each section by stable media keys.
+- Cross-duplicates are removed between video and podcast candidate pools before rendering.
+- Bundle-driven topic searches now preserve this separation on both Videos and Podcasts pages.
 
 ---
 
@@ -89,6 +127,21 @@ Copy `.env.example` to `.env` and set keys as needed.
 
 If you use social RSS route resolution, set:
 - `RSSHUB_BASE_URL` (for example: `https://rsshub.app`)
+
+---
+
+## RSS feed configuration (videos + podcasts)
+
+To change the single RSS feed used by both Videos and Podcasts:
+
+1. Open `netlify/functions/rss-aggregator.js`
+2. Locate `RSS_FEEDS.videos` and `RSS_FEEDS.podcasts`
+3. Replace the `url` value in both entries with your new RSS feed
+
+Current setup points both to:
+- `https://rss.app/feeds/_D52QE16IQULFQQkk.xml`
+
+Tip: keep the two URLs identical if you want one shared feed for both sections.
 
 ---
 

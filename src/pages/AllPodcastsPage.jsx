@@ -12,6 +12,7 @@ import { filterContentByCategory } from '../utils/categoryFiltering'
 import { dedupeContentItems } from '../utils/contentDeduplication'
 import { deriveMediaOutlet } from '../utils/sourceUtils'
 import { matchesTopicQuery } from '../utils/topicFiltering'
+import { isVideoItem, isPodcastItem, dedupeByMediaKey, removeCrossDuplicates } from '../utils/mediaClassification'
 import './AllNewsPage.css'
 
 function AllPodcastsPage({ category = null }) {
@@ -78,40 +79,31 @@ function AllPodcastsPage({ category = null }) {
       if (hasActiveTopic && topic && topic.trim().length > 0) {
         const searchResults = await searchRSSContent(topic)
         const normalizedResults = (Array.isArray(searchResults) ? searchResults : []).map(normalizePodcastItem)
-        let topicPodcasts = dedupeContentItems(normalizedResults.filter((item) => {
-          const typeText = toStr(item?.type).toLowerCase()
-          const categoryText = toStr(item?.category).toLowerCase()
-          const sourceText = toStr(item?.source).toLowerCase()
-          const linkText = toStr(item?.link).toLowerCase()
-          return (
-            typeText === 'podcast' ||
-            categoryText.includes('podcast') ||
-            categoryText.includes('audio') ||
-            sourceText.includes('podcast') ||
-            linkText.includes('podcast')
-          )
-        }))
+        const searchPodcasts = normalizedResults.filter(isPodcastItem)
+        const searchVideos = normalizedResults.filter(isVideoItem)
+        let topicPodcasts = dedupeByMediaKey(removeCrossDuplicates(searchPodcasts, searchVideos))
 
         const MIN_TOPIC_PODCASTS = 20
         if (topicPodcasts.length < MIN_TOPIC_PODCASTS) {
           const podcastPool = await fetchRSSPodcasts()
           const supplemental = (Array.isArray(podcastPool) ? podcastPool : [])
             .map(normalizePodcastItem)
+            .filter(isPodcastItem)
             .filter((item) => matchesTopicQuery(item, topic))
-          topicPodcasts = dedupeContentItems([...topicPodcasts, ...supplemental])
+          topicPodcasts = dedupeByMediaKey([...topicPodcasts, ...supplemental])
         }
 
-        setPodcasts(dedupeContentItems(topicPodcasts))
+        setPodcasts(dedupeByMediaKey(topicPodcasts))
       } else {
         const podcastsData = await fetchTrendingContent(filterContext)
-        const normalizedPodcasts = (Array.isArray(podcastsData) ? podcastsData : []).map(normalizePodcastItem)
+        const normalizedPodcasts = (Array.isArray(podcastsData) ? podcastsData : []).map(normalizePodcastItem).filter(isPodcastItem)
 
         let filtered = normalizedPodcasts
         if (filterContext) {
           filtered = filterContentByCategory(normalizedPodcasts, filterContext, 1, { strict: true })
         }
 
-        setPodcasts(dedupeContentItems(filtered))
+        setPodcasts(dedupeByMediaKey(filtered))
       }
     } catch (error) {
       console.error('Error loading podcasts:', error)

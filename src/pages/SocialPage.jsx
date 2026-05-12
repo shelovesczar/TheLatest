@@ -13,6 +13,7 @@ function SocialPage() {
   const { topic, hasActiveTopic } = useSearch()
   const [socialPosts, setSocialPosts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [selectedPlatform, setSelectedPlatform] = useState('ALL')
 
   useEffect(() => {
     const loadSocialPosts = async () => {
@@ -53,6 +54,11 @@ function SocialPage() {
     }
   }
 
+  const platforms = ['ALL', ...new Set(socialPosts.map(p => p.platform).filter(Boolean))]
+  const filteredPosts = selectedPlatform === 'ALL'
+    ? socialPosts
+    : socialPosts.filter(p => p.platform === selectedPlatform)
+
   return (
     <div className="category-page">
       <div className="category-hero">
@@ -72,7 +78,32 @@ function SocialPage() {
 
       <div className="category-content">
         <section className="section social-media">
-          <h2 className="section-title">Social Media Posts</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h2 className="section-title">Social Media Posts</h2>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {platforms.map(platform => (
+                <button
+                  key={platform}
+                  onClick={() => setSelectedPlatform(platform)}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: '25px',
+                    border: '1.5px solid var(--accent-color)',
+                    background: selectedPlatform === platform ? 'var(--accent-color)' : 'transparent',
+                    color: selectedPlatform === platform ? '#ffffff' : 'var(--accent-color)',
+                    fontWeight: '700',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08rem'
+                  }}
+                >
+                  {platform}
+                </button>
+              ))}
+            </div>
+          </div>
           
           {loading ? (
             <div className="loading-container">
@@ -80,7 +111,7 @@ function SocialPage() {
             </div>
           ) : (
             <div className="social-posts-grid">
-              {socialPosts.map((post, index) => (
+              {filteredPosts.map((post, index) => (
                 <div key={index} className="social-post-card">
                   {post.html ? (
                     <div dangerouslySetInnerHTML={{ __html: post.html }} />

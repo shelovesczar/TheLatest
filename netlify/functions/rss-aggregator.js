@@ -1,6 +1,6 @@
 const Parser = require('rss-parser');
 const parser = new Parser({
-  timeout: 12000, // 12 seconds — fail fast on slow feeds
+  timeout: 5000, // 5 seconds — fail fast on slow feeds
   customFields: {
     item: [
       ['media:content', 'media'],
@@ -25,10 +25,11 @@ let cache = {
 let articleImageCache = new Map();
 let feedFailureCache = new Map();
 
-const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes — halves cold-start frequency
-const MAX_ITEMS_PER_FEED = 30;         // was 80 — we never render >30 per feed
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes — fewer cold fetches
+const MAX_ITEMS_PER_FEED = 15;          // only grab top 15 per feed for speed
+const MAX_FEEDS_PER_REQUEST = 6;        // cap parallel feeds to avoid slow stragglers
 const ARTICLE_IMAGE_CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
-const MAX_IMAGE_ENRICH_ITEMS = 20;     // was 60 — top 20 items only, much faster
+const MAX_IMAGE_ENRICH_ITEMS = 0;       // disabled — images come from feed metadata
 const IMAGE_ENRICH_CONCURRENCY = 5;
 const PERMANENT_FEED_FAILURE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 const TRANSIENT_FEED_FAILURE_TTL = 30 * 60 * 1000; // 30 minutes
@@ -695,106 +696,47 @@ const RSS_FEEDS = {
     { url: 'https://rss.app/feeds/_iIjbt3XTnFFpU0Cv.xml', source: 'The Latest' }
   ],
   videos: [
-    // YouTube News Channels
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCupvZG-5ko_eiXAupbDfxWw', source: 'CNN' },
+    // Video-focused feeds
+    { url: 'https://rss.app/feeds/_D52QE16IQULFQQkk.xml', source: 'Custom Video Feed' },
+    // Major News Networks
     { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCeY0bbntWzzVIaj2z3QigXg', source: 'NBC News' },
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCXIJgqnII2ZOINSWNOGFThA', source: 'Fox News' },
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCBi2mrWuNuyYy4gbM6fU18Q', source: 'ABC News' },
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UC16niRr50-MSBwiO3YDb3RA', source: 'BBC News' },
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCaXkIU1QidjPwiAYu6GcHjg', source: 'MSNBC' },
     { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UC52X5wxOL_s5yw0dQk7NtgA', source: 'Associated Press Video' },
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UChqUTb7kYRX8-EiaN3XFrSQ', source: 'Reuters Video' },
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCIRYBXDze5krPDzAEOxFGVA', source: 'The Guardian Video' },
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCrp_UI8XtuYfpiqluWLD7Lw', source: 'CNBC Television' },
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCIALMKvObZNtJ6AmdCLP7Lg', source: 'Bloomberg Television' },
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCoMdktPbSTixAyNGwb-UYkQ', source: 'Sky News' },
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UC6ZFN9Tx6xh-skXCuRHCDpQ', source: 'PBS NewsHour' },
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCmh5gdwCx6lN7gEC20leNVA', source: 'Yahoo Finance' },
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCknLrEdhRCp1aegoMqRaCZg', source: 'DW News' },
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCNye-wNBqNL5ZzHSJj3l8Bg', source: 'Al Jazeera English' },
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCX3i5UvvT6cz8KJjbDwt1nA', source: 'Wall Street Journal' },
-    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UC8p1vwvWtl6T73JiExfWs1g', source: 'C-SPAN' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCupvZG-dwjc-b5gqpDpMLEA', source: 'CNN' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UChqUTb1LzRh2qiKI7O-g1vQ', source: 'New York Times' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCH5YX9AEe82R-yz-EHqnVUA', source: 'BBC News' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCoHnyF6otAH6D45KKcspd3g', source: 'Reuters TV' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCXMCrsqgcQIBN4UYnIZ51uA', source: 'Fox News' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCBi2mrWuNuyYy4tbNP5qpFQ', source: 'ABC News' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCYzhQ58Uw0aHAW2J1qHBVLQ', source: 'CBS News' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCQjzHeHnrz8ItchyNuSXe2A', source: 'AP News' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCAl6sMQK7UGrN-_XNR5Faqg', source: 'The Guardian' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCs7lxVk-yCAJta1j6_byrPw', source: 'Washington Post' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCNLeXyNOC_-maxChBQOUQpQ', source: 'Al Jazeera English' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCA5YwsTYQONMNp9ZNVUamcA', source: 'PBS' },
+    { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCaLlzGqiREWo1HWcxZ0-9Vg', source: 'MSNBC' },
   ],
   podcasts: [
-    // News & Politics Podcasts
-    { url: 'https://feeds.npr.org/500005/podcast.xml', source: 'NPR Politics' },
-    { url: 'https://feeds.megaphone.fm/NYT8938532588', source: 'The Daily (NYT)' },
-    { url: 'https://feeds.megaphone.fm/WWO3519750118', source: 'Pod Save America' },
-    { url: 'https://feeds.simplecast.com/54nAGcIl', source: 'The Ezra Klein Show' },
+    // Podcast-focused feeds (kept separate from videos to avoid overlap)
     { url: 'https://feeds.npr.org/510318/podcast.xml', source: 'NPR Up First' },
-    { url: 'https://feeds.megaphone.fm/WAPO5439518155', source: 'Washington Post' },
-    { url: 'https://feeds.megaphone.fm/WSJ9463786025', source: 'WSJ What\'s News' },
-    { url: 'https://feeds.megaphone.fm/ADL9452555852', source: 'The Ben Shapiro Show' },
-    { url: 'https://feeds.megaphone.fm/newshour', source: 'PBS NewsHour' },
-    { url: 'https://www.omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/a91018a4-ea4f-4130-bf55-ae270180c327/44710ecc-10bb-48d1-93c7-ae270180c33e/podcast.rss', source: 'Morning Joe' },
-    { url: 'https://feeds.megaphone.fm/VMP7924054000', source: 'Pod Save the World' },
-    { url: 'https://feeds.megaphone.fm/FOXN2895050347', source: 'Fox News' },
+    { url: 'https://feeds.megaphone.fm/NYT8938532588', source: 'The Daily (NYT)' },
     { url: 'https://podcasts.files.bbci.co.uk/p02nq0gn.rss', source: 'BBC Global News Podcast' },
-    { url: 'https://feeds.npr.org/510355/podcast.xml', source: 'NPR Consider This' },
-    { url: 'https://feeds.npr.org/510289/podcast.xml', source: 'NPR Planet Money' },
-    { url: 'https://feeds.megaphone.fm/VMP5705694065', source: 'Today, Explained' },
-    
-    // Technology & Business Podcasts
-    { url: 'https://feeds.megaphone.fm/HSW8935723597', source: 'TED Tech' },
-    { url: 'https://feeds.simplecast.com/XA_851k3', source: 'Reply All' },
-    { url: 'https://lexfridman.com/feed/podcast/', source: 'Lex Fridman' },
-    { url: 'https://feeds.megaphone.fm/recodedecode', source: 'Recode Decode' },
-    { url: 'https://feeds.simplecast.com/qm_9xx0g', source: 'Acquired' },
-    { url: 'https://feeds.megaphone.fm/ROOSTER7199250968', source: 'a16z Podcast' },
-    { url: 'https://feeds.simplecast.com/4T39_jAj', source: 'Invest Like the Best' },
-    { url: 'https://feeds.simplecast.com/wgl4xEgL', source: 'Masters of Scale' },
-    { url: 'https://rss.art19.com/freakonomics-radio', source: 'Freakonomics' },
-    { url: 'https://feeds.megaphone.fm/marketsnacks-daily', source: 'The Best One Yet' },
-    { url: 'https://feeds.megaphone.fm/BINGE9775291795', source: 'How I Built This' },
-    { url: 'https://feeds.pacific-content.com/mogul', source: 'Business Wars' },
-    
-    // Culture & Entertainment Podcasts
-    { url: 'https://feeds.simplecast.com/rpXNNhRZ', source: 'Fresh Air' },
-    { url: 'https://feeds.npr.org/510298/podcast.xml', source: 'TED Radio Hour' },
-    { url: 'https://feeds.megaphone.fm/ROOSTER2072428631', source: 'WTF Marc Maron' },
-    { url: 'https://feeds.simplecast.com/l2i9YnTd', source: 'Conan O\'Brien' },
-    { url: 'https://www.omnycontent.com/d/playlist/aaea4e69-af51-495e-afc9-a9760146922b/14a43378-edb2-49be-8511-ab0d000a7030/d1b9612f-bb1b-4b85-9c0e-ab0d000a7038/podcast.rss', source: 'Armchair Expert' },
-    { url: 'https://feeds.simplecast.com/wjQvV1gf', source: 'Smartless' },
-    { url: 'https://rss.art19.com/stuff-you-should-know', source: 'Stuff You Should Know' },
-    { url: 'https://feeds.simplecast.com/Nn6fjnB0', source: 'Radiolab' },
-    { url: 'https://www.omnycontent.com/d/playlist/aaea4e69-af51-495e-afc9-a9760146922b/edc76a46-3151-4d67-b489-ab0500afc990/f51f3e9b-9488-4b6e-8f2b-ab0500afcb98/podcast.rss', source: 'The Bill Simmons' },
-    { url: 'https://feeds.acast.com/public/shows/the-joe-rogan-experience', source: 'Joe Rogan Experience' },
-    
-    // Science & Education Podcasts
-    { url: 'https://feeds.megaphone.fm/sciencevs', source: 'Science Vs' },
-    { url: 'https://www.omnycontent.com/d/playlist/6c78df20-eafc-40a8-beeb-a82f00f2f97f/abac18c5-df1a-4e2e-9980-aead01005895/1aee9784-87c3-4a18-88bd-aead0100589e/podcast.rss', source: 'Hidden Brain' },
-    { url: 'https://feeds.megaphone.fm/INFOROCKET4046796097', source: 'Stuff To Blow Your Mind' },
-    { url: 'https://feeds.simplecast.com/Y2Y_sofX', source: 'Short Wave' },
-    { url: 'https://feeds.megaphone.fm/sciencefriday', source: 'Science Friday' },
-    { url: 'https://www.omnycontent.com/d/playlist/aaea4e69-af51-495e-afc9-a9760146922b/0dc6ed37-fbc7-4b36-9d7f-ab810177c2bb/dbcf2494-9783-4a10-850a-ab810177c2c6/podcast.rss', source: 'Ologies' },
-    
-    // True Crime & History Podcasts
-    { url: 'https://feeds.simplecast.com/tOjJ6yCZ', source: 'Criminal' },
-    { url: 'https://feeds.megaphone.fm/EMPN6330802945', source: 'My Favorite Murder' },
-    { url: 'https://feeds.megaphone.fm/SU6174937661', source: 'Serial' },
-    { url: 'https://www.omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/a91018a4-ea4f-4130-bf55-ae270180c327/44710ecc-10bb-48d1-93c7-ae270180c33e/podcast.rss', source: 'Hardcore History' },
-    { url: 'https://rss.art19.com/revisionist-history', source: 'Revisionist History' },
-    
-    // Sports Podcasts
-    { url: 'https://feeds.megaphone.fm/ESP5765452710', source: 'ESPN Daily' },
-    { url: 'https://feeds.megaphone.fm/ESP4816647903', source: 'Pardon My Take' },
-    { url: 'https://omnycontent.com/d/playlist/885bb800-15a4-4e4c-9cf6-a73c00f01729/3c127de2-bb99-43d8-9e14-aa3f0031bb0c/2edb23a4-67e9-4838-9aaa-aa3f0031bb0f/podcast.rss', source: 'The Ringer NBA' },
-    { url: 'https://feeds.megaphone.fm/ESP6891740883', source: 'Fantasy Football' },
-    
-    // Health & Wellness Podcasts
-    { url: 'https://feeds.megaphone.fm/HSW5985171007', source: 'The doctor\'s Farmacy' },
-    { url: 'https://feeds.simplecast.com/_AqM7d43', source: 'Feel Better, Live More' },
-    { url: 'https://rss.art19.com/huberman-lab', source: 'Huberman Lab' },
-    { url: 'https://www.omnycontent.com/d/playlist/ccfe4372-0257-426c-8c45-aa8e01826bb2/a40daac5-7c4d-4fa1-96f2-aae900f4ad5d/17a5ba5b-46e0-40c8-a7e8-aae900f5126c/podcast.rss', source: 'On Purpose' },
-    
-    // Comedy Podcasts
-    { url: 'https://feeds.simplecast.com/XOlG2ZQl', source: 'Smartless' },
-    { url: 'https://rss.art19.com/my-dad-wrote-a-porno', source: 'My Dad Wrote A Porno' },
-    { url: 'https://feeds.megaphone.fm/comedybangbang', source: 'Comedy Bang Bang' },
-    
-    // RSS APP feeds
-    { url: 'https://rss.app/feeds/wGtHhwQaOwup8JQs.xml', source: 'New York Post' },
-    { url: 'https://rss.app/feeds/_iIjbt3XTnFFpU0Cv.xml', source: 'The Latest' }
+    // Additional Podcast Feeds
+    { url: 'https://feeds.publicradio.org/public_feeds/marketplace/rss/rss.xml', source: 'Marketplace' },
+    { url: 'https://feeds.publicradio.org/public_feeds/marketplace-tech/rss/rss.xml', source: 'Marketplace Tech' },
+    { url: 'https://feeds.npr.org/432398906/podcast.xml', source: 'TED Radio Hour' },
+    { url: 'https://www.thisamericanlife.org/podcast/feed.chtbl.com/thisamericanlife.rss', source: 'This American Life' },
+    { url: 'https://feeds.megaphone.fm/ADL2638872911', source: 'Freakonomics Radio' },
+    { url: 'https://feeds.megaphone.fm/intelligence2', source: 'Intelligence Squared' },
+    { url: 'https://feeds.megaphone.fm/WSJ2920671661', source: 'The Journal' },
+    { url: 'https://feeds.megaphone.fm/the-world', source: 'The World' },
+    { url: 'https://feeds.npr.org/510019/podcast.xml', source: 'Morning Edition' },
+    { url: 'https://feeds.npr.org/510355/podcast.xml', source: 'All Things Considered' },
+    { url: 'https://feeds.npr.org/510202/podcast.xml', source: 'Weekend Edition Saturday' },
+    { url: 'https://feeds.npr.org/510200/podcast.xml', source: 'Weekend Edition Sunday' },
+    { url: 'https://feeds.npr.org/510307/podcast.xml', source: 'Fresh Air' },
+    { url: 'https://www.economist.com/podcasts/the-intelligence-rss', source: 'The Intelligence - Economist' },
+    { url: 'https://podcasts.voanews.com/podcast/in-the-news/', source: 'VOA In The News' },
+    { url: 'https://feeds.megaphone.fm/DW7903283160', source: 'Deutsche Welle - Global 3000' },
   ],
   sports: [
     // Major Sports Networks
@@ -929,6 +871,27 @@ const RSS_FEEDS = {
   ]
 };
 
+const RSS_APP_BUNDLE_FEED_URL = process.env.RSS_APP_BUNDLE_FEED_URL || 'https://rss.app/feeds/_iIjbt3XTnFFpU0Cv.xml';
+const RSS_APP_BUNDLE_SOURCE = process.env.RSS_APP_BUNDLE_SOURCE || 'The Latest Bundle';
+const BUNDLE_ELIGIBLE_FEED_KEYS = new Set([
+  'news', 'opinions', 'videos', 'podcasts',
+  'sports', 'tech', 'entertainment', 'business', 'lifestyle', 'culture'
+]);
+
+function prependBundleFeed(feedList = [], feedKey = 'news') {
+  if (!RSS_APP_BUNDLE_FEED_URL || !BUNDLE_ELIGIBLE_FEED_KEYS.has(feedKey)) {
+    return feedList;
+  }
+
+  const bundleUrl = String(RSS_APP_BUNDLE_FEED_URL).trim().toLowerCase();
+  const alreadyIncluded = feedList.some((feed) => String(feed?.url || '').trim().toLowerCase() === bundleUrl);
+  if (alreadyIncluded) {
+    return feedList;
+  }
+
+  return [{ url: RSS_APP_BUNDLE_FEED_URL, source: RSS_APP_BUNDLE_SOURCE }, ...feedList];
+}
+
 // Helper to extract image from RSS item
 function extractImage(item) {
   let imageUrl = null;
@@ -965,35 +928,51 @@ function extractImage(item) {
   };
   
   // Special handling for YouTube videos - extract video ID and construct thumbnail URL
-  if (item.link) {
-    // Handle both youtube.com and youtu.be formats
-    const youtubeMatch = item.link.match(/(?:youtube\.com\/watch\?.*v=|youtu\.be\/)([^&?/]+)/);
-    if (youtubeMatch && youtubeMatch[1]) {
-      const videoId = youtubeMatch[1];
+  const linkField = item.link || item.url || item.id;
+  if (linkField) {
+    // Handle both youtube.com and youtu.be formats, plus RSS guid formats
+    const youtubeMatch = linkField.match(/(?:youtube\.com\/watch\?.*v=([^&?/]+)|youtu\.be\/([^&?/]+)|yt\.googleapis\.com\/v\/([^&?/?]+))/);
+    if (youtubeMatch && (youtubeMatch[1] || youtubeMatch[2] || youtubeMatch[3])) {
+      const videoId = youtubeMatch[1] || youtubeMatch[2] || youtubeMatch[3];
       // Use high quality thumbnail (maxresdefault), fall back to mq quality if not available
       return `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
     }
   }
   
-  // Check iTunes podcast image (common in podcast feeds)
+  // Check for YouTube media:content thumbnails
+  if (item['media:content']) {
+    const mediaItems = Array.isArray(item['media:content']) ? item['media:content'] : [item['media:content']];
+    for (const media of mediaItems) {
+      if (media.$ && media.$.url && media.$.url.includes('youtube.com')) {
+        const youtubeMatch = media.$.url.match(/(?:youtube\.com\/v\/|yt\.googleapis\.com\/v\/)([^&?/?]+)/);
+        if (youtubeMatch && youtubeMatch[1]) {
+          return `https://i.ytimg.com/vi/${youtubeMatch[1]}/maxresdefault.jpg`;
+        }
+      }
+    }
+  }
+  
+  // Check iTunes podcast image (common in podcast feeds) - multiple property name variations
   if (item.itunes && item.itunes.image) {
     if (typeof item.itunes.image === 'string') return item.itunes.image;
     if (item.itunes.image.$ && item.itunes.image.$.href) return item.itunes.image.$.href;
     if (item.itunes.image._ && item.itunes.image._) return item.itunes.image._;
   }
 
-  if (item.itunesImage) {
-    addFromObject(item.itunesImage);
-  }
-
-  // Direct iTunes image URL (sometimes it's a direct string property)
+  // Direct iTunes namespace variations
   if (typeof item['itunes:image'] === 'string') {
-    addCandidate(item['itunes:image']);
+    return item['itunes:image'];
   } else if (item['itunes:image'] && typeof item['itunes:image'] === 'object') {
     if (item['itunes:image'].$ && item['itunes:image'].$.href) {
-      addCandidate(item['itunes:image'].$.href);
+      return item['itunes:image'].$.href;
     }
     addFromObject(item['itunes:image']);
+  }
+
+  // Check image element within itunes namespace
+  if (item['itunes:image-href']) {
+    const imageUrl = toPlainText(item['itunes:image-href']);
+    if (isValidImageUrl(imageUrl)) return imageUrl;
   }
 
   if (item.imageField) {
@@ -1147,25 +1126,18 @@ function extractImage(item) {
   // Try to extract from content/description HTML
   const content = item.contentEncoded || item.content || item.description || '';
   if (content) {
-    // Look for img tags - prefer larger images
+    // Look for img tags
     const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
     let match;
     const imgUrls = [];
     
     while ((match = imgRegex.exec(content)) !== null) {
       const url = match[1];
-      // Filter out tracking pixels and small images
-      if (!url.includes('1x1') && !url.includes('pixel') && !url.includes('tracker') && 
-          !url.includes('tracking') && !url.includes('icon') && !url.includes('logo')) {
-        // Check for size hints in URL or attributes
-        const imgTag = match[0];
-        const widthMatch = imgTag.match(/width=["']?(\d+)/i);
-        const width = widthMatch ? parseInt(widthMatch[1]) : 0;
-        
-        if (width >= 700 || width === 0) {
-          imgUrls.push({ url, width });
-        }
-      }
+      // Capture all image candidates and keep width hints only for ordering.
+      const imgTag = match[0];
+      const widthMatch = imgTag.match(/width=["']?(\d+)/i);
+      const width = widthMatch ? parseInt(widthMatch[1]) : 0;
+      imgUrls.push({ url, width });
     }
 
     const srcsetRegex = /srcset=["']([^"']+)["']/gi;
@@ -1189,6 +1161,11 @@ function extractImage(item) {
   // Category-specific fallback images for better UX
   const title = toLowerSearchText(item.title);
   const description = toLowerSearchText(item.description);
+
+  // Log which items are falling back to splash images (for debugging)
+  if (item.source && (item.source.includes('YouTube') || item.source.includes('News') || item.source.includes('Podcast'))) {
+    console.log(`[Image Fallback] ${item.source}: "${toPlainText(item.title).substring(0, 50)}..."`);
+  }
 
   const articlePreviewImage = getArticlePreviewImage(item.link || item.url);
   if (articlePreviewImage) {
@@ -1214,17 +1191,10 @@ function extractImage(item) {
 // Helper function to validate image URLs
 function isValidImageUrl(url) {
   if (!url || typeof url !== 'string') return false;
-  
-  // Filter out obviously invalid URLs
-  if (url.length < 10) return false;
-  if (url.includes('1x1')) return false;
-  if (url.includes('pixel') && !url.includes('pixels')) return false;
-  if (url.includes('tracker')) return false;
-  if (url.includes('tracking')) return false;
-  
-  // Check for valid protocols
-  if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
-  
+
+  // Keep validation permissive: only ensure we have a non-empty URL string.
+  if (url.trim().length === 0) return false;
+
   return true;
 }
 
@@ -1305,14 +1275,15 @@ function extractSource(item, defaultSource) {
 }
 
 // Parse a single RSS feed
-async function parseFeed(feedConfig) {
+async function parseFeed(feedConfig, options = {}) {
   if (shouldSkipFeed(feedConfig.url)) {
     return [];
   }
 
   try {
     const feed = await parser.parseURL(feedConfig.url);
-    const rawItems = Array.isArray(feed.items) ? feed.items.slice(0, MAX_ITEMS_PER_FEED) : [];
+    const maxItems = options.maxItems ?? MAX_ITEMS_PER_FEED;
+    const rawItems = Array.isArray(feed.items) ? feed.items.slice(0, maxItems) : [];
     const filteredItems = rawItems
       .filter(item => !shouldFilterOut(item)) // Apply filtering
       .map(item => ({
@@ -1324,7 +1295,7 @@ async function parseFeed(feedConfig) {
         image: extractImage(item),
         source: extractSource(item, feedConfig.source), // Outlet / publisher source
         author: extractAuthor(item),
-        publishedAt: item.pubDate ? new Date(item.pubDate).toLocaleString() : 'Recently',
+        publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : new Date(0).toISOString(),
         category: toPlainText(item.categories ? item.categories[0] : 'News') || 'News'
       }));
     
@@ -1340,29 +1311,60 @@ async function parseFeed(feedConfig) {
   }
 }
 
-// Fetch multiple feeds in parallel (with batching for performance)
-async function fetchFeeds(feedList) {
-  console.log(`Starting to fetch ${feedList.length} RSS feeds...`);
-  const feedPromises = feedList.map(feed => parseFeed(feed));
+// Fetch multiple feeds in parallel, capped at MAX_FEEDS_PER_REQUEST to keep response fast
+async function fetchFeeds(feedList, options = {}) {
+  // Prioritise the first N feeds; they are ordered from most to least important
+  const maxFeeds = options.maxFeeds ?? MAX_FEEDS_PER_REQUEST;
+  const limited = feedList.slice(0, maxFeeds);
+  console.log(`Starting to fetch ${limited.length} RSS feeds (${feedList.length} configured)...`);
+
+  const feedPromises = limited.map(feed => parseFeed(feed, options));
   const results = await Promise.allSettled(feedPromises);
   
-  // Count successes and failures
   const successful = results.filter(r => r.status === 'fulfilled' && r.value.length > 0).length;
-  const failed = results.filter(r => r.status === 'rejected' || r.value.length === 0).length;
+  const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value.length === 0)).length;
   console.log(`RSS Fetch complete: ${successful} successful, ${failed} failed/empty`);
   
-  // Flatten and filter out failed requests
   const allItems = results
     .filter(result => result.status === 'fulfilled')
-    .flatMap(result => result.value)
+    .flatMap(result => result.value);
   
   const deduped = dedupeItems(allItems)
     .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
-  const enriched = await enrichItemsWithArticleImages(deduped);
+  // Skip article image enrichment — feed metadata already provides images and enrichment
+  // fetches each article page which is the main source of latency.
+  console.log(`Deduped ${allItems.length} → ${deduped.length} items; skipping image enrichment for speed.`);
+  return deduped;
+}
 
-  console.log(`Deduped ${allItems.length} items down to ${deduped.length}; enriched images for ${Math.min(deduped.length, MAX_IMAGE_ENRICH_ITEMS)} candidates`);
-  return enriched;
+function buildSourceBreakdown(items = [], maxSources = 12) {
+  const counts = new Map();
+
+  items.forEach((item) => {
+    const source = toPlainText(item?.source) || 'Unknown Source';
+    counts.set(source, (counts.get(source) || 0) + 1);
+  });
+
+  const topSources = Array.from(counts.entries())
+    .map(([source, count]) => ({ source, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, maxSources);
+
+  return {
+    totalItems: items.length,
+    uniqueSources: counts.size,
+    topSources
+  };
+}
+
+function logSourceBreakdown(label, items = []) {
+  const stats = buildSourceBreakdown(items, 8);
+  console.log(`[SOURCE STATS] ${label}: ${stats.totalItems} items across ${stats.uniqueSources} sources`);
+  if (stats.topSources.length > 0) {
+    console.log(`[SOURCE STATS] ${label} top sources: ${stats.topSources.map((s) => `${s.source} (${s.count})`).join(', ')}`);
+  }
+  return stats;
 }
 
 // Check if cache is valid
@@ -1373,7 +1375,8 @@ function isCacheValid(cacheKey) {
 }
 
 exports.handler = async (event, context) => {
-  const { type = 'news', category, search } = event.queryStringParameters || {};
+  const { type = 'news', category, search, sourceStats } = event.queryStringParameters || {};
+  const includeSourceStats = ['1', 'true', 'yes'].includes(String(sourceStats || '').toLowerCase());
   
   // Set CORS headers
   const headers = {
@@ -1425,13 +1428,13 @@ exports.handler = async (event, context) => {
       // Future-proof: any new category added to RSS_FEEDS is automatically included.
       if (staleCacheKeys.length > 0) {
         // Tightly limited sources per category specifically for search-triggered fetches
-        const SEARCH_SOURCES_LIMIT = 8; // broader source coverage while still bounded
-        const SEARCH_VIDEO_SOURCES_LIMIT = 16; // prioritize richer media retrieval
+        const SEARCH_SOURCES_LIMIT = 18; // broader source coverage for search confidence
+        const SEARCH_VIDEO_SOURCES_LIMIT = 18; // prioritize richer media retrieval
         const GLOBAL_SEARCH_TIMEOUT = 8500; // keep below common function hard limits
 
         const fetchCategoryWithTimeout = async (catKey) => {
           try {
-            const feedList = RSS_FEEDS[catKey] || [];
+            const feedList = prependBundleFeed(RSS_FEEDS[catKey] || [], catKey);
             const sourceLimit = catKey === 'videos' ? SEARCH_VIDEO_SOURCES_LIMIT : SEARCH_SOURCES_LIMIT;
             const sourcesToFetch = feedList.slice(0, sourceLimit);
             if (sourcesToFetch.length === 0) return [];
@@ -1440,7 +1443,10 @@ exports.handler = async (event, context) => {
             const perCategoryTimeout = new Promise((_, reject) =>
               setTimeout(() => reject(new Error(`Timeout: ${catKey}`)), catKey === 'videos' ? 4500 : 3500)
             );
-            return await Promise.race([fetchFeeds(sourcesToFetch), perCategoryTimeout]);
+            return await Promise.race([fetchFeeds(sourcesToFetch, {
+              maxFeeds: sourceLimit,
+              maxItems: catKey === 'videos' ? 18 : 24
+            }), perCategoryTimeout]);
           } catch (err) {
             console.warn(`[SEARCH] Skipped "${catKey}": ${err.message}`);
             return [];
@@ -1492,7 +1498,7 @@ exports.handler = async (event, context) => {
         
         // Word-based matching with variations (handles plural/singular)
         const searchWords = searchTerm.split(/\s+/);
-        return searchWords.every(word => {
+        const isMatch = searchWords.every(word => {
           if (word.length < 2) return true; // Skip single characters
           
           // Check multiple variations of the word
@@ -1509,7 +1515,20 @@ exports.handler = async (event, context) => {
           // Check if any variation appears in the searchable text
           return variations.some(variant => searchableText.includes(variant));
         });
+        
+        return isMatch;
       });
+      
+      console.log(`[SEARCH] Filtered to ${searchResults.length} matching results`);
+      
+      if (searchResults.length > 0) {
+        // Sample first few matches for debugging
+        const sampleMatches = searchResults.slice(0, 3).map(r => ({
+          title: r.title?.substring(0, 60),
+          source: r.source
+        }));
+        console.log(`[SEARCH] Sample matches:`, JSON.stringify(sampleMatches));
+      }
       
       // Remove duplicates using URL/title/source heuristics
       const uniqueResults = dedupeItems(searchResults);
@@ -1559,6 +1578,11 @@ exports.handler = async (event, context) => {
       }).sort((a, b) => b.relevanceScore - a.relevanceScore);
       
       console.log(`[SEARCH] Found ${scoredResults.length} results for "${searchTerm}"`);
+      if (scoredResults.length > 0) {
+        logSourceBreakdown(`search:${searchTerm}`, scoredResults);
+      }
+
+      const statsPayload = includeSourceStats ? { sourceStats: buildSourceBreakdown(scoredResults) } : {};
       
       return {
         statusCode: 200,
@@ -1568,7 +1592,8 @@ exports.handler = async (event, context) => {
           cached: false,
           timestamp: Date.now(),
           count: scoredResults.length,
-          searchTerm
+          searchTerm,
+          ...statsPayload
         })
       };
     }
@@ -1576,42 +1601,52 @@ exports.handler = async (event, context) => {
     // Check cache first (non-search requests)
     if (isCacheValid(cacheKey)) {
       console.log(`Returning cached data for ${cacheKey}`);
+      const cachedData = cache[cacheKey].data;
+      const statsPayload = includeSourceStats ? { sourceStats: buildSourceBreakdown(cachedData || []) } : {};
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
-          data: cache[cacheKey].data,
+          data: cachedData,
           cached: true,
-          timestamp: cache[cacheKey].timestamp
+          timestamp: cache[cacheKey].timestamp,
+          ...statsPayload
         })
       };
     }
 
     // Determine which feeds to fetch
-    let feedsToFetch = RSS_FEEDS[type] || RSS_FEEDS.news;
+    let activeFeedKey = RSS_FEEDS[type] ? type : 'news';
+    let feedsToFetch = prependBundleFeed(RSS_FEEDS[activeFeedKey] || RSS_FEEDS.news, activeFeedKey);
     
     // If category specified, fetch relevant feeds for ANY type (news, opinions, videos, podcasts)
     if (category) {
       const cat = toLowerSearchText(category);
       
       if (cat === 'sports') {
-        feedsToFetch = RSS_FEEDS.sports;
-        console.log(`Fetching SPORTS ${type}:`, RSS_FEEDS.sports.length, 'sources');
+        activeFeedKey = 'sports';
+        feedsToFetch = prependBundleFeed(RSS_FEEDS.sports, activeFeedKey);
+        console.log(`Fetching SPORTS ${type}:`, feedsToFetch.length, 'sources');
       } else if (cat === 'tech' || cat === 'technology' || cat === 'business-tech') {
-        feedsToFetch = RSS_FEEDS.tech;
-        console.log(`Fetching TECH ${type}:`, RSS_FEEDS.tech.length, 'sources');
+        activeFeedKey = 'tech';
+        feedsToFetch = prependBundleFeed(RSS_FEEDS.tech, activeFeedKey);
+        console.log(`Fetching TECH ${type}:`, feedsToFetch.length, 'sources');
       } else if (cat === 'business' || cat === 'finance') {
-        feedsToFetch = RSS_FEEDS.business;
-        console.log(`Fetching BUSINESS ${type}:`, RSS_FEEDS.business.length, 'sources');
+        activeFeedKey = 'business';
+        feedsToFetch = prependBundleFeed(RSS_FEEDS.business, activeFeedKey);
+        console.log(`Fetching BUSINESS ${type}:`, feedsToFetch.length, 'sources');
       } else if (cat === 'entertainment') {
-        feedsToFetch = RSS_FEEDS.entertainment;
-        console.log(`Fetching ENTERTAINMENT ${type}:`, RSS_FEEDS.entertainment.length, 'sources');
+        activeFeedKey = 'entertainment';
+        feedsToFetch = prependBundleFeed(RSS_FEEDS.entertainment, activeFeedKey);
+        console.log(`Fetching ENTERTAINMENT ${type}:`, feedsToFetch.length, 'sources');
       } else if (cat === 'lifestyle') {
-        feedsToFetch = RSS_FEEDS.lifestyle;
-        console.log(`Fetching LIFESTYLE ${type}:`, RSS_FEEDS.lifestyle.length, 'sources');
+        activeFeedKey = 'lifestyle';
+        feedsToFetch = prependBundleFeed(RSS_FEEDS.lifestyle, activeFeedKey);
+        console.log(`Fetching LIFESTYLE ${type}:`, feedsToFetch.length, 'sources');
       } else if (cat === 'culture') {
-        feedsToFetch = RSS_FEEDS.culture;
-        console.log(`Fetching CULTURE ${type}:`, RSS_FEEDS.culture.length, 'sources');
+        activeFeedKey = 'culture';
+        feedsToFetch = prependBundleFeed(RSS_FEEDS.culture, activeFeedKey);
+        console.log(`Fetching CULTURE ${type}:`, feedsToFetch.length, 'sources');
       } else {
         // For unknown categories, keep the default feeds for the type
         console.log(`Fetching ${type.toUpperCase()} feeds (default):`, feedsToFetch.length, 'sources');
@@ -1621,6 +1656,7 @@ exports.handler = async (event, context) => {
     // Fetch fresh data
     console.log(`Fetching fresh data for ${cacheKey}`);
     data = await fetchFeeds(feedsToFetch);
+    logSourceBreakdown(cacheKey, data);
 
     // Update cache
     cache[cacheKey] = {
@@ -1635,7 +1671,8 @@ exports.handler = async (event, context) => {
         data,
         cached: false,
         timestamp: Date.now(),
-        count: data.length
+        count: data.length,
+        ...(includeSourceStats ? { sourceStats: buildSourceBreakdown(data) } : {})
       })
     };
 

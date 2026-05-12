@@ -50,6 +50,62 @@ function HomePage({
   hotTopics,
   handleSubscribe
 }) {
+  const normalizeCrossDedupeUrl = (value) => {
+    const raw = String(value || '').trim()
+    if (!raw) return ''
+
+    try {
+      const parsed = new URL(raw, 'https://thelatest.local')
+      parsed.hash = ''
+
+      const trackingParams = new Set([
+        'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+        'fbclid', 'gclid', 'mc_cid', 'mc_eid', 'guccounter', 'cmpid', 'ocid',
+        'ref', 'ref_src', 'ref_url', 'source', 'spm', 'igshid'
+      ])
+
+      const kept = []
+      parsed.searchParams.forEach((paramValue, paramKey) => {
+        const key = String(paramKey || '').toLowerCase()
+        if (!trackingParams.has(key)) {
+          kept.push([key, String(paramValue || '')])
+        }
+      })
+
+      kept.sort((a, b) => {
+        if (a[0] === b[0]) return a[1].localeCompare(b[1])
+        return a[0].localeCompare(b[0])
+      })
+
+      parsed.search = ''
+      kept.forEach(([key, paramValue]) => parsed.searchParams.append(key, paramValue))
+
+      const pathname = parsed.pathname.replace(/\/+$/, '') || '/'
+      const query = parsed.searchParams.toString()
+      return `${parsed.origin}${pathname}${query ? `?${query}` : ''}`.toLowerCase()
+    } catch {
+      return raw.replace(/#.*$/, '').toLowerCase()
+    }
+  }
+
+  const itemKey = (item) => {
+    const normalizedUrl = normalizeCrossDedupeUrl(item?.url || item?.link)
+    if (normalizedUrl) return `url:${normalizedUrl}`
+    const fallbackTitle = String(item?.title || '').trim().toLowerCase()
+    const fallbackSource = String(item?.source || '').trim().toLowerCase()
+    return fallbackTitle ? `title:${fallbackSource}|${fallbackTitle}` : ''
+  }
+
+  const splitMediaWithoutOverlap = (videoItems, podcastItems) => {
+    const uniqueVideos = dedupeContentItems(videoItems || [])
+    const videoKeys = new Set(uniqueVideos.map(itemKey).filter(Boolean))
+    const uniquePodcasts = dedupeContentItems(podcastItems || []).filter((item) => {
+      const key = itemKey(item)
+      return key && !videoKeys.has(key)
+    })
+    return { uniqueVideos, uniquePodcasts }
+  }
+
   const ensureTopicCoverage = (primaryItems, backupPool, topicValue, minItems) => {
     const primary = Array.isArray(primaryItems) ? primaryItems : []
     const backup = Array.isArray(backupPool) ? backupPool : []
@@ -226,10 +282,12 @@ function HomePage({
 
           if (isCancelled) return
 
+          const { uniqueVideos, uniquePodcasts } = splitMediaWithoutOverlap(guaranteedVideos, guaranteedPodcasts)
+
           setTopStories(dedupeContentItems(guaranteedNews))
           setOpinions(dedupeContentItems(guaranteedOpinions))
-          setVideos(dedupeContentItems(guaranteedVideos))
-          setPodcasts(dedupeContentItems(guaranteedPodcasts))
+          setVideos(uniqueVideos)
+          setPodcasts(uniquePodcasts)
           setLoadingOpinions(false)
           setLoadingVideos(false)
           setLoadingPodcasts(false)
@@ -262,12 +320,12 @@ function HomePage({
             if (opinionsResult.status === 'fulfilled') {
               setOpinions(dedupeContentItems(opinionsResult.value || []))
             }
-            if (videosResult.status === 'fulfilled') {
-              setVideos(dedupeContentItems(videosResult.value || []))
-            }
-            if (podcastsResult.status === 'fulfilled') {
-              setPodcasts(dedupeContentItems(podcastsResult.value || []))
-            }
+            const mergedVideos = videosResult.status === 'fulfilled' ? (videosResult.value || []) : []
+            const mergedPodcasts = podcastsResult.status === 'fulfilled' ? (podcastsResult.value || []) : []
+            const { uniqueVideos, uniquePodcasts } = splitMediaWithoutOverlap(mergedVideos, mergedPodcasts)
+
+            setVideos(uniqueVideos)
+            setPodcasts(uniquePodcasts)
 
             setLoadingOpinions(false)
             setLoadingVideos(false)
@@ -334,7 +392,12 @@ function HomePage({
       try {
         if (!hasActiveTopic) {
           const videosData = await fetchVideos()
-          setVideos(videosData || [])
+          const nextVideos = dedupeContentItems(videosData || [])
+          setVideos(nextVideos)
+          setPodcasts((currentPodcasts) => {
+            const { uniquePodcasts } = splitMediaWithoutOverlap(nextVideos, currentPodcasts || [])
+            return uniquePodcasts
+          })
         }
       } catch (error) {
         console.error('Error loading videos:', error)
@@ -352,7 +415,8 @@ function HomePage({
       try {
         if (!hasActiveTopic) {
           const podcastsData = await fetchTrendingContent()
-          setPodcasts(podcastsData || [])
+          const { uniquePodcasts } = splitMediaWithoutOverlap(videos || [], podcastsData || [])
+          setPodcasts(uniquePodcasts)
         }
       } catch (error) {
         console.error('Error loading podcasts:', error)

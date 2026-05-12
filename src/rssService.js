@@ -4,9 +4,9 @@ import { deriveMediaOutlet } from './utils/sourceUtils';
 
 // RSS Aggregator endpoint - works both locally (with netlify dev) and in production
 const RSS_API_URL = '/.netlify/functions/rss-aggregator';
-const RSS_CACHE_VERSION = 'v4-dedupe';
-const REQUEST_TIMEOUT = 12000; // 12s — matches backend feed timeout
-const RETRY_ATTEMPTS = 2;      // was 3 — one retry is enough
+const RSS_CACHE_VERSION = 'v8-fast';
+const REQUEST_TIMEOUT = 8000;  // 8s — backend now completes in ~5s
+const RETRY_ATTEMPTS = 1;      // no retry; stale cache is shown on failure instead
 const RETRY_BASE_DELAY_MS = 500;
 const FUNCTIONS_RECHECK_COOLDOWN_MS = 15000;
 
@@ -73,6 +73,109 @@ const normalizeOutletSource = (item) => ({
   source: deriveMediaOutlet(item),
 });
 
+const SEARCH_FAST_PATH_TIMEOUT_MS = 600;
+
+const normalizeSearchText = (value) => String(value || '')
+  .toLowerCase()
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const buildSearchableText = (item = {}) => {
+  const title = normalizeSearchText(item.title);
+  const description = normalizeSearchText(item.description);
+  const content = normalizeSearchText(item.content);
+  const source = normalizeSearchText(item.source);
+  const category = normalizeSearchText(item.category);
+  return `${title} ${description} ${content} ${source} ${category}`.trim();
+};
+
+const wordVariations = (word) => {
+  return [
+    word,
+    `${word}s`,
+    `${word}es`,
+    word.endsWith('s') ? word.slice(0, -1) : null,
+    word.endsWith('es') ? word.slice(0, -2) : null,
+    word.endsWith('ies') ? `${word.slice(0, -3)}y` : null,
+    word.endsWith('y') ? `${word.slice(0, -1)}ies` : null
+  ].filter(Boolean);
+};
+
+const doesItemMatchSearch = (item, searchTerm) => {
+  if (!item || !item.title) return false;
+
+  const searchableText = buildSearchableText(item);
+  if (searchableText.includes(searchTerm)) {
+    return true;
+  }
+
+  return searchTerm.split(/\s+/).every((word) => {
+    if (word.length < 2) return true;
+    return wordVariations(word).some((variant) => searchableText.includes(variant));
+  });
+};
+
+const scoreLocalSearchResult = (item, searchTerm) => {
+  const titleText = normalizeSearchText(item.title);
+  const descriptionText = normalizeSearchText(item.description);
+  const contentText = normalizeSearchText(item.content);
+  let score = 0;
+
+  if (titleText.includes(searchTerm)) score += 10;
+  if (descriptionText.includes(searchTerm)) score += 4;
+  if (contentText.includes(searchTerm)) score += 2;
+
+  searchTerm.split(/\s+/).forEach((word) => {
+    if (word.length >= 3) {
+      if (titleText.includes(word)) score += 3;
+      if (descriptionText.includes(word)) score += 1;
+      if (contentText.includes(word)) score += 1;
+    }
+  });
+
+  const publishedAt = Date.parse(item.publishedAt || item.date || 0);
+  if (!Number.isNaN(publishedAt)) {
+    score += Math.max(0, 5 - Math.floor((Date.now() - publishedAt) / 86400000));
+  }
+
+  return score;
+};
+
+const searchCachedContent = async (searchTerm) => {
+  try {
+    const keys = await cacheManager.getAllKeys();
+    const cacheKeys = keys.filter((key) => typeof key === 'string' && !key.includes('_search_'));
+
+    const cachedBuckets = await Promise.all(
+      cacheKeys.map(async (key) => {
+        const data = await cacheManager.getStale(key);
+        return Array.isArray(data) ? data : [];
+      })
+    );
+
+    const cachedItems = cachedBuckets.flat();
+    const matchedItems = cachedItems.filter((item) => doesItemMatchSearch(item, searchTerm));
+
+    return dedupeContentItems(
+      matchedItems
+        .map((item) => ({
+          ...normalizeOutletSource(item),
+          relevanceScore: scoreLocalSearchResult(item, searchTerm)
+        }))
+        .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    );
+  } catch (error) {
+    console.warn('[RSS Search] Local cached search failed:', error.message);
+    return [];
+  }
+};
+
+const TRACKING_QUERY_PARAMS = new Set([
+  'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+  'fbclid', 'gclid', 'mc_cid', 'mc_eid', 'guccounter', 'cmpid', 'ocid',
+  'ref', 'ref_src', 'ref_url', 'source', 'spm', 'igshid'
+]);
+
 const normalizeDedupeUrl = (value) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -80,14 +183,33 @@ const normalizeDedupeUrl = (value) => {
   try {
     const parsed = new URL(raw, 'https://thelatest.local');
     parsed.hash = '';
+
+    // Remove only known tracking params; keep meaningful params (e.g., YouTube v=...).
+    const keptParams = [];
+    parsed.searchParams.forEach((paramValue, paramKey) => {
+      const normalizedKey = String(paramKey || '').toLowerCase();
+      if (!TRACKING_QUERY_PARAMS.has(normalizedKey)) {
+        keptParams.push([normalizedKey, String(paramValue || '')]);
+      }
+    });
+
+    keptParams.sort((a, b) => {
+      if (a[0] === b[0]) return a[1].localeCompare(b[1]);
+      return a[0].localeCompare(b[0]);
+    });
+
     parsed.search = '';
+    keptParams.forEach(([key, paramValue]) => {
+      parsed.searchParams.append(key, paramValue);
+    });
 
     const pathname = parsed.pathname.replace(/\/+$/, '') || '/';
-    return `${parsed.origin}${pathname}`.toLowerCase();
+    const search = parsed.searchParams.toString();
+    const querySuffix = search ? `?${search}` : '';
+    return `${parsed.origin}${pathname}${querySuffix}`.toLowerCase();
   } catch {
     return raw
-      .replace(/[?#].*$/, '')
-      .replace(/\/+$/, '')
+      .replace(/#.*$/, '')
       .toLowerCase();
   }
 };
@@ -421,40 +543,91 @@ export async function searchRSSContent(searchTerm) {
     return [];
   }
 
-  const cacheKey = getSearchCacheKey(searchTerm);
-  const cachedData = await cacheManager.get(cacheKey);
-  if (cachedData) {
-    console.log(`[RSS Search] Using cached results for "${searchTerm}"`);
-    return cachedData;
-  }
-
-  if (!canAttemptFunctions()) {
-    console.log('[RSS Search] Functions unavailable');
-    return getStaleOrEmpty(cacheKey, 'search');
-  }
-
   try {
-    const response = await requestWithRetry(`${RSS_API_URL}?search=${encodeURIComponent(searchTerm)}`);
+    const normalizedTerm = normalizeSearchText(searchTerm);
+    const localResults = await searchCachedContent(normalizedTerm);
+
+    if (localResults.length > 0) {
+      console.log(`[RSS Search] Local cache hit for "${searchTerm}" with ${localResults.length} results`);
+
+      if (!canAttemptFunctions()) {
+        return localResults;
+      }
+
+      const remotePromise = (async () => {
+        const url = `${RSS_API_URL}?search=${encodeURIComponent(searchTerm)}`;
+        console.log(`[RSS Search] Deep searching backend for "${searchTerm}" at ${url}`);
+        const response = await requestWithRetry(url);
+        markFunctionsAvailable();
+
+        const normalizedResults = extractDataArray(response).map(normalizeOutletSource);
+        return dedupeContentItems(normalizedResults);
+      })();
+
+      remotePromise.catch((error) => {
+        console.warn('[RSS Search] Remote enhancement failed:', error.message);
+        return [];
+      });
+
+      const remoteResults = await Promise.race([
+        remotePromise,
+        sleep(SEARCH_FAST_PATH_TIMEOUT_MS).then(() => null)
+      ]);
+
+      if (Array.isArray(remoteResults) && remoteResults.length > 0) {
+        const merged = dedupeContentItems([...remoteResults, ...localResults]);
+        console.log(`[RSS Search] Returning merged local+remote results: ${merged.length}`);
+        return merged;
+      }
+
+      return localResults;
+    }
+
+    if (!canAttemptFunctions()) {
+      console.warn('[RSS Search] Functions unavailable - backend not accessible');
+      return [];
+    }
+
+    const url = `${RSS_API_URL}?search=${encodeURIComponent(searchTerm)}`;
+    console.log(`[RSS Search] Searching for "${searchTerm}" at ${url}`);
+    
+    const response = await requestWithRetry(url);
     markFunctionsAvailable();
+    
+    console.log('[RSS Search] Response received:', {
+      status: response.status,
+      dataLength: response?.data?.data?.length || 0,
+      responseStructure: Object.keys(response?.data || {})
+    });
 
     const normalizedResults = extractDataArray(response).map(normalizeOutletSource);
+    console.log(`[RSS Search] After extraction: ${normalizedResults.length} items`);
+    
     const results = dedupeContentItems(normalizedResults);
+    console.log(`[RSS Search] After dedup: ${results.length} items`);
+    
     if (results.length > 0) {
       if (results.length !== normalizedResults.length) {
-        console.log(`[RSS Search] Removed ${normalizedResults.length - results.length} duplicate search results`);
+        console.log(`[RSS Search] Removed ${normalizedResults.length - results.length} duplicates`);
       }
-      await cacheManager.set(cacheKey, results);
-      console.log(`[RSS Search] Found ${results.length} results for "${searchTerm}"`);
+      console.log(`[RSS Search] ✓ Found ${results.length} results for "${searchTerm}"`);
       return results;
     }
 
-    return getStaleOrEmpty(cacheKey, 'search');
+    console.warn(`[RSS Search] No results found for "${searchTerm}" from backend`);
+    return [];
   } catch (error) {
-    console.error('[RSS Search] Error:', error.message);
+    console.error('[RSS Search] ERROR:', {
+      message: error.message,
+      status: error?.response?.status,
+      code: error?.code,
+      url: error?.config?.url
+    });
     if (shouldDisableFunctions(error)) {
+      console.warn('[RSS Search] Disabling functions due to error');
       markFunctionsUnavailable();
     }
-    return getStaleOrEmpty(cacheKey, 'search');
+    return [];
   }
 }
 

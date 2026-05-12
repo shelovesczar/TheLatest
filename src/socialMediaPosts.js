@@ -49,6 +49,22 @@ export const trendingPosts = {
       author: '@viral',
       platform: 'TikTok'
     }
+  ],
+  truthsocial: [
+    {
+      id: '1',
+      url: 'https://truthsocial.com/@user/post/1',
+      embedUrl: 'https://truthsocial.com/@user/post/1',
+      author: '@truthuser',
+      platform: 'Truth Social'
+    },
+    {
+      id: '2',
+      url: 'https://truthsocial.com/@user2/post/2',
+      embedUrl: 'https://truthsocial.com/@user2/post/2',
+      author: '@truthuser2',
+      platform: 'Truth Social'
+    }
   ]
 }
 
@@ -57,7 +73,8 @@ export const getRandomTrendingPosts = (count = 6) => {
   const allPosts = [
     ...trendingPosts.twitter,
     ...trendingPosts.instagram,
-    ...trendingPosts.tiktok
+    ...trendingPosts.tiktok,
+    ...trendingPosts.truthsocial
   ]
   
   // Shuffle array
@@ -65,7 +82,7 @@ export const getRandomTrendingPosts = (count = 6) => {
   
   // Return requested number ensuring variety
   const selected = []
-  const platforms = ['X', 'Instagram', 'TikTok']
+  const platforms = ['X', 'Instagram', 'TikTok', 'Truth Social']
   
   // Try to get 2 from each platform
   platforms.forEach(platform => {

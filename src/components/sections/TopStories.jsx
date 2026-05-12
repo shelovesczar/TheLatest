@@ -10,6 +10,7 @@ import './TopStories.css'
 function TopStories({ loading, topStories, activeStory, setActiveStory, categoryTitle, categorySources, categoryPath }) {
   const tickerRef = useRef(null)
   const imageRef = useRef(null)
+  const cardRef = useRef(null)
   const navigate = useNavigate()
   const [descriptionLength, setDescriptionLength] = useState(150)
 
@@ -76,27 +77,60 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
     return text.substring(0, maxLength).trim() + '...';
   }
 
-  // Dynamically adjust description length based on image aspect ratio
-  useEffect(() => {
-    if (imageRef.current && topStories[activeStory]) {
-      const img = new Image();
-      img.src = topStories[activeStory].image;
-      
-      img.onload = () => {
-        const aspectRatio = img.width / img.height;
-        
-        // Landscape images (wider) = more vertical space for text
-        if (aspectRatio > 1.5) {
-          setDescriptionLength(250); // Wide image, show more text
-        } else if (aspectRatio > 1.2) {
-          setDescriptionLength(200); // Medium wide
-        } else if (aspectRatio < 0.8) {
-          setDescriptionLength(100); // Tall/portrait image, less text
-        } else {
-          setDescriptionLength(150); // Square/normal
-        }
-      };
+  const getStoryDescription = (story, maxLength) => {
+    if (!story) return ''
+
+    const primary = String(story.description || '').trim()
+    const secondary = String(story.content || '').trim()
+
+    let combined = primary
+
+    // If description is short, use content as a continuation to avoid a sparse card.
+    if (secondary && combined.length < maxLength * 0.72) {
+      if (combined && secondary.toLowerCase().startsWith(combined.toLowerCase().slice(0, 60))) {
+        combined = secondary
+      } else {
+        combined = `${combined} ${secondary}`.trim()
+      }
     }
+
+    if (!combined) {
+      combined = String(story.title || '').trim()
+    }
+
+    return truncateText(combined, maxLength)
+  }
+
+  // Dynamically adjust description length based on the rendered card width
+  useEffect(() => {
+    const updateDescriptionLength = () => {
+      const cardWidth = cardRef.current?.offsetWidth || window.innerWidth
+
+      if (cardWidth >= 1200) {
+        setDescriptionLength(420)
+      } else if (cardWidth >= 960) {
+        setDescriptionLength(330)
+      } else if (cardWidth >= 768) {
+        setDescriptionLength(260)
+      } else if (cardWidth >= 560) {
+        setDescriptionLength(200)
+      } else {
+        setDescriptionLength(140)
+      }
+    }
+
+    updateDescriptionLength()
+
+    if (!cardRef.current || typeof ResizeObserver === 'undefined') {
+      return undefined
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateDescriptionLength()
+    })
+
+    observer.observe(cardRef.current)
+    return () => observer.disconnect()
   }, [activeStory, topStories])
 
   // Clamp activeStory if topStories reloads with fewer items
@@ -199,47 +233,51 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
           </div>
 
           <div className="story-with-ad-container">
-            <article className="story-card-large">
+            <article className="story-card-large" ref={cardRef}>
               <div className="story-card-image" ref={imageRef}>
                 <img 
                   {...getImageProps(topStories[activeStory].image, topStories[activeStory].title, 'news')}
                 />
               </div>
               <div className="story-card-content">
-                <a 
-                  href="#"
-                  onClick={e => { e.preventDefault(); goToArticle(topStories[activeStory]) }}
-                  style={{ textDecoration: 'none', color: 'inherit' }}
-                >
-                  <h3 className="story-card-headline">{topStories[activeStory].title}</h3>
-                </a>
-                <div className="story-card-meta">
-                  <span className="story-card-source">{getMediaOutlet(topStories[activeStory])}</span>
-                  <span className="story-card-time">{topStories[activeStory].time}</span>
+                <div className="story-card-body">
+                  <a 
+                    href="#"
+                    onClick={e => { e.preventDefault(); goToArticle(topStories[activeStory]) }}
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    <h3 className="story-card-headline">{topStories[activeStory].title}</h3>
+                  </a>
+                  <div className="story-card-meta">
+                    <span className="story-card-source">{getMediaOutlet(topStories[activeStory])}</span>
+                    <span className="story-card-time">{topStories[activeStory].time}</span>
+                  </div>
+                  <p className="story-card-description">{getStoryDescription(topStories[activeStory], descriptionLength)}</p>
                 </div>
-                <p className="story-card-description">{truncateText(topStories[activeStory].description, descriptionLength)}</p>
-                <div className="story-source-credit">
-                  <span className="story-source-label">Source:</span>
-                  {getOriginalUrl(topStories[activeStory]) ? (
-                    <a
-                      className="story-source-link"
-                      href={getOriginalUrl(topStories[activeStory])}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {getMediaOutlet(topStories[activeStory])}
-                    </a>
-                  ) : (
-                    <span className="story-source-name">{getMediaOutlet(topStories[activeStory])}</span>
-                  )}
+                <div className="story-card-footer">
+                  <div className="story-source-credit">
+                    <span className="story-source-label">Source:</span>
+                    {getOriginalUrl(topStories[activeStory]) ? (
+                      <a
+                        className="story-source-link"
+                        href={getOriginalUrl(topStories[activeStory])}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {getMediaOutlet(topStories[activeStory])}
+                      </a>
+                    ) : (
+                      <span className="story-source-name">{getMediaOutlet(topStories[activeStory])}</span>
+                    )}
+                  </div>
+                  <a 
+                    href="#"
+                    onClick={e => { e.preventDefault(); goToArticle(topStories[activeStory]) }}
+                    className="read-more-link"
+                  >
+                    Read full story →
+                  </a>
                 </div>
-                <a 
-                  href="#"
-                  onClick={e => { e.preventDefault(); goToArticle(topStories[activeStory]) }}
-                  className="read-more-link"
-                >
-                  Read full story →
-                </a>
               </div>
             </article>
             

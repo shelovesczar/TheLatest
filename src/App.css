@@ -277,20 +277,6 @@ body {
   position: relative;
 }
 
-/* Full-bleed top/bottom accent lines that span the entire viewport width */
-[data-section]::before,
-[data-section]::after {
-  content: '';
-  position: absolute;
-  left: calc(50% - 50vw);
-  width: 100vw;
-  height: 2px;
-  background: var(--accent-color);
-  pointer-events: none;
-}
-[data-section]::before { top: 0; }
-[data-section]::after  { bottom: 0; }
-
 .section {
   padding-bottom: 1rem;
   width: 100%;
@@ -321,6 +307,9 @@ body {
   color: var(--text-primary);
   text-transform: uppercase;
   letter-spacing: 0.2rem;
+  text-decoration: underline;
+  text-underline-offset: .5rem;
+  text-decoration-color: var(--accent-color);
   margin-top: 0;
   margin-left: 0;
   margin-bottom: var(--spacing-lg) !important;

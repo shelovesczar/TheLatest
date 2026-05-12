@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearch } from '../../context/SearchContext'
 import { generateAISummary, getCachedSummary, cacheSummary } from '../../services/aiService'
 import { getTopicImage } from '../../utils/topicImages'
@@ -11,6 +11,8 @@ function AISummary({ category = 'general', description, categoryImage, categoryT
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [summaryData, setSummaryData] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(new Date())
+  const cardRef = useRef(null)
+  const [descriptionLength, setDescriptionLength] = useState(180)
   
   // Determine if we should use topic or category
   const useTopicFilter = !ignoreTopic && hasActiveTopic
@@ -28,6 +30,44 @@ function AISummary({ category = 'general', description, categoryImage, categoryT
   useEffect(() => {
     loadSummary()
   }, [topic, hasActiveTopic, ignoreTopic])
+
+  // Adjust the summary excerpt length based on the rendered card width.
+  useEffect(() => {
+    const updateDescriptionLength = () => {
+      const cardWidth = cardRef.current?.offsetWidth || window.innerWidth
+
+      if (cardWidth >= 1200) {
+        setDescriptionLength(320)
+      } else if (cardWidth >= 960) {
+        setDescriptionLength(260)
+      } else if (cardWidth >= 768) {
+        setDescriptionLength(220)
+      } else if (cardWidth >= 560) {
+        setDescriptionLength(180)
+      } else {
+        setDescriptionLength(130)
+      }
+    }
+
+    updateDescriptionLength()
+
+    if (!cardRef.current || typeof ResizeObserver === 'undefined') {
+      return undefined
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateDescriptionLength()
+    })
+
+    observer.observe(cardRef.current)
+    return () => observer.disconnect()
+  }, [topic, hasActiveTopic, ignoreTopic])
+
+  const truncateText = (text, maxLength) => {
+    if (!text) return ''
+    if (text.length <= maxLength) return text
+    return `${text.substring(0, maxLength).trim()}...`
+  }
 
   const loadSummary = async () => {
     const searchTopic = useTopicFilter ? topic : ''
@@ -117,34 +157,39 @@ function AISummary({ category = 'general', description, categoryImage, categoryT
       </h2>
 
       <div className="story-with-ad-container">
-        <article className="story-card-large">
+        <article className="story-card-large" ref={cardRef}>
           <div className="story-card-image">
             <img 
               {...getImageProps(getDisplayImage(), getHeadline(), 'news')}
             />
           </div>
           <div className="story-card-content">
-            <h3 className="story-card-headline">{getHeadline()}</h3>
-            <div className="story-card-meta">
-              <span className="story-card-source">
-                {summaryData?.provider || 'AI Summary'} 
-                {summaryData?.isFallback && ' (Configure API keys for live updates)'}
-              </span>
-              <span className="story-card-time">
-                Updated {lastUpdated.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-              </span>
+            <div className="story-card-body">
+              <h3 className="story-card-headline">{getHeadline()}</h3>
+              <div className="story-card-meta">
+                <span className="story-card-source">
+                  {summaryData?.provider || 'AI Summary'} 
+                  {summaryData?.isFallback && ' (Configure API keys for live updates)'}
+                </span>
+                <span className="story-card-time">
+                  Updated {lastUpdated.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                </span>
+              </div>
+              <p className="story-card-description">
+                {truncateText(summaryData?.summary || description || 'Loading AI summary...', descriptionLength)}
+              </p>
             </div>
-            <p className="story-card-description">
-              {summaryData?.summary || description || 'Loading AI summary...'}
-            </p>
-            <a 
-              href="https://www.perplexity.ai" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="read-more-link"
-            >
-              View Full Analysis →
-            </a>
+
+            <div className="story-card-footer">
+              <a 
+                href="https://www.perplexity.ai" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="read-more-link"
+              >
+                View Full Summary →
+              </a>
+            </div>
           </div>
         </article>
         

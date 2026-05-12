@@ -5,10 +5,12 @@ import { useSearch } from '../../context/SearchContext'
 import './Hero.css'
 
 function Hero({ visibleTopics, handleTopicClick }) {
+  const WORD_HOLD_MS = 3200
+  const FADE_OUT_MS = 280
+
   const { searchQuery, setSearchQuery, setTopic } = useSearch()
   const [currentWord, setCurrentWord] = useState(0)
-  const [displayText, setDisplayText] = useState('')
-  const [isDeleting, setIsDeleting] = useState(false)
+  const [isFading, setIsFading] = useState(false)
   const rotatingWords = ['innovation', 'trends', 'conversations', 'lifestyle', 'culture', 'tech', 'science', 'entertainment', 'health', 'travel', 'business', 'world news']
 
   const handleSearch = (e) => {
@@ -29,43 +31,34 @@ function Hero({ visibleTopics, handleTopicClick }) {
   }
 
   useEffect(() => {
-    const word = rotatingWords[currentWord]
-    
-    const typeSpeed = isDeleting ? 50 : 100
-    const pauseTime = isDeleting ? 500 : 2000
+    const fadeTimer = setTimeout(() => {
+      setIsFading(true)
+    }, WORD_HOLD_MS - FADE_OUT_MS)
 
-    if (!isDeleting && displayText === word) {
-      // Finished typing, wait then start deleting
-      setTimeout(() => setIsDeleting(true), pauseTime)
-      return
-    }
-
-    if (isDeleting && displayText === '') {
-      // Finished deleting, move to next word
-      setIsDeleting(false)
+    const rotateTimer = setTimeout(() => {
       setCurrentWord((prev) => (prev + 1) % rotatingWords.length)
-      return
+      setIsFading(false)
+    }, WORD_HOLD_MS)
+
+    return () => {
+      clearTimeout(fadeTimer)
+      clearTimeout(rotateTimer)
     }
-
-    const timeout = setTimeout(() => {
-      if (isDeleting) {
-        setDisplayText(word.substring(0, displayText.length - 1))
-      } else {
-        setDisplayText(word.substring(0, displayText.length + 1))
-      }
-    }, typeSpeed)
-
-    return () => clearTimeout(timeout)
-  }, [displayText, isDeleting, currentWord, rotatingWords])
+  }, [currentWord, rotatingWords.length, WORD_HOLD_MS, FADE_OUT_MS])
 
   return (
     <section className="hero">
       <h1 className="hero-title">
         Keep up with<br />
-        the latest <span className="hero-highlight rotating-word">{displayText}<span className="cursor">|</span></span>
+        <span className="hero-line">
+          the latest
+          <span className="hero-highlight flipper-shell" aria-live="polite">
+            <span key={currentWord} className={`flipper-word flipper-single${isFading ? ' is-fading' : ''}`}>{rotatingWords[currentWord]}</span>
+          </span>
+        </span>
       </h1>
       <p className="hero-subtitle">
-        All topics. Most major platforms. All in one place.
+        All topics. Major platforms. All in one place.
       </p>
       
       {/* Search Bar */}

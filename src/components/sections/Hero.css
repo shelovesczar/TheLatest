@@ -20,7 +20,7 @@
 }
 
 .hero-title {
-  font-size: clamp(2.5rem, 9vw, 5.5rem);
+  font-size: clamp(2.2rem, 8vw, 4.85rem);
   font-weight: 700;
   color: #ffffff;
   margin-bottom: clamp(0.55rem, 1.4vh, 0.9rem);
@@ -41,22 +41,54 @@
   font-weight: 800;
 }
 
-.rotating-word {
-  display: inline-block;
+.hero-line {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.18em;
+  white-space: nowrap;
 }
 
-.cursor {
+.flipper-shell {
+  --flip-height: 1.24em;
   display: inline-block;
-  margin-left: 2px;
-  animation: blink 1s infinite;
+  position: relative;
+  height: var(--flip-height);
+  width: max-content;
+  min-width: 0;
+  max-width: none;
+  overflow: hidden;
+  vertical-align: baseline;
+  text-align: left;
+  justify-items: start;
+  padding: 0.04em 0.12em 0.08em 0.02em;
+  margin: -0.04em -0.12em -0.08em -0.02em;
 }
 
-@keyframes blink {
-  0%, 50% {
-    opacity: 1;
-  }
-  51%, 100% {
+.flipper-word {
+  display: block;
+  white-space: nowrap;
+  line-height: var(--flip-height);
+  will-change: transform, opacity;
+  transition: transform 0.28s ease-out, opacity 0.28s ease-out;
+}
+
+.flipper-single {
+  animation: flipperSlideIn 0.56s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.flipper-word.is-fading {
+  transform: translateY(-8%);
+  opacity: 0;
+}
+
+@keyframes flipperSlideIn {
+  from {
+    transform: translateY(100%);
     opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
   }
 }
 
@@ -198,7 +230,7 @@
   }
   
   .hero-title {
-    font-size: clamp(1.8rem, 7vw, 3.5rem);
+    font-size: clamp(1.65rem, 6.8vw, 3.2rem);
   }
   
   .hero-subtitle {
@@ -214,8 +246,12 @@
   }
   
   .hero-title {
-    font-size: clamp(1.5rem, 6vw, 2.5rem);
+    font-size: clamp(1.35rem, 5.4vw, 2.2rem);
     margin-bottom: clamp(0.75rem, 2vh, 1.2rem);
+  }
+
+  .flipper-shell {
+    max-width: 70vw;
   }
   
   .hero-subtitle {
