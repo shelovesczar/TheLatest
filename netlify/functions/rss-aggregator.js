@@ -19,8 +19,17 @@ let cache = {
   news: { data: null, timestamp: 0 },
   opinions: { data: null, timestamp: 0 },
   videos: { data: null, timestamp: 0 },
-  podcasts: { data: null, timestamp: 0 }
+  podcasts: { data: null, timestamp: 0 },
+  sports: { data: null, timestamp: 0 },
+  tech: { data: null, timestamp: 0 },
+  entertainment: { data: null, timestamp: 0 },
+  business: { data: null, timestamp: 0 },
+  lifestyle: { data: null, timestamp: 0 },
+  culture: { data: null, timestamp: 0 }
 };
+
+// Tracks rotation offsets per feed key so non-priority feeds cycle over time.
+let feedRotationOffsets = new Map();
 
 let articleImageCache = new Map();
 let feedFailureCache = new Map();
@@ -28,6 +37,7 @@ let feedFailureCache = new Map();
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes — fewer cold fetches
 const MAX_ITEMS_PER_FEED = 15;          // only grab top 15 per feed for speed
 const MAX_FEEDS_PER_REQUEST = 6;        // cap parallel feeds to avoid slow stragglers
+const PRIORITY_FEED_MIN_ITEMS = 24;      // high-priority feeds pull more items
 const ARTICLE_IMAGE_CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
 const MAX_IMAGE_ENRICH_ITEMS = 0;       // disabled — images come from feed metadata
 const IMAGE_ENRICH_CONCURRENCY = 5;
@@ -71,6 +81,135 @@ function toPlainText(value) {
 
 function toLowerSearchText(value) {
   return toPlainText(value).toLowerCase();
+}
+
+function tokenizeSearchText(value) {
+  return toLowerSearchText(value)
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((token) => token.length >= 2);
+}
+
+function damerauLevenshteinDistance(a = '', b = '') {
+  const source = String(a);
+  const target = String(b);
+  const sourceLength = source.length;
+  const targetLength = target.length;
+
+  if (!sourceLength) return targetLength;
+  if (!targetLength) return sourceLength;
+
+  const matrix = Array.from({ length: sourceLength + 1 }, () => new Array(targetLength + 1).fill(0));
+
+  for (let i = 0; i <= sourceLength; i += 1) matrix[i][0] = i;
+  for (let j = 0; j <= targetLength; j += 1) matrix[0][j] = j;
+
+  for (let i = 1; i <= sourceLength; i += 1) {
+    for (let j = 1; j <= targetLength; j += 1) {
+      const cost = source[i - 1] === target[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+
+      if (
+        i > 1 &&
+        j > 1 &&
+        source[i - 1] === target[j - 2] &&
+        source[i - 2] === target[j - 1]
+      ) {
+        matrix[i][j] = Math.min(matrix[i][j], matrix[i - 2][j - 2] + 1);
+      }
+    }
+  }
+
+  return matrix[sourceLength][targetLength];
+}
+
+function tokenMatches(queryToken, candidateToken) {
+  if (!queryToken || !candidateToken) return false;
+  if (queryToken === candidateToken) return true;
+  if (candidateToken.startsWith(queryToken) || queryToken.startsWith(candidateToken)) return true;
+
+  const minLength = Math.min(queryToken.length, candidateToken.length);
+  if (minLength < 5) return false;
+
+  // Allow lightweight typo tolerance for longer words: e.g., "meixco" -> "mexico"
+  return damerauLevenshteinDistance(queryToken, candidateToken) <= 1;
+}
+
+function countTokenHits(fieldTokens = [], queryTokens = []) {
+  let score = 0;
+  const matchedQueryTokens = new Set();
+
+  queryTokens.forEach((queryToken) => {
+    for (const candidateToken of fieldTokens) {
+      if (!tokenMatches(queryToken, candidateToken)) continue;
+
+      matchedQueryTokens.add(queryToken);
+      score += queryToken === candidateToken ? 1 : 0.65;
+      break;
+    }
+  });
+
+  return { score, matchedCount: matchedQueryTokens.size };
+}
+
+function evaluateSearchRelevance(item = {}, query = '', options = {}) {
+  const queryTokens = tokenizeSearchText(query);
+  if (queryTokens.length === 0) {
+    return { isMatch: true, score: 0, rationale: { title: 0, body: 0, meta: 0, matchedQueryTokens: 0 } };
+  }
+
+  const strictMode = Boolean(options.strictMode);
+
+  const titleTokens = tokenizeSearchText(item.title);
+  const descriptionTokens = tokenizeSearchText(item.description);
+  const contentTokens = tokenizeSearchText(item.content);
+  const metaTokens = tokenizeSearchText(`${item.source || ''} ${item.category || ''} ${(item.tags || []).join(' ')}`);
+
+  const titleHits = countTokenHits(titleTokens, queryTokens);
+  const descriptionHits = countTokenHits(descriptionTokens, queryTokens);
+  const contentHits = countTokenHits(contentTokens, queryTokens);
+  const metaHits = countTokenHits(metaTokens, queryTokens);
+
+  const bodyScore = descriptionHits.score + (contentHits.score * 0.8);
+  const weightedScore =
+    (titleHits.score * 7) +
+    (bodyScore * 4) +
+    (metaHits.score * 1.5);
+
+  const matchedQueryTokens = new Set([
+    ...queryTokens.filter((token) => titleTokens.some((candidate) => tokenMatches(token, candidate))),
+    ...queryTokens.filter((token) => descriptionTokens.some((candidate) => tokenMatches(token, candidate))),
+    ...queryTokens.filter((token) => contentTokens.some((candidate) => tokenMatches(token, candidate))),
+    ...queryTokens.filter((token) => metaTokens.some((candidate) => tokenMatches(token, candidate)))
+  ]);
+
+  const coverageRequired = strictMode
+    ? (queryTokens.length === 1 ? 1 : Math.ceil(queryTokens.length * 0.7))
+    : (queryTokens.length === 1 ? 1 : Math.ceil(queryTokens.length * 0.6));
+  const hasEnoughCoverage = matchedQueryTokens.size >= coverageRequired;
+
+  // Enforce substance: in strict mode reject title-only weak matches for single-word queries.
+  const hasBodySupport = bodyScore >= 0.8;
+  const singleWordTitleOnly = strictMode && queryTokens.length === 1 && titleHits.score > 0 && !hasBodySupport && metaHits.score === 0;
+  const passesThreshold = weightedScore >= (strictMode ? 9.5 : 7.5);
+
+  const isMatch = hasEnoughCoverage && passesThreshold && !singleWordTitleOnly;
+
+  return {
+    isMatch,
+    score: Number(weightedScore.toFixed(2)),
+    rationale: {
+      mode: strictMode ? 'strict' : 'relaxed',
+      title: Number(titleHits.score.toFixed(2)),
+      body: Number(bodyScore.toFixed(2)),
+      meta: Number(metaHits.score.toFixed(2)),
+      matchedQueryTokens: matchedQueryTokens.size
+    }
+  };
 }
 
 function normalizeTitle(value) {
@@ -679,8 +818,8 @@ const RSS_FEEDS = {
     { url: 'https://apnews.com/apf-topnews', source: 'Associated Press' },
     
     // RSS APP feeds (for more niche topics)
-    { url: 'https://rss.app/feeds/tTWnpqRL1kY8uxZD.xml', source: 'CNN' },
-    { url: 'https://rss.app/feeds/_iIjbt3XTnFFpU0Cv.xml', source: 'The Latest' }
+    { url: 'https://rss.app/feeds/tTWnpqRL1kY8uxZD.xml', source: 'CNN' }
+    // Bundle feed is prepended automatically by prependBundleFeed() at position 1
   ],
   opinions: [
     { url: 'https://rss.nytimes.com/services/xml/rss/nyt/Opinion.xml', source: 'New York Times Opinion' },
@@ -692,12 +831,12 @@ const RSS_FEEDS = {
     { url: 'https://www.nationalreview.com/feed/', source: 'National Review' },
     { url: 'https://www.wsj.com/xml/rss/3_7041.xml', source: 'WSJ Opinion' },
     // RSS APP feeds (for more niche topics)
-    { url: 'https://rss.app/feeds/wGtHhwQaOwup8JQs.xml', source: 'New York Post' },
-    { url: 'https://rss.app/feeds/_iIjbt3XTnFFpU0Cv.xml', source: 'The Latest' }
+    { url: 'https://rss.app/feeds/wGtHhwQaOwup8JQs.xml', source: 'New York Post' }
+    // Bundle feed is prepended automatically by prependBundleFeed() at position 1
   ],
   videos: [
     // Video-focused feeds
-    { url: 'https://rss.app/feeds/_D52QE16IQULFQQkk.xml', source: 'Custom Video Feed' },
+    { url: 'https://rss.app/feeds/_D52QE16IQULFQQkk.xml', source: 'Custom Video Feed', priority: 'high', maxItems: 30 },
     // Major News Networks
     { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCeY0bbntWzzVIaj2z3QigXg', source: 'NBC News' },
     { url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UC52X5wxOL_s5yw0dQk7NtgA', source: 'Associated Press Video' },
@@ -739,6 +878,9 @@ const RSS_FEEDS = {
     { url: 'https://feeds.megaphone.fm/DW7903283160', source: 'Deutsche Welle - Global 3000' },
   ],
   sports: [
+    // Priority Sports Feed - Featured
+    { url: 'https://rss.app/feeds/_O0XVRIWKtus1tywc.xml', source: 'Sports RSS Bundle', priority: 'high', maxItems: 30 },
+    
     // Major Sports Networks
     { url: 'https://www.espn.com/espn/rss/news', source: 'ESPN' },
     { url: 'https://www.si.com/rss/si_topstories.rss', source: 'Sports Illustrated' },
@@ -889,7 +1031,7 @@ function prependBundleFeed(feedList = [], feedKey = 'news') {
     return feedList;
   }
 
-  return [{ url: RSS_APP_BUNDLE_FEED_URL, source: RSS_APP_BUNDLE_SOURCE }, ...feedList];
+  return [{ url: RSS_APP_BUNDLE_FEED_URL, source: RSS_APP_BUNDLE_SOURCE, priority: 'high', maxItems: 24 }, ...feedList];
 }
 
 // Helper to extract image from RSS item
@@ -1274,6 +1416,34 @@ function extractSource(item, defaultSource) {
   return toPlainText(defaultSource);
 }
 
+// ── Opinion classifier ──────────────────────────────────────────────────────
+// Used to separate bundle-feed items between Top Stories (news) and Opinions.
+const OPINION_URL_MARKERS = [
+  '/opinion', '/commentary', '/editorial', '/column', '/op-ed',
+  '/perspective', '/analysis', '/viewpoint', '/debate'
+];
+const OPINION_CATEGORY_WORDS = [
+  'opinion', 'commentary', 'editorial', 'column', 'op-ed',
+  'perspective', 'analysis', 'viewpoint', 'debate', 'comment'
+];
+const OPINION_TITLE_PREFIXES = [
+  'opinion:', 'op-ed:', 'editorial:', 'analysis:', 'perspective:', 'column:'
+];
+const OPINION_SOURCE_SUFFIXES = [' opinion', ' editorial', ' commentary'];
+
+function classifyAsOpinion(item) {
+  const url      = toLowerSearchText(item.url || item.link);
+  const category = toLowerSearchText(item.category);
+  const title    = toLowerSearchText(item.title);
+  const source   = toLowerSearchText(item.source);
+
+  if (OPINION_URL_MARKERS.some(p  => url.includes(p)))      return true;
+  if (OPINION_CATEGORY_WORDS.some(w => category.includes(w))) return true;
+  if (OPINION_TITLE_PREFIXES.some(p => title.startsWith(p))) return true;
+  if (OPINION_SOURCE_SUFFIXES.some(s => source.endsWith(s))) return true;
+  return false;
+}
+
 // Parse a single RSS feed
 async function parseFeed(feedConfig, options = {}) {
   if (shouldSkipFeed(feedConfig.url)) {
@@ -1282,7 +1452,10 @@ async function parseFeed(feedConfig, options = {}) {
 
   try {
     const feed = await parser.parseURL(feedConfig.url);
-    const maxItems = options.maxItems ?? MAX_ITEMS_PER_FEED;
+    const requestedMaxItems = options.maxItems ?? MAX_ITEMS_PER_FEED;
+    const feedSpecificMax = Number.isFinite(feedConfig?.maxItems) ? feedConfig.maxItems : 0;
+    const priorityFloor = feedConfig?.priority === 'high' ? PRIORITY_FEED_MIN_ITEMS : 0;
+    const maxItems = Math.max(requestedMaxItems, feedSpecificMax, priorityFloor);
     const rawItems = Array.isArray(feed.items) ? feed.items.slice(0, maxItems) : [];
     const filteredItems = rawItems
       .filter(item => !shouldFilterOut(item)) // Apply filtering
@@ -1296,7 +1469,8 @@ async function parseFeed(feedConfig, options = {}) {
         source: extractSource(item, feedConfig.source), // Outlet / publisher source
         author: extractAuthor(item),
         publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : new Date(0).toISOString(),
-        category: toPlainText(item.categories ? item.categories[0] : 'News') || 'News'
+        category: toPlainText(item.categories ? item.categories[0] : 'News') || 'News',
+        _feedUrl: feedConfig.url  // internal: used for bundle classification; stripped before response
       }));
     
     console.log(`${feedConfig.source}: ${rawItems.length} sampled, ${filteredItems.length} after filtering`);
@@ -1311,12 +1485,42 @@ async function parseFeed(feedConfig, options = {}) {
   }
 }
 
+function selectFeedsForRequest(feedList = [], options = {}) {
+  const maxFeeds = options.maxFeeds ?? MAX_FEEDS_PER_REQUEST;
+  if (!Array.isArray(feedList) || feedList.length === 0 || maxFeeds <= 0) return [];
+
+  const highPriorityFeeds = feedList.filter((feed) => feed?.priority === 'high');
+  const standardFeeds = feedList.filter((feed) => feed?.priority !== 'high');
+
+  if (highPriorityFeeds.length >= maxFeeds) {
+    return highPriorityFeeds.slice(0, maxFeeds);
+  }
+
+  const remainingSlots = maxFeeds - highPriorityFeeds.length;
+  if (standardFeeds.length <= remainingSlots) {
+    return [...highPriorityFeeds, ...standardFeeds];
+  }
+
+  const feedKey = String(options.feedKey || 'default');
+  const currentOffset = feedRotationOffsets.get(feedKey) || 0;
+  const rotatedStandardFeeds = [
+    ...standardFeeds.slice(currentOffset),
+    ...standardFeeds.slice(0, currentOffset)
+  ];
+  const selectedStandardFeeds = rotatedStandardFeeds.slice(0, remainingSlots);
+
+  if (!options.disableRotation) {
+    const nextOffset = (currentOffset + selectedStandardFeeds.length) % standardFeeds.length;
+    feedRotationOffsets.set(feedKey, nextOffset);
+  }
+
+  return [...highPriorityFeeds, ...selectedStandardFeeds];
+}
+
 // Fetch multiple feeds in parallel, capped at MAX_FEEDS_PER_REQUEST to keep response fast
 async function fetchFeeds(feedList, options = {}) {
-  // Prioritise the first N feeds; they are ordered from most to least important
-  const maxFeeds = options.maxFeeds ?? MAX_FEEDS_PER_REQUEST;
-  const limited = feedList.slice(0, maxFeeds);
-  console.log(`Starting to fetch ${limited.length} RSS feeds (${feedList.length} configured)...`);
+  const limited = selectFeedsForRequest(feedList, options);
+  console.log(`Starting to fetch ${limited.length} RSS feeds (${feedList.length} configured, ${limited.filter((f) => f?.priority === 'high').length} priority)...`);
 
   const feedPromises = limited.map(feed => parseFeed(feed, options));
   const results = await Promise.allSettled(feedPromises);
@@ -1375,8 +1579,11 @@ function isCacheValid(cacheKey) {
 }
 
 exports.handler = async (event, context) => {
-  const { type = 'news', category, search, sourceStats } = event.queryStringParameters || {};
+  const { type = 'news', category, search, sourceStats, strictSearch = '0', relaxSearchFallback = '1', minStrictResults = '6' } = event.queryStringParameters || {};
   const includeSourceStats = ['1', 'true', 'yes'].includes(String(sourceStats || '').toLowerCase());
+  const useStrictSearch = ['1', 'true', 'yes'].includes(String(strictSearch || '').toLowerCase());
+  const allowRelaxedFallback = ['1', 'true', 'yes'].includes(String(relaxSearchFallback || '').toLowerCase());
+  const strictMinimum = Math.max(1, Math.min(parseInt(minStrictResults, 10) || 6, 20));
   
   // Set CORS headers
   const headers = {
@@ -1480,102 +1687,54 @@ exports.handler = async (event, context) => {
 
       console.log(`[SEARCH] Total ${allData.length} unique items available for search`);
       
-      // Enhanced search with fuzzy matching and variations
-      const searchResults = allData.filter(item => {
-        if (!item || !item.title) return false; // Skip invalid items
-        
-        const title = toLowerSearchText(item.title);
-        const description = toLowerSearchText(item.description);
-        const content = toLowerSearchText(item.content);
-        const source = toLowerSearchText(item.source);
-        const category = toLowerSearchText(item.category);
-        const searchableText = `${title} ${description} ${content} ${source} ${category}`;
-        
-        // Exact phrase match (highest priority)
-        if (searchableText.includes(searchTerm)) {
-          return true;
-        }
-        
-        // Word-based matching with variations (handles plural/singular)
-        const searchWords = searchTerm.split(/\s+/);
-        const isMatch = searchWords.every(word => {
-          if (word.length < 2) return true; // Skip single characters
-          
-          // Check multiple variations of the word
-          const variations = [
-            word,                                 // Original (e.g., "dodger")
-            word + 's',                          // Plural (e.g., "dodgers")
-            word + 'es',                         // Alt plural (e.g., "beaches")
-            word.endsWith('s') ? word.slice(0, -1) : null,  // Singular from plural (e.g., "dodger" from "dodgers")
-            word.endsWith('es') ? word.slice(0, -2) : null, // Singular from es plural
-            word.endsWith('ies') ? word.slice(0, -3) + 'y' : null, // cities -> city
-            word.endsWith('y') ? word.slice(0, -1) + 'ies' : null  // city -> cities
-          ].filter(v => v !== null);
-          
-          // Check if any variation appears in the searchable text
-          return variations.some(variant => searchableText.includes(variant));
-        });
-        
-        return isMatch;
-      });
-      
-      console.log(`[SEARCH] Filtered to ${searchResults.length} matching results`);
-      
-      if (searchResults.length > 0) {
-        // Sample first few matches for debugging
-        const sampleMatches = searchResults.slice(0, 3).map(r => ({
-          title: r.title?.substring(0, 60),
-          source: r.source
-        }));
-        console.log(`[SEARCH] Sample matches:`, JSON.stringify(sampleMatches));
+      const strictResults = dedupeItems(allData)
+        .map((item) => {
+          const relevance = evaluateSearchRelevance(item, searchTerm, { strictMode: useStrictSearch });
+          return {
+            ...item,
+            relevanceScore: relevance.score,
+            relevanceRationale: relevance.rationale,
+            _isRelevant: relevance.isMatch
+          };
+        })
+        .filter((item) => item._isRelevant)
+        .sort((a, b) => b.relevanceScore - a.relevanceScore)
+        .map(({ _isRelevant, ...rest }) => rest);
+
+      let scoredResults = strictResults;
+      let searchModeUsed = useStrictSearch ? 'strict' : 'relaxed';
+
+      if (useStrictSearch && allowRelaxedFallback && strictResults.length < strictMinimum) {
+        const relaxedResults = dedupeItems(allData)
+          .map((item) => {
+            const relevance = evaluateSearchRelevance(item, searchTerm, { strictMode: false });
+            return {
+              ...item,
+              relevanceScore: relevance.score,
+              relevanceRationale: relevance.rationale,
+              _isRelevant: relevance.isMatch
+            };
+          })
+          .filter((item) => item._isRelevant)
+          .sort((a, b) => b.relevanceScore - a.relevanceScore)
+          .map(({ _isRelevant, ...rest }) => rest);
+
+        scoredResults = relaxedResults;
+        searchModeUsed = 'relaxed-fallback';
+        console.log(`[SEARCH] Strict mode yielded ${strictResults.length} (<${strictMinimum}), switched to relaxed fallback: ${relaxedResults.length}`);
       }
-      
-      // Remove duplicates using URL/title/source heuristics
-      const uniqueResults = dedupeItems(searchResults);
-      
-      // Sort by relevance (count keyword matches and title relevance)
-      const scoredResults = uniqueResults.map(item => {
-        const titleText = toLowerSearchText(item.title);
-        const descText = toLowerSearchText(item.description);
-        
-        // Calculate relevance score
-        let score = 0;
-        
-        // Escape special regex characters in search term
-        const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        
-        try {
-          // Title matches are worth more
-          const titleMatches = (titleText.match(new RegExp(escapedSearchTerm, 'g')) || []).length;
-          score += titleMatches * 5;
-          
-          // Description matches
-          const descMatches = (descText.match(new RegExp(escapedSearchTerm, 'g')) || []).length;
-          score += descMatches * 2;
-        } catch (regexError) {
-          // Fallback to simple string counting if regex fails
-          console.warn('[SEARCH] Regex error, using fallback counting:', regexError.message);
-          const titleMatches = (titleText.split(searchTerm).length - 1);
-          const descMatches = (descText.split(searchTerm).length - 1);
-          score += titleMatches * 5 + descMatches * 2;
-        }
-        
-        // Exact title match gets bonus
-        if (titleText.includes(searchTerm)) {
-          score += 10;
-        }
-        
-        // Word matches for multi-word searches
-        const searchWords = searchTerm.split(/\s+/);
-        searchWords.forEach(word => {
-          if (word.length >= 3) {
-            if (titleText.includes(word)) score += 3;
-            if (descText.includes(word)) score += 1;
-          }
-        });
-        
-        return { ...item, relevanceScore: score };
-      }).sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+      console.log(`[SEARCH] Relevant matches: ${scoredResults.length}`);
+
+      if (scoredResults.length > 0) {
+        const sampleMatches = scoredResults.slice(0, 3).map((r) => ({
+          title: r.title?.substring(0, 60),
+          source: r.source,
+          relevanceScore: r.relevanceScore,
+          rationale: r.relevanceRationale
+        }));
+        console.log('[SEARCH] Top ranked sample:', JSON.stringify(sampleMatches));
+      }
       
       console.log(`[SEARCH] Found ${scoredResults.length} results for "${searchTerm}"`);
       if (scoredResults.length > 0) {
@@ -1593,6 +1752,9 @@ exports.handler = async (event, context) => {
           timestamp: Date.now(),
           count: scoredResults.length,
           searchTerm,
+          searchMode: searchModeUsed,
+          strictSearchEnabled: useStrictSearch,
+          minStrictResults: strictMinimum,
           ...statsPayload
         })
       };
@@ -1655,7 +1817,32 @@ exports.handler = async (event, context) => {
 
     // Fetch fresh data
     console.log(`Fetching fresh data for ${cacheKey}`);
-    data = await fetchFeeds(feedsToFetch);
+    data = await fetchFeeds(feedsToFetch, { feedKey: activeFeedKey });
+
+    // ── Bundle-feed classification ────────────────────────────────────────────
+    // Items fetched from the bundle feed are mixed content (news + opinions).
+    // For `news` requests  : keep only non-opinion bundle items (→ Top Stories).
+    // For `opinions` requests: keep only opinion-classified bundle items.
+    // Items from dedicated non-bundle feeds always pass through unchanged.
+    const bundleUrlNorm = (RSS_APP_BUNDLE_FEED_URL || '').trim().toLowerCase();
+    if (bundleUrlNorm) {
+      if (activeFeedKey === 'news') {
+        data = data.filter(item => {
+          if ((item._feedUrl || '').trim().toLowerCase() !== bundleUrlNorm) return true;
+          return !classifyAsOpinion(item);
+        });
+        console.log(`[BUNDLE] news: ${data.length} items after removing opinion-classified bundle entries`);
+      } else if (activeFeedKey === 'opinions') {
+        data = data.filter(item => {
+          if ((item._feedUrl || '').trim().toLowerCase() !== bundleUrlNorm) return true;
+          return classifyAsOpinion(item);
+        });
+        console.log(`[BUNDLE] opinions: ${data.length} items after keeping only opinion-classified bundle entries`);
+      }
+    }
+    // Strip internal tracking field before caching / responding
+    data = data.map(({ _feedUrl, ...rest }) => rest);
+
     logSourceBreakdown(cacheKey, data);
 
     // Update cache

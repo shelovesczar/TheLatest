@@ -18,6 +18,7 @@ const parser = new Parser({
 const CACHE_DURATION = 15 * 60 * 1000;
 const RSSHUB_BASE_URL = process.env.RSSHUB_BASE_URL || 'https://rsshub.app';
 let socialCache = new Map();
+let currentCycleIndex = 0;  // Track current rotation cycle
 
 const TOPIC_EXPANSIONS = {
   politics: ['politics', 'election', 'congress', 'senate', 'policy', 'government', 'trump', 'biden', 'white house'],
@@ -27,6 +28,72 @@ const TOPIC_EXPANSIONS = {
   sports: ['sports', 'nfl', 'nba', 'mlb', 'soccer', 'football', 'fifa', 'olympics'],
   world: ['world', 'international', 'global', 'iran', 'israel', 'ukraine', 'middle east', 'strait', 'hormuz'],
   culture: ['culture', 'lifestyle', 'fashion', 'health', 'travel']
+};
+
+const tokenize = (value = '') => String(value)
+  .toLowerCase()
+  .replace(/[^a-z0-9\s]/g, ' ')
+  .split(/\s+/)
+  .filter((token) => token.length >= 2);
+
+const damerauLevenshteinDistance = (a = '', b = '') => {
+  const source = String(a);
+  const target = String(b);
+  const sourceLength = source.length;
+  const targetLength = target.length;
+
+  if (!sourceLength) return targetLength;
+  if (!targetLength) return sourceLength;
+
+  const matrix = Array.from({ length: sourceLength + 1 }, () => new Array(targetLength + 1).fill(0));
+  for (let i = 0; i <= sourceLength; i += 1) matrix[i][0] = i;
+  for (let j = 0; j <= targetLength; j += 1) matrix[0][j] = j;
+
+  for (let i = 1; i <= sourceLength; i += 1) {
+    for (let j = 1; j <= targetLength; j += 1) {
+      const cost = source[i - 1] === target[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+
+      if (
+        i > 1 &&
+        j > 1 &&
+        source[i - 1] === target[j - 2] &&
+        source[i - 2] === target[j - 1]
+      ) {
+        matrix[i][j] = Math.min(matrix[i][j], matrix[i - 2][j - 2] + 1);
+      }
+    }
+  }
+
+  return matrix[sourceLength][targetLength];
+};
+
+const tokenMatches = (queryToken, candidateToken) => {
+  if (!queryToken || !candidateToken) return false;
+  if (queryToken === candidateToken) return true;
+  if (candidateToken.startsWith(queryToken) || queryToken.startsWith(candidateToken)) return true;
+  if (Math.min(queryToken.length, candidateToken.length) < 5) return false;
+  return damerauLevenshteinDistance(queryToken, candidateToken) <= 1;
+};
+
+const countHits = (fieldTokens = [], queryTokens = []) => {
+  let score = 0;
+  let matched = 0;
+
+  queryTokens.forEach((queryToken) => {
+    for (const candidateToken of fieldTokens) {
+      if (!tokenMatches(queryToken, candidateToken)) continue;
+      matched += 1;
+      score += queryToken === candidateToken ? 1 : 0.65;
+      break;
+    }
+  });
+
+  return { score, matched };
 };
 
 const stripHtml = (value = '') =>
@@ -89,6 +156,36 @@ const getConfiguredFeeds = () => {
     .filter(Boolean);
 };
 
+/**
+ * Get active feeds based on rotation cycle
+ * High-priority feeds are always included
+ * Standard feeds rotate based on cycle index
+ */
+const getActiveFeeds = (allFeeds, cycleIndex = 0) => {
+  const feedConfig = require('./social-feed-config.cjs');
+  const priorityFeeds = allFeeds.filter(f => f.priority === 'high');
+  
+  const rotationCycleLength = feedConfig.fetchConfig.rotationCycleLength;
+  const activeRotationIndex = cycleIndex % rotationCycleLength;
+  
+  const rotationalFeeds = allFeeds.filter(f => 
+    f.priority === 'standard' && f.rotationIndex === activeRotationIndex
+  );
+  
+  console.log(`[SocialFeeds] Cycle ${cycleIndex}: Active feeds =`, 
+    [...priorityFeeds, ...rotationalFeeds].map(f => f.source).join(', '));
+  
+  return [...priorityFeeds, ...rotationalFeeds];
+};
+
+/**
+ * Get max items to fetch for a specific feed
+ */
+const getMaxItemsForFeed = (feed) => {
+  const feedConfig = require('./social-feed-config.cjs');
+  return feed.maxItems || (feedConfig.fetchConfig.defaultItemsPerFeed * (feed.weight || 1));
+};
+
 const getImageFromItem = (item) => {
   const mediaContent = item?.mediaContent;
   if (Array.isArray(mediaContent) && mediaContent[0]?.$?.url) return mediaContent[0].$.url;
@@ -141,14 +238,18 @@ const matchesTopic = (post, topic) => {
   const query = String(topic || '').trim().toLowerCase();
   if (!query) return true;
 
-  const expanded = expandTopicQuery(query);
-  const searchable = `${post?.title || ''} ${post?.content || ''} ${post?.author || ''} ${post?.source || ''} ${post?.category || ''} ${(post?.tags || []).join(' ')}`.toLowerCase();
+  const expanded = Array.from(expandTopicQuery(query));
+  const queryTokens = tokenize(expanded.join(' '));
 
-  for (const keyword of expanded) {
-    if (searchable.includes(keyword)) return true;
-  }
+  const titleHits = countHits(tokenize(post?.title || ''), queryTokens);
+  const bodyHits = countHits(tokenize(`${post?.content || ''}`), queryTokens);
+  const metaHits = countHits(tokenize(`${post?.author || ''} ${post?.source || ''} ${post?.category || ''} ${(post?.tags || []).join(' ')}`), queryTokens);
 
-  return false;
+  const weightedScore = (titleHits.score * 6) + (bodyHits.score * 4) + (metaHits.score * 1.5);
+  const hasCoverage = titleHits.matched + bodyHits.matched + metaHits.matched >= Math.max(1, Math.ceil(tokenize(query).length * 0.6));
+  const titleOnlyWeakMatch = titleHits.score > 0 && bodyHits.score === 0 && metaHits.score === 0;
+
+  return hasCoverage && weightedScore >= 6 && !titleOnlyWeakMatch;
 };
 
 const uniqueByUrl = (items) => {
@@ -166,8 +267,12 @@ const cacheKeyFor = (topic, limit, feedCount) => `${String(topic || '').trim().t
 exports.handler = async (event) => {
   const { topic = '', limit = '12' } = event.queryStringParameters || {};
   const maxItems = Math.max(1, Math.min(parseInt(limit, 10) || 12, 30));
-  const feeds = getConfiguredFeeds();
-  const cacheKey = cacheKeyFor(topic, maxItems, feeds.length);
+  const allFeeds = getConfiguredFeeds();
+  
+  // Get active feeds for current cycle
+  const activeFeeds = getActiveFeeds(allFeeds, currentCycleIndex);
+  
+  const cacheKey = cacheKeyFor(topic, maxItems, activeFeeds.length);
   const cached = socialCache.get(cacheKey);
 
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION && Array.isArray(cached.data) && cached.data.length > 0) {
@@ -178,11 +283,17 @@ exports.handler = async (event) => {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type'
       },
-      body: JSON.stringify({ data: cached.data, cached: true, configuredFeeds: feeds.length })
+      body: JSON.stringify({ 
+        data: cached.data, 
+        cached: true, 
+        configuredFeeds: allFeeds.length,
+        activeFeedsInCycle: activeFeeds.length,
+        cycle: currentCycleIndex
+      })
     };
   }
 
-  if (feeds.length === 0) {
+  if (activeFeeds.length === 0) {
     return {
       statusCode: 200,
       headers: {
@@ -192,15 +303,15 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({
         data: [],
-        configuredFeeds: 0,
-        warning: 'No social RSS feeds configured. Add feed routes/URLs to netlify/functions/social-feed-config.cjs or SOCIAL_RSS_FEEDS env var.'
+        configuredFeeds: allFeeds.length,
+        warning: 'No active feeds in current rotation cycle. Check social-feed-config.cjs for configuration.'
       })
     };
   }
 
   try {
     const settled = await Promise.allSettled(
-      feeds.map(async (feed) => {
+      activeFeeds.map(async (feed) => {
         const urlsToTry = [feed.url, feed.fallbackUrl].filter(Boolean);
         let parsed = null;
 
@@ -214,7 +325,8 @@ exports.handler = async (event) => {
         }
 
         const items = Array.isArray(parsed?.items) ? parsed.items : [];
-        return items.slice(0, 12).map((item) => normalizeFeedItem(item, feed));
+        const maxItemsForFeed = getMaxItemsForFeed(feed);
+        return items.slice(0, maxItemsForFeed).map((item) => normalizeFeedItem(item, feed));
       })
     );
 
@@ -234,6 +346,9 @@ exports.handler = async (event) => {
       });
     }
 
+    // Increment cycle for next fetch
+    currentCycleIndex++;
+
     return {
       statusCode: 200,
       headers: {
@@ -241,7 +356,12 @@ exports.handler = async (event) => {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type'
       },
-      body: JSON.stringify({ data: filtered, configuredFeeds: feeds.length })
+      body: JSON.stringify({ 
+        data: filtered, 
+        configuredFeeds: allFeeds.length,
+        activeFeedsInCycle: activeFeeds.length,
+        cycle: currentCycleIndex - 1
+      })
     };
   } catch (error) {
     console.error('[SocialFeeds] Error:', error.message);

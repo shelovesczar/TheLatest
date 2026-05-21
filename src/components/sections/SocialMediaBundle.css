@@ -1,0 +1,240 @@
+/* Social Media Bundle Component */
+
+.social-media-bundle {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  overflow: hidden;
+  margin-bottom: 2rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.bundle-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.bundle-title-section {
+  margin: 0;
+}
+
+.bundle-title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  letter-spacing: 0.05rem;
+}
+
+.bundle-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08rem;
+}
+
+/* Tabs */
+.bundle-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+  background: var(--bg-tertiary);
+  scrollbar-width: none;
+}
+
+.bundle-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.bundle-tab {
+  flex: 1;
+  min-width: 120px;
+  padding: 1rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.08rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-bottom: 3px solid transparent;
+  position: relative;
+}
+
+.bundle-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.bundle-tab.active {
+  color: var(--accent-color);
+  border-bottom-color: var(--accent-color);
+}
+
+.tab-icon {
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tab-label {
+  font-size: 0.85rem;
+}
+
+/* Tab Content */
+.bundle-content {
+  padding: 1.5rem;
+  min-height: 120px;
+}
+
+.tab-content {
+  animation: fadeIn 0.3s ease;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.tab-content p {
+  margin: 0.5rem 0;
+  font-size: 0.95rem;
+}
+
+.tab-content p:first-child {
+  margin-top: 0;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* URL Section */
+.bundle-url-section {
+  padding: 1.5rem;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+}
+
+.url-label {
+  display: block;
+  margin-bottom: 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08rem;
+  color: var(--text-secondary);
+}
+
+.url-input-group {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.bundle-url-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.bundle-url-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(0, 174, 239, 0.1);
+}
+
+.copy-button {
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent-color);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06rem;
+}
+
+.copy-button:hover {
+  background: color-mix(in srgb, var(--accent-color) 85%, black);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 174, 239, 0.25);
+}
+
+.copy-button:active {
+  transform: translateY(0);
+}
+
+.url-format-label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .bundle-tab {
+    min-width: 100px;
+    padding: 0.8rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .tab-label {
+    display: none;
+  }
+
+  .bundle-title {
+    font-size: 1.1rem;
+  }
+
+  .url-input-group {
+    flex-direction: column;
+  }
+
+  .copy-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .bundle-header {
+    padding: 1rem;
+  }
+
+  .bundle-content {
+    padding: 1rem;
+  }
+
+  .bundle-url-section {
+    padding: 1rem;
+  }
+}

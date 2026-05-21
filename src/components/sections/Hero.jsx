@@ -58,7 +58,7 @@ function Hero({ visibleTopics, handleTopicClick }) {
         </span>
       </h1>
       <p className="hero-subtitle">
-        All topics. Major platforms. All in one place.
+        All topics. All Major platforms. All in one place.
       </p>
       
       {/* Search Bar */}

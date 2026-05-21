@@ -1,8 +1,7 @@
 /* ─── Topic Filter Strip ─────────────────────────────────────── */
 
 .home-main-content {
-  padding-top: 0.4rem;
-  padding-bottom: var(--spacing-lg);
+  /* padding-bottom: var(--spacing-lg); */
 }
 
 /* Each home section gets the same breathing room as All pages */
@@ -109,7 +108,6 @@
 
 @media (max-width: 768px) {
   .home-main-content {
-    padding-top: 0.25rem;
   }
 
   .home-main-content .section {

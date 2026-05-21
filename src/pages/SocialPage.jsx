@@ -3,6 +3,7 @@ import { useSearch } from '../context/SearchContext'
 import { Link } from 'react-router-dom'
 import { getRandomTrendingPosts } from '../socialMediaService'
 import { getRandomCategoryPosts } from '../socialMediaPosts'
+import SocialMediaBundle from '../components/sections/SocialMediaBundle'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faXTwitter, faInstagram, faTiktok, faReddit } from '@fortawesome/free-brands-svg-icons'
 import { getImageProps } from '../utils/imageUtils'
@@ -78,6 +79,8 @@ function SocialPage() {
 
       <div className="category-content">
         <section className="section social-media">
+          <SocialMediaBundle bundleUrl="https://rss.app/feeds/_LVYomWWGnBBWz7m9.xml" bundleNumber={2} totalFeeds={1} />
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <h2 className="section-title">Social Media Posts</h2>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -118,22 +121,54 @@ function SocialPage() {
                   ) : (
                     <>
                       <div className="social-post-header">
-                        <FontAwesomeIcon icon={getIcon(post.platform)} className="platform-icon" />
+                        <div className="platform-icon">
+                          <FontAwesomeIcon icon={getIcon(post.platform)} />
+                        </div>
                         <div className="social-post-meta">
                           <span className="author">{post.author}</span>
                           <span className="platform">{post.platform}</span>
                         </div>
                       </div>
-                      {post.image && (
-                        <img {...getImageProps(post.image, post.content, 'general')} className="social-post-image" />
+
+                      {(post.image || post.video) && (
+                        <div className="social-post-media">
+                          {post.video ? (
+                            <div className="social-post-video-container">
+                              <video 
+                                src={post.video} 
+                                controls 
+                                className="social-post-video"
+                                poster={post.image}
+                              />
+                              <div className="video-play-overlay">▶</div>
+                            </div>
+                          ) : (
+                            <img 
+                              {...getImageProps(post.image, post.content, 'general')} 
+                              className="social-post-image"
+                              alt={post.content}
+                            />
+                          )}
+                        </div>
                       )}
+
                       <p className="social-post-content">{post.content}</p>
+
                       <div className="social-post-stats">
-                        <span>{post.likes?.toLocaleString() || 0} likes</span>
-                        <span>{post.shares?.toLocaleString() || 0} shares</span>
+                        <span>💬 {post.replies?.toLocaleString() || 0}</span>
+                        <span>🔄 {post.retweets?.toLocaleString() || post.shares?.toLocaleString() || 0}</span>
+                        <span>❤️ {post.likes?.toLocaleString() || 0}</span>
                       </div>
+
+                      <div className="social-post-actions">
+                        <button className="social-action-button">💬</button>
+                        <button className="social-action-button">🔄</button>
+                        <button className="social-action-button">❤️</button>
+                        <button className="social-action-button">📤</button>
+                      </div>
+
                       <a href={post.url} target="_blank" rel="noopener noreferrer" className="view-post-link">
-                        View Post →
+                        View Full Post →
                       </a>
                     </>
                   )}

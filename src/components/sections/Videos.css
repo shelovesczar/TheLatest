@@ -92,6 +92,20 @@
   display: block;
 }
 
+.video-preview-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: #000;
+}
+
+.video-preview-layer iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  pointer-events: none;
+}
+
 .video-card:hover .video-thumbnail img {
   transform: scale(1.05);
 }
@@ -111,6 +125,12 @@
   font-size: 1.5rem;
   color: white;
   transition: all 0.3s;
+  z-index: 4;
+}
+
+.play-button.is-hidden {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.9);
 }
 
 .video-card:hover .play-button {
@@ -151,6 +171,15 @@
   font-weight: 700;
   display: block;
   text-align: center;
+}
+
+.video-source-platform {
+  margin-top: -0.85rem;
+  color: var(--text-tertiary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04rem;
+  text-transform: uppercase;
 }
 
 .video-meta {

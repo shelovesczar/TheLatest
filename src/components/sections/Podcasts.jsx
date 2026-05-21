@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getImageProps } from '../../utils/imageUtils'
 import { deriveMediaOutlet } from '../../utils/sourceUtils'
+import { formatDateOnly } from '../../utils/dateUtils'
 import './Podcasts.css'
 
 function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
@@ -95,7 +96,7 @@ function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
                 <p className="podcast-description">{truncateText(podcast.description, 100)}</p>
                 <div className="podcast-footer">
                   <span className="podcast-platform">Listen on {deriveMediaOutlet(podcast)}</span>
-                  <span className="podcast-date">{podcast.date}</span>
+                  <span className="podcast-date">{formatDateOnly(podcast.date)}</span>
                 </div>
               </div>
               </a>

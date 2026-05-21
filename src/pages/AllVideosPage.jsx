@@ -13,6 +13,7 @@ import { dedupeContentItems } from '../utils/contentDeduplication'
 import { deriveMediaOutlet } from '../utils/sourceUtils'
 import { matchesTopicQuery } from '../utils/topicFiltering'
 import { isVideoItem, isPodcastItem, dedupeByMediaKey, removeCrossDuplicates } from '../utils/mediaClassification'
+import { formatDateOnly } from '../utils/dateUtils'
 import './AllNewsPage.css'
 
 function AllVideosPage({ category = null }) {
@@ -88,7 +89,7 @@ function AllVideosPage({ category = null }) {
           const videoPool = await fetchRSSVideos()
           const supplemental = (Array.isArray(videoPool) ? videoPool : [])
             .map(normalizeVideoItem)
-            .filter(isVideoItem)
+            .filter((item) => !isPodcastItem(item))
             .filter((item) => matchesTopicQuery(item, topic))
           topicVideos = dedupeByMediaKey([...topicVideos, ...supplemental])
         }
@@ -96,7 +97,9 @@ function AllVideosPage({ category = null }) {
         setVideos(dedupeByMediaKey(topicVideos))
       } else {
         const videosData = await fetchVideos(filterContext)
-        const normalizedVideos = (Array.isArray(videosData) ? videosData : []).map(normalizeVideoItem).filter(isVideoItem)
+        const normalizedVideos = (Array.isArray(videosData) ? videosData : [])
+          .map(normalizeVideoItem)
+          .filter((item) => !isPodcastItem(item))
 
         let filtered = normalizedVideos
         if (filterContext) {
@@ -223,7 +226,7 @@ function AllVideosPage({ category = null }) {
                   <div className="lead-story-content">
                     <div className="news-card-meta lead-story-meta">
                       <span className="news-card-source">{leadStory.category || leadStory.source}</span>
-                      {leadStory.publishedAt && <span className="news-card-time">{leadStory.publishedAt}</span>}
+                      {leadStory.publishedAt && <span className="news-card-time">{formatDateOnly(leadStory.publishedAt)}</span>}
                     </div>
                     <a href={leadStory.link} target="_blank" rel="noopener noreferrer" className="lead-story-headline-link">
                       <h2 className="lead-story-headline">{leadStory.title}</h2>
@@ -278,7 +281,7 @@ function AllVideosPage({ category = null }) {
                     <div className="secondary-story-content">
                       <div className="news-card-meta">
                         <span className="news-card-source">{item.source}</span>
-                        {item.publishedAt && <span className="news-card-time">{item.publishedAt}</span>}
+                        {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
                       </div>
                       <a href={item.link} target="_blank" rel="noopener noreferrer" className="secondary-story-link">
                         <h3 className="secondary-story-headline">{item.title}</h3>
@@ -309,7 +312,7 @@ function AllVideosPage({ category = null }) {
                       <div className="latest-story-content">
                         <div className="news-card-meta">
                           <span className="news-card-source">{item.category || item.source}</span>
-                          {item.publishedAt && <span className="news-card-time">{item.publishedAt}</span>}
+                          {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
                         </div>
                         <a href={item.link} target="_blank" rel="noopener noreferrer" className="latest-story-link">
                           <h3 className="latest-story-headline">{item.title}</h3>
@@ -355,7 +358,7 @@ function AllVideosPage({ category = null }) {
                     >
                       <span className="quick-update-source">{item.source}</span>
                       <h3 className="quick-update-headline">{truncateText(item.title, 88)}</h3>
-                      {item.publishedAt && <span className="quick-update-time">{item.publishedAt}</span>}
+                      {item.publishedAt && <span className="quick-update-time">{formatDateOnly(item.publishedAt)}</span>}
                     </a>
                   ))}
                 </div>

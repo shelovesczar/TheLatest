@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getImageProps } from '../../utils/imageUtils'
 import { deriveMediaOutlet } from '../../utils/sourceUtils'
+import { formatDateOnly } from '../../utils/dateUtils'
 import './Opinions.css'
 
 function Opinions({ loadingOpinions, opinions, categoryPath }) {
@@ -91,7 +92,7 @@ function Opinions({ loadingOpinions, opinions, categoryPath }) {
                 <div className="opinion-meta">
                   <span className="opinion-author">{opinion.author}</span>
                   <span className="opinion-source">{deriveMediaOutlet(opinion)}</span>
-                  <span className="opinion-date">{opinion.date}</span>
+                  <span className="opinion-date">{formatDateOnly(opinion.date)}</span>
                 </div>
               </div>
               </a>

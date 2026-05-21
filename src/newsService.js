@@ -1047,13 +1047,17 @@ export const fetchVideos = async (category = null, topic = '') => {
   try {
     console.log(`Fetching videos from RSS feeds${category ? ` (${category})` : ''}...`);
 
-    const scopedVideos = dedupeByMediaKey(applyTopicFilter(await getRSSVideos(category), topic).filter(isVideoItem));
+    const scopedVideos = dedupeByMediaKey(
+      applyTopicFilter(await getRSSVideos(category), topic).filter((item) => !isPodcastItem(item))
+    );
     if (scopedVideos && scopedVideos.length > 0) {
       console.log(`Successfully fetched ${scopedVideos.length} scoped videos from RSS`);
       return scopedVideos;
     }
 
-    const generalVideos = dedupeByMediaKey(applyTopicFilter(await getRSSVideos(null), topic).filter(isVideoItem));
+    const generalVideos = dedupeByMediaKey(
+      applyTopicFilter(await getRSSVideos(null), topic).filter((item) => !isPodcastItem(item))
+    );
     if (generalVideos && generalVideos.length > 0) {
       console.log(`Scoped videos empty; using ${generalVideos.length} general video items`);
       return generalVideos;

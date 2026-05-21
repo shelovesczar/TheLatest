@@ -3,12 +3,14 @@ import { useSearch } from '../context/SearchContext'
 import { useParams, useNavigate } from 'react-router-dom'
 import { recordHistory } from '../utils/savedArticles'
 import DateTicker from '../components/layout/DateTicker'
+import AdBreak from '../components/common/AdBreak'
 import { fetchRSSNews } from '../newsService'
 import { searchRSSContent } from '../rssService'
 import { getImageProps } from '../utils/imageUtils'
 import { getCategoryConfig } from '../utils/categoryConfig'
 import { filterContentByCategory } from '../utils/categoryFiltering'
 import { dedupeContentItems } from '../utils/contentDeduplication'
+import { formatDateOnly } from '../utils/dateUtils'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import './AllNewsPage.css'
@@ -234,7 +236,7 @@ function AllNewsPage({ category = null }) {
                   <div className="lead-story-content">
                     <div className="news-card-meta lead-story-meta">
                       <span className="news-card-source">{leadStory.category || leadStory.source}</span>
-                      {leadStory.publishedAt && <span className="news-card-time">{leadStory.publishedAt}</span>}
+                      {leadStory.publishedAt && <span className="news-card-time">{formatDateOnly(leadStory.publishedAt)}</span>}
                     </div>
                     <a href="#" onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="lead-story-headline-link">
                       <h2 className="lead-story-headline">{leadStory.title}</h2>
@@ -288,7 +290,7 @@ function AllNewsPage({ category = null }) {
                     <div className="secondary-story-content">
                       <div className="news-card-meta">
                         <span className="news-card-source">{item.source}</span>
-                        {item.publishedAt && <span className="news-card-time">{item.publishedAt}</span>}
+                        {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
                       </div>
                       <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="secondary-story-link">
                         <h3 className="secondary-story-headline">{item.title}</h3>
@@ -302,7 +304,7 @@ function AllNewsPage({ category = null }) {
             <section className="latest-news-layout">
               <div className="latest-news-column">
                 <div className="panel-header latest-news-header">
-                  <span className="panel-kicker">Live Coverage</span>
+                  <span className="panel-kicker">Latest Coverage</span>
                   <h2 className="panel-title">Latest News</h2>
                 </div>
 
@@ -319,7 +321,7 @@ function AllNewsPage({ category = null }) {
                       <div className="latest-story-content">
                         <div className="news-card-meta">
                           <span className="news-card-source">{item.category || item.source}</span>
-                          {item.publishedAt && <span className="news-card-time">{item.publishedAt}</span>}
+                          {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
                         </div>
                         <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-link">
                           <h3 className="latest-story-headline">{item.title}</h3>
@@ -353,7 +355,10 @@ function AllNewsPage({ category = null }) {
                 )}
               </div>
 
-              <aside className="quick-updates-panel">
+              <aside className="sidebar-column">
+                <AdBreak type="sidebar" />
+
+                <div className="quick-updates-panel">
                 <div className="panel-header">
                   <span className="panel-kicker">Desk Wire</span>
                   <h2 className="panel-title">Quick Updates</h2>
@@ -369,10 +374,11 @@ function AllNewsPage({ category = null }) {
                     >
                       <span className="quick-update-source">{item.source}</span>
                       <h3 className="quick-update-headline">{truncateText(item.title, 88)}</h3>
-                      {item.publishedAt && <span className="quick-update-time">{item.publishedAt}</span>}
+                      {item.publishedAt && <span className="quick-update-time">{formatDateOnly(item.publishedAt)}</span>}
                     </a>
                   ))}
                 </div>
+              </div>
               </aside>
             </section>
           </>

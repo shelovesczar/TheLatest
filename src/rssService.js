@@ -4,7 +4,7 @@ import { deriveMediaOutlet } from './utils/sourceUtils';
 
 // RSS Aggregator endpoint - works both locally (with netlify dev) and in production
 const RSS_API_URL = '/.netlify/functions/rss-aggregator';
-const RSS_CACHE_VERSION = 'v8-fast';
+const RSS_CACHE_VERSION = 'v9-video-density';
 const REQUEST_TIMEOUT = 8000;  // 8s — backend now completes in ~5s
 const RETRY_ATTEMPTS = 1;      // no retry; stale cache is shown on failure instead
 const RETRY_BASE_DELAY_MS = 500;
@@ -80,58 +80,97 @@ const normalizeSearchText = (value) => String(value || '')
   .replace(/\s+/g, ' ')
   .trim();
 
-const buildSearchableText = (item = {}) => {
-  const title = normalizeSearchText(item.title);
-  const description = normalizeSearchText(item.description);
-  const content = normalizeSearchText(item.content);
-  const source = normalizeSearchText(item.source);
-  const category = normalizeSearchText(item.category);
-  return `${title} ${description} ${content} ${source} ${category}`.trim();
-};
+const tokenizeSearchText = (value) => normalizeSearchText(value)
+  .replace(/[^a-z0-9\s]/g, ' ')
+  .split(/\s+/)
+  .filter((token) => token.length >= 2);
 
-const wordVariations = (word) => {
-  return [
-    word,
-    `${word}s`,
-    `${word}es`,
-    word.endsWith('s') ? word.slice(0, -1) : null,
-    word.endsWith('es') ? word.slice(0, -2) : null,
-    word.endsWith('ies') ? `${word.slice(0, -3)}y` : null,
-    word.endsWith('y') ? `${word.slice(0, -1)}ies` : null
-  ].filter(Boolean);
-};
+const damerauLevenshteinDistance = (a = '', b = '') => {
+  const source = String(a);
+  const target = String(b);
+  const sourceLength = source.length;
+  const targetLength = target.length;
 
-const doesItemMatchSearch = (item, searchTerm) => {
-  if (!item || !item.title) return false;
+  if (!sourceLength) return targetLength;
+  if (!targetLength) return sourceLength;
 
-  const searchableText = buildSearchableText(item);
-  if (searchableText.includes(searchTerm)) {
-    return true;
+  const matrix = Array.from({ length: sourceLength + 1 }, () => new Array(targetLength + 1).fill(0));
+  for (let i = 0; i <= sourceLength; i += 1) matrix[i][0] = i;
+  for (let j = 0; j <= targetLength; j += 1) matrix[0][j] = j;
+
+  for (let i = 1; i <= sourceLength; i += 1) {
+    for (let j = 1; j <= targetLength; j += 1) {
+      const cost = source[i - 1] === target[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+
+      if (
+        i > 1 &&
+        j > 1 &&
+        source[i - 1] === target[j - 2] &&
+        source[i - 2] === target[j - 1]
+      ) {
+        matrix[i][j] = Math.min(matrix[i][j], matrix[i - 2][j - 2] + 1);
+      }
+    }
   }
 
-  return searchTerm.split(/\s+/).every((word) => {
-    if (word.length < 2) return true;
-    return wordVariations(word).some((variant) => searchableText.includes(variant));
+  return matrix[sourceLength][targetLength];
+};
+
+const tokenMatches = (queryToken, candidateToken) => {
+  if (!queryToken || !candidateToken) return false;
+  if (queryToken === candidateToken) return true;
+  if (candidateToken.startsWith(queryToken) || queryToken.startsWith(candidateToken)) return true;
+  if (Math.min(queryToken.length, candidateToken.length) < 5) return false;
+  return damerauLevenshteinDistance(queryToken, candidateToken) <= 1;
+};
+
+const countTokenHits = (fieldTokens = [], queryTokens = []) => {
+  let score = 0;
+  let matched = 0;
+
+  queryTokens.forEach((queryToken) => {
+    for (const candidateToken of fieldTokens) {
+      if (!tokenMatches(queryToken, candidateToken)) continue;
+      matched += 1;
+      score += queryToken === candidateToken ? 1 : 0.65;
+      break;
+    }
   });
+
+  return { score, matched };
+};
+
+const evaluateSearchRelevance = (item, searchTerm) => {
+  if (!item || !item.title) return { isMatch: false, score: 0 };
+
+  const queryTokens = tokenizeSearchText(searchTerm);
+  if (queryTokens.length === 0) return { isMatch: false, score: 0 };
+
+  const titleHits = countTokenHits(tokenizeSearchText(item.title), queryTokens);
+  const descriptionHits = countTokenHits(tokenizeSearchText(item.description), queryTokens);
+  const contentHits = countTokenHits(tokenizeSearchText(item.content), queryTokens);
+  const metaHits = countTokenHits(tokenizeSearchText(`${item.source || ''} ${item.category || ''}`), queryTokens);
+
+  const bodyScore = descriptionHits.score + (contentHits.score * 0.8);
+  const weightedScore = (titleHits.score * 7) + (bodyScore * 4) + (metaHits.score * 1.5);
+  const totalMatched = titleHits.matched + descriptionHits.matched + contentHits.matched + metaHits.matched;
+  const requiredCoverage = queryTokens.length === 1 ? 1 : Math.ceil(queryTokens.length * 0.6);
+  const titleOnlyWeak = titleHits.score > 0 && bodyScore === 0 && metaHits.score === 0;
+
+  return {
+    isMatch: totalMatched >= requiredCoverage && weightedScore >= 7.5 && !titleOnlyWeak,
+    score: weightedScore
+  };
 };
 
 const scoreLocalSearchResult = (item, searchTerm) => {
-  const titleText = normalizeSearchText(item.title);
-  const descriptionText = normalizeSearchText(item.description);
-  const contentText = normalizeSearchText(item.content);
-  let score = 0;
-
-  if (titleText.includes(searchTerm)) score += 10;
-  if (descriptionText.includes(searchTerm)) score += 4;
-  if (contentText.includes(searchTerm)) score += 2;
-
-  searchTerm.split(/\s+/).forEach((word) => {
-    if (word.length >= 3) {
-      if (titleText.includes(word)) score += 3;
-      if (descriptionText.includes(word)) score += 1;
-      if (contentText.includes(word)) score += 1;
-    }
-  });
+  const baseScore = evaluateSearchRelevance(item, searchTerm).score;
+  let score = baseScore;
 
   const publishedAt = Date.parse(item.publishedAt || item.date || 0);
   if (!Number.isNaN(publishedAt)) {
@@ -154,7 +193,7 @@ const searchCachedContent = async (searchTerm) => {
     );
 
     const cachedItems = cachedBuckets.flat();
-    const matchedItems = cachedItems.filter((item) => doesItemMatchSearch(item, searchTerm));
+    const matchedItems = cachedItems.filter((item) => evaluateSearchRelevance(item, searchTerm).isMatch);
 
     return dedupeContentItems(
       matchedItems
@@ -537,11 +576,26 @@ export async function fetchRSSPodcasts(category = null) {
  * @param {string} searchTerm - The search term to query
  * @returns {Promise<Array>} - Array of matching articles
  */
-export async function searchRSSContent(searchTerm) {
+export async function searchRSSContent(searchTerm, options = {}) {
   if (!searchTerm || searchTerm.trim().length === 0) {
     console.log('[RSS Search] Empty search term');
     return [];
   }
+
+  const strictSearch = options.strictSearch !== false;
+  const relaxSearchFallback = options.relaxSearchFallback !== false;
+  const parsedMinStrict = Number.parseInt(options.minStrictResults, 10);
+  const minStrictResults = Number.isNaN(parsedMinStrict) ? 6 : Math.max(1, Math.min(parsedMinStrict, 20));
+
+  const buildSearchUrl = (term) => {
+    const params = new URLSearchParams({
+      search: term,
+      strictSearch: strictSearch ? '1' : '0',
+      relaxSearchFallback: relaxSearchFallback ? '1' : '0',
+      minStrictResults: String(minStrictResults)
+    });
+    return `${RSS_API_URL}?${params.toString()}`;
+  };
 
   try {
     const normalizedTerm = normalizeSearchText(searchTerm);
@@ -555,7 +609,7 @@ export async function searchRSSContent(searchTerm) {
       }
 
       const remotePromise = (async () => {
-        const url = `${RSS_API_URL}?search=${encodeURIComponent(searchTerm)}`;
+        const url = buildSearchUrl(searchTerm);
         console.log(`[RSS Search] Deep searching backend for "${searchTerm}" at ${url}`);
         const response = await requestWithRetry(url);
         markFunctionsAvailable();
@@ -588,7 +642,7 @@ export async function searchRSSContent(searchTerm) {
       return [];
     }
 
-    const url = `${RSS_API_URL}?search=${encodeURIComponent(searchTerm)}`;
+    const url = buildSearchUrl(searchTerm);
     console.log(`[RSS Search] Searching for "${searchTerm}" at ${url}`);
     
     const response = await requestWithRetry(url);

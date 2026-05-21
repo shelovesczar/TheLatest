@@ -14,7 +14,7 @@
 }
 
 .search-section {
-  padding-bottom: var(--spacing-sm);
+  padding-bottom: var(--spacing-lg) !important;
 }
 
 .search-slider-container {

@@ -18,6 +18,23 @@ const safeStr = (val) => {
 };
 
 /**
+ * Format ISO timestamp to date-only format (MM-DD-YYYY)
+ * If the string doesn't look like an ISO timestamp, return as-is
+ */
+const formatTimeDisplay = (timeStr) => {
+  if (!timeStr) return '';
+  // Check if it looks like an ISO timestamp (contains 'T' and looks like YYYY-MM-DDTHH:...)
+  const isoMatch = timeStr.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+  if (isoMatch) {
+    // Convert from YYYY-MM-DD to MM-DD-YYYY
+    const [, year, month, day] = isoMatch;
+    return `${month}-${day}-${year}`;
+  }
+  // Otherwise return as-is (e.g., "2h ago", "1d ago", etc.)
+  return timeStr;
+};
+
+/**
  * Apple News-style News Card Component
  * Large image with text overlay
  */
@@ -32,7 +49,8 @@ const NewsCard = ({
 }) => {
   const safeTitle    = safeStr(title);
   const safeSource   = safeStr(source);
-  const safeTimeAgo  = safeStr(timeAgo);
+  const rawTimeAgo   = safeStr(timeAgo);
+  const safeTimeAgo  = formatTimeDisplay(rawTimeAgo);
   const safeCategory = safeStr(category);
   const safeImage    = safeStr(image);
   const safeUrl      = safeStr(url);
