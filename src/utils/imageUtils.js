@@ -278,3 +278,43 @@ export function getImageProps(src, alt = '', category = 'general', opts = {}) {
     decoding: 'async',
   };
 }
+
+const RESPONSIVE_WIDTHS = [320, 480, 640, 768, 960, 1200, 1600];
+
+export function buildResponsiveSrcSet(src, category = 'general', opts = {}) {
+  const baseSrc = isValidImageUrl(src) ? src : getFallbackImage(category);
+  const quality = Number.isFinite(opts.quality) ? opts.quality : 84;
+
+  return RESPONSIVE_WIDTHS
+    .map((targetWidth) => {
+      const processed = processImageUrl(baseSrc, {
+        width: targetWidth,
+        quality,
+        sharpen: opts.sharpen ?? false,
+      });
+      return `${processed} ${targetWidth}w`;
+    })
+    .join(', ');
+}
+
+export function getResponsiveImageProps(src, alt = '', category = 'general', opts = {}) {
+  const width = Number.isFinite(opts.width) ? opts.width : 1200;
+  const quality = Number.isFinite(opts.quality) ? opts.quality : 84;
+  const sizes = opts.sizes || '(max-width: 768px) 100vw, 50vw';
+  const loading = opts.loading || 'lazy';
+  const decoding = opts.decoding || 'async';
+
+  const baseProps = getImageProps(src, alt, category, {
+    width,
+    quality,
+    sharpen: opts.sharpen ?? false,
+  });
+
+  return {
+    ...baseProps,
+    srcSet: buildResponsiveSrcSet(src, category, { quality, sharpen: opts.sharpen ?? false }),
+    sizes,
+    loading,
+    decoding,
+  };
+}

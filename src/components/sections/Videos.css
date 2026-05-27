@@ -242,7 +242,7 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   .videos-slider-container {
     gap: 0.5rem;
     margin-bottom: var(--spacing-sm);

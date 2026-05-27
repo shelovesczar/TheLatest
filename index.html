@@ -9,11 +9,17 @@
     <!-- Preconnect to external domains to reduce DNS lookup + TLS negotiation time -->
     <link rel="preconnect" href="https://images.unsplash.com" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://images.weserv.nl" crossorigin>
     
     <!-- DNS prefetch for other external resources -->
     <link rel="dns-prefetch" href="https://rss.app">
     <link rel="dns-prefetch" href="https://feeds.bbci.co.uk">
     <link rel="dns-prefetch" href="https://rss.nytimes.com">
+
+    <!-- Critical preloads -->
+    <link rel="preload" href="/fonts/Reactive.otf" as="font" type="font/otf" crossorigin>
+    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1495020689067-958852a7765e?w=1200&q=80">
+    <link rel="preload" as="fetch" href="/.netlify/functions/rss-aggregator?type=news" crossorigin="anonymous">
     
     <title>The Latest</title>
   </head>

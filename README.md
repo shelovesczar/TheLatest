@@ -86,6 +86,24 @@ Rules applied:
 - Cross-duplicates are removed between video and podcast candidate pools before rendering.
 - Bundle-driven topic searches now preserve this separation on both Videos and Podcasts pages.
 
+### 9) Major performance upgrade for smoother scrolling and faster loading
+The app now includes a full performance pass focused on low-power devices and long news feeds.
+
+What changed:
+- Virtualized rendering for heavy lists so only a small visible window is kept in the DOM.
+- Progressive section loading using reusable in-view observers.
+- Shared responsive image component with `srcset`/`sizes` for smaller image payloads.
+- Skeleton card placeholders to reduce layout shifts while content is loading.
+- Search result caching improvements for faster repeat queries.
+- Critical preload hints for first font, first image, and first feed request.
+- Lighter visual effects in hot paths to reduce scroll jank on weak GPUs.
+
+Expected user-facing impact:
+- Faster initial page responsiveness.
+- Smoother scrolling in long result pages.
+- Reduced layout jumping during asynchronous loads.
+- Better performance consistency on older phones and budget laptops.
+
 ---
 
 ## Tech stack

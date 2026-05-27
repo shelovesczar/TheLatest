@@ -202,7 +202,7 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   .opinions-slider-container {
     gap: 0.5rem;
   }

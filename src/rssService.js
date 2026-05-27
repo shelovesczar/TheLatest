@@ -582,6 +582,9 @@ export async function searchRSSContent(searchTerm, options = {}) {
     return [];
   }
 
+  const normalizedSearchTerm = String(searchTerm).trim();
+  const searchCacheKey = getSearchCacheKey(normalizedSearchTerm);
+
   const strictSearch = options.strictSearch !== false;
   const relaxSearchFallback = options.relaxSearchFallback !== false;
   const parsedMinStrict = Number.parseInt(options.minStrictResults, 10);
@@ -598,6 +601,12 @@ export async function searchRSSContent(searchTerm, options = {}) {
   };
 
   try {
+    const cachedSearch = await cacheManager.get(searchCacheKey);
+    if (cachedSearch && cachedSearch.length > 0) {
+      console.log(`[RSS Search] Cache hit for "${normalizedSearchTerm}" with ${cachedSearch.length} results`);
+      return cachedSearch;
+    }
+
     const normalizedTerm = normalizeSearchText(searchTerm);
     const localResults = await searchCachedContent(normalizedTerm);
 
@@ -630,6 +639,7 @@ export async function searchRSSContent(searchTerm, options = {}) {
 
       if (Array.isArray(remoteResults) && remoteResults.length > 0) {
         const merged = dedupeContentItems([...remoteResults, ...localResults]);
+        await cacheManager.set(searchCacheKey, merged);
         console.log(`[RSS Search] Returning merged local+remote results: ${merged.length}`);
         return merged;
       }
@@ -661,6 +671,7 @@ export async function searchRSSContent(searchTerm, options = {}) {
     console.log(`[RSS Search] After dedup: ${results.length} items`);
     
     if (results.length > 0) {
+      await cacheManager.set(searchCacheKey, results);
       if (results.length !== normalizedResults.length) {
         console.log(`[RSS Search] Removed ${normalizedResults.length - results.length} duplicates`);
       }

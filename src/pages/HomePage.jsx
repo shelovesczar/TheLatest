@@ -7,12 +7,14 @@ import { searchRSSContent, fetchRSSVideos } from '../rssService'
 import { getRandomTrendingPosts } from '../socialMediaService'
 import { dedupeContentItems } from '../utils/contentDeduplication'
 import { matchesTopicQuery } from '../utils/topicFiltering'
+import { useInView } from '../hooks/useInView'
 import './HomePage.css'
 import Hero from '../components/sections/Hero'
 import TopStories from '../components/sections/TopStories'
 import DateTicker from '../components/layout/DateTicker'
 import TrendingStories from '../components/sections/TrendingStories'
 import AdBreak from '../components/common/AdBreak'
+import CardSkeleton from '../components/common/CardSkeleton'
 
 // Lazy load below-the-fold components
 const AISummary = lazy(() => import('../components/sections/AISummary'))
@@ -24,23 +26,8 @@ const Search = lazy(() => import('../components/sections/Search'))
 
 // Loading component
 const SectionLoader = () => (
-  <div style={{
-    padding: '3rem',
-    textAlign: 'center',
-    color: '#666',
-    minHeight: '200px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  }}>
-    <div className="spinner" style={{
-      border: '3px solid #f3f3f3',
-      borderTop: '3px solid var(--accent-color)',
-      borderRadius: '50%',
-      width: '40px',
-      height: '40px',
-      animation: 'spin 1s linear infinite'
-    }} />
+  <div style={{ padding: '1.2rem 0' }}>
+    <CardSkeleton count={3} />
   </div>
 )
 
@@ -136,13 +123,10 @@ function HomePage({
   const [loadingPodcasts, setLoadingPodcasts] = useState(true)
   const [loadingSocial, setLoadingSocial] = useState(true)
 
-  // Track which sections are visible (for lazy loading)
-  const [visibleSections, setVisibleSections] = useState({
-    opinions: false,
-    videos: false,
-    podcasts: false,
-    social: false
-  })
+  const { ref: opinionsRef, isInView: opinionsInView } = useInView({ rootMargin: '220px' })
+  const { ref: videosRef, isInView: videosInView } = useInView({ rootMargin: '220px' })
+  const { ref: podcastsRef, isInView: podcastsInView } = useInView({ rootMargin: '220px' })
+  const { ref: socialRef, isInView: socialInView } = useInView({ rootMargin: '220px' })
   const topicTickerRef = useRef(null)
   const lastSocialQueryRef = useRef(null)
   const sectionPrefetchRef = useRef({
@@ -369,7 +353,7 @@ function HomePage({
   // Load additional sections when they become visible
   useEffect(() => {
     const loadOpinions = async () => {
-      if (!visibleSections.opinions || opinions.length > 0 || sectionPrefetchRef.current.opinions) return
+      if (!opinionsInView || opinions.length > 0 || sectionPrefetchRef.current.opinions) return
       setLoadingOpinions(true)
       try {
         if (!hasActiveTopic) {
@@ -383,11 +367,11 @@ function HomePage({
       }
     }
     loadOpinions()
-  }, [visibleSections.opinions, hasActiveTopic])
+  }, [opinionsInView, hasActiveTopic])
 
   useEffect(() => {
     const loadVideos = async () => {
-      if (!visibleSections.videos || videos.length > 0 || sectionPrefetchRef.current.videos) return
+      if (!videosInView || videos.length > 0 || sectionPrefetchRef.current.videos) return
       setLoadingVideos(true)
       try {
         if (!hasActiveTopic) {
@@ -406,11 +390,11 @@ function HomePage({
       }
     }
     loadVideos()
-  }, [visibleSections.videos, hasActiveTopic])
+  }, [videosInView, hasActiveTopic])
 
   useEffect(() => {
     const loadPodcasts = async () => {
-      if (!visibleSections.podcasts || podcasts.length > 0 || sectionPrefetchRef.current.podcasts) return
+      if (!podcastsInView || podcasts.length > 0 || sectionPrefetchRef.current.podcasts) return
       setLoadingPodcasts(true)
       try {
         if (!hasActiveTopic) {
@@ -425,12 +409,12 @@ function HomePage({
       }
     }
     loadPodcasts()
-  }, [visibleSections.podcasts, hasActiveTopic])
+  }, [podcastsInView, hasActiveTopic])
 
   useEffect(() => {
     const loadSocial = async () => {
       const socialQuery = hasActiveTopic ? (topic || '').trim().toLowerCase() : '__all__'
-      if (!visibleSections.social) return
+      if (!socialInView) return
       if (socialPosts.length > 0 && lastSocialQueryRef.current === socialQuery) return
 
       setLoadingSocial(true)
@@ -447,38 +431,7 @@ function HomePage({
       }
     }
     loadSocial()
-  }, [visibleSections.social, hasActiveTopic, topic])
-
-  // Intersection Observer to detect when sections come into view
-  useEffect(() => {
-    const observerOptions = {
-      root: null,
-      rootMargin: '200px', // Load 200px before section is visible
-      threshold: 0.01
-    }
-
-    const observerCallback = (entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const sectionName = entry.target.dataset.section
-          if (sectionName) {
-            setVisibleSections(prev => ({ ...prev, [sectionName]: true }))
-          }
-        }
-      })
-    }
-
-    const observer = new IntersectionObserver(observerCallback, observerOptions)
-
-    // Observe all lazy-loaded sections
-    const sections = ['opinions', 'videos', 'podcasts', 'social']
-    sections.forEach(section => {
-      const element = document.querySelector(`[data-section="${section}"]`)
-      if (element) observer.observe(element)
-    })
-
-    return () => observer.disconnect()
-  }, [])
+  }, [socialInView, hasActiveTopic, topic])
 
   return (
     <main className="main-content home-main-content">
@@ -586,7 +539,7 @@ function HomePage({
       <AdBreak type="standard" />
 
       {/* ── 6. Opinions ── */}
-      <div data-section="opinions">
+      <div ref={opinionsRef} data-section="opinions">
         <Suspense fallback={<SectionLoader />}>
           <Opinions
             opinions={opinions}
@@ -598,7 +551,7 @@ function HomePage({
       <AdBreak type="compact" />
 
       {/* ── 7. Videos ── */}
-      <div data-section="videos">
+      <div ref={videosRef} data-section="videos">
         <Suspense fallback={<SectionLoader />}>
           <Videos
             videos={videos}
@@ -610,7 +563,7 @@ function HomePage({
       <AdBreak type="compact" />
 
       {/* ── 8. Podcasts ── */}
-      <div data-section="podcasts">
+      <div ref={podcastsRef} data-section="podcasts">
         <Suspense fallback={<SectionLoader />}>
           <Podcasts
             podcasts={podcasts}
@@ -622,7 +575,7 @@ function HomePage({
       <AdBreak type="compact" />
 
       {/* ── 9. Social Media ── */}
-      <div data-section="social">
+      <div ref={socialRef} data-section="social">
         <Suspense fallback={<SectionLoader />}>
           <SocialMedia
             socialPosts={socialPosts}

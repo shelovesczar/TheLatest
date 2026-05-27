@@ -1,0 +1,49 @@
+.card-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.card-skeleton {
+  min-height: 320px;
+  border-radius: 16px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.card-skeleton-media {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  background: linear-gradient(90deg, rgba(160, 170, 196, 0.14), rgba(160, 170, 196, 0.26), rgba(160, 170, 196, 0.14));
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.2s linear infinite;
+}
+
+.card-skeleton-line {
+  height: 12px;
+  border-radius: 999px;
+  margin-top: 10px;
+  background: linear-gradient(90deg, rgba(160, 170, 196, 0.14), rgba(160, 170, 196, 0.24), rgba(160, 170, 196, 0.14));
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.2s linear infinite;
+}
+
+.card-skeleton-line.short {
+  width: 45%;
+}
+
+.card-skeleton-line.long {
+  width: 78%;
+}
+
+@keyframes skeletonShimmer {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}

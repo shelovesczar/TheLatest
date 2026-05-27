@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { recordHistory } from '../utils/savedArticles'
 import DateTicker from '../components/layout/DateTicker'
 import AdBreak from '../components/common/AdBreak'
 import { fetchRSSNews } from '../newsService'
 import { searchRSSContent } from '../rssService'
-import { getImageProps } from '../utils/imageUtils'
+import OptimizedImage from '../components/common/OptimizedImage'
 import { getCategoryConfig } from '../utils/categoryConfig'
 import { filterContentByCategory } from '../utils/categoryFiltering'
 import { dedupeContentItems } from '../utils/contentDeduplication'
@@ -25,6 +26,7 @@ function AllNewsPage({ category = null }) {
   const [visibleCount, setVisibleCount] = useState(8)
   const LOAD_MORE_SIZE = 8
   const sourceTickerRef = useRef(null)
+  const latestListRef = useRef(null)
 
   // Navigate to the on-site article reader
   const goToArticle = useCallback((article) => {
@@ -153,6 +155,14 @@ function AllNewsPage({ category = null }) {
   const latestStories = latestStoriesAll.slice(0, visibleCount)
   const hasMore = visibleCount < latestStoriesAll.length
   const remaining = latestStoriesAll.length - visibleCount
+  const shouldVirtualizeLatest = latestStoriesAll.length > 24
+
+  const latestVirtualizer = useVirtualizer({
+    count: latestStoriesAll.length,
+    getScrollElement: () => latestListRef.current,
+    estimateSize: () => 290,
+    overscan: 6,
+  })
   const quickUpdates = filteredNews.slice(0, 8)
   const breakingHeadlines = filteredNews.slice(0, 10).map((item) => item.title).filter(Boolean)
 
@@ -230,7 +240,7 @@ function AllNewsPage({ category = null }) {
                 <article className="lead-story-card">
                   {leadStory.image && (
                     <a href="#" onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="lead-story-image">
-                      <img {...getImageProps(leadStory.image, leadStory.title, 'news')} />
+                      <OptimizedImage src={leadStory.image} alt={leadStory.title} category="news" sizes="(max-width: 768px) 100vw, 60vw" />
                     </a>
                   )}
                   <div className="lead-story-content">
@@ -284,7 +294,7 @@ function AllNewsPage({ category = null }) {
                   <article key={`${item.link || item.title}-${index}`} className="secondary-story-card">
                     {item.image && (
                       <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="secondary-story-image">
-                        <img {...getImageProps(item.image, item.title, 'news')} />
+                        <OptimizedImage src={item.image} alt={item.title} category="news" sizes="(max-width: 768px) 100vw, 33vw" />
                       </a>
                     )}
                     <div className="secondary-story-content">
@@ -308,41 +318,92 @@ function AllNewsPage({ category = null }) {
                   <h2 className="panel-title">Latest News</h2>
                 </div>
 
-                <div className="latest-news-list">
-                  {(latestStories.length > 0 ? latestStories : filteredNews.slice(1)).map((item, index) => {
-                    const isLast = index === latestStories.length - 1 && hasMore
-                    return (
-                    <article key={`${item.link || item.title}-${index}`} className={`latest-story-card${isLast ? ' latest-story-card--fade' : ''}`}>
-                      {item.image && (
-                        <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-image">
-                          <img {...getImageProps(item.image, item.title, 'news')} />
-                        </a>
-                      )}
-                      <div className="latest-story-content">
-                        <div className="news-card-meta">
-                          <span className="news-card-source">{item.category || item.source}</span>
-                          {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
-                        </div>
-                        <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-link">
-                          <h3 className="latest-story-headline">{item.title}</h3>
-                        </a>
-                        {item.description && (
-                          <p className="latest-story-description">
-                            {item.image
-                              ? getDynamicTruncation(item.image, item.description)
-                              : truncateText(item.description, 180)}
-                          </p>
-                        )}
-                        <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="read-more-link">
-                          Continue reading →
-                        </a>
-                      </div>
-                    </article>
-                    )
-                  })}
-                </div>
+                {shouldVirtualizeLatest ? (
+                  <div className="latest-news-list latest-news-list--virtual" ref={latestListRef}>
+                    <div
+                      className="latest-news-list-virtual-inner"
+                      style={{ height: `${latestVirtualizer.getTotalSize()}px` }}
+                    >
+                      {latestVirtualizer.getVirtualItems().map((virtualRow) => {
+                        const item = latestStoriesAll[virtualRow.index]
+                        if (!item) return null
 
-                {hasMore && (
+                        return (
+                          <div
+                            key={virtualRow.key}
+                            ref={latestVirtualizer.measureElement}
+                            data-index={virtualRow.index}
+                            className="latest-news-virtual-item"
+                            style={{ transform: `translateY(${virtualRow.start}px)` }}
+                          >
+                            <article className="latest-story-card">
+                              {item.image && (
+                                <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-image">
+                                  <OptimizedImage src={item.image} alt={item.title} category="news" sizes="(max-width: 768px) 100vw, 45vw" />
+                                </a>
+                              )}
+                              <div className="latest-story-content">
+                                <div className="news-card-meta">
+                                  <span className="news-card-source">{item.category || item.source}</span>
+                                  {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
+                                </div>
+                                <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-link">
+                                  <h3 className="latest-story-headline">{item.title}</h3>
+                                </a>
+                                {item.description && (
+                                  <p className="latest-story-description">
+                                    {item.image
+                                      ? getDynamicTruncation(item.image, item.description)
+                                      : truncateText(item.description, 180)}
+                                  </p>
+                                )}
+                                <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="read-more-link">
+                                  Continue reading →
+                                </a>
+                              </div>
+                            </article>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="latest-news-list">
+                    {(latestStories.length > 0 ? latestStories : filteredNews.slice(1)).map((item, index) => {
+                      const isLast = index === latestStories.length - 1 && hasMore
+                      return (
+                      <article key={`${item.link || item.title}-${index}`} className={`latest-story-card${isLast ? ' latest-story-card--fade' : ''}`}>
+                        {item.image && (
+                          <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-image">
+                            <OptimizedImage src={item.image} alt={item.title} category="news" sizes="(max-width: 768px) 100vw, 45vw" />
+                          </a>
+                        )}
+                        <div className="latest-story-content">
+                          <div className="news-card-meta">
+                            <span className="news-card-source">{item.category || item.source}</span>
+                            {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
+                          </div>
+                          <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-link">
+                            <h3 className="latest-story-headline">{item.title}</h3>
+                          </a>
+                          {item.description && (
+                            <p className="latest-story-description">
+                              {item.image
+                                ? getDynamicTruncation(item.image, item.description)
+                                : truncateText(item.description, 180)}
+                            </p>
+                          )}
+                          <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="read-more-link">
+                            Continue reading →
+                          </a>
+                        </div>
+                      </article>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {hasMore && !shouldVirtualizeLatest && (
                   <div className="load-more-container">
                     <button
                       className="load-more-btn"

@@ -1,13 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { searchRSSContent } from '../rssService'
 import { fetchRSSNews } from '../newsService'
-import { getImageProps } from '../utils/imageUtils'
 import { recordHistory, searchArchive } from '../utils/savedArticles'
 import DateTicker from '../components/layout/DateTicker'
 import { formatDateOnly } from '../utils/dateUtils'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSearch, faTimes } from '@fortawesome/free-solid-svg-icons'
+import OptimizedImage from '../components/common/OptimizedImage'
+import CardSkeleton from '../components/common/CardSkeleton'
 import './AllNewsPage.css'
 import './SearchResults.css'
 
@@ -56,6 +58,7 @@ function SearchResults() {
   const [feedLoading, setFeedLoading]     = useState(true)
   const [selectedSource, setSelectedSource] = useState('ALL')
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280))
+  const virtualResultsRef = useRef(null)
 
   // Keep input in sync when the URL query changes (e.g. back button)
   useEffect(() => { setInputValue(query) }, [query])
@@ -136,6 +139,15 @@ function SearchResults() {
     if (viewportWidth >= 768) return 180
     return 130
   }
+
+  const descriptionLimit = useMemo(() => getDescriptionLimit(), [viewportWidth])
+
+  const resultVirtualizer = useVirtualizer({
+    count: results.length,
+    getScrollElement: () => virtualResultsRef.current,
+    estimateSize: () => 420,
+    overscan: 8,
+  })
 
   // ── Default feed layout helpers ──────────────────────────────
   const toStr = (v) => {
@@ -242,35 +254,57 @@ function SearchResults() {
                   <div className="sr-results-header">
                     <span className="sr-count">{results.length} articles found</span>
                   </div>
-                  <div className="results-grid">
-                    {results.map((article, index) => (
-                      <a
-                        key={index}
-                        href="#"
-                        onClick={e => { e.preventDefault(); goToArticle(article) }}
-                        className="result-card"
-                      >
-                        {article.image && (
-                          <div className="result-image">
-                            <img {...getImageProps(article.image, article.title, 'news')} />
+                  <div className="results-virtual-scroll" ref={virtualResultsRef}>
+                    <div
+                      className="results-virtual-inner"
+                      style={{ height: `${resultVirtualizer.getTotalSize()}px` }}
+                    >
+                      {resultVirtualizer.getVirtualItems().map((virtualRow) => {
+                        const article = results[virtualRow.index]
+                        if (!article) return null
+
+                        return (
+                          <div
+                            key={virtualRow.key}
+                            ref={resultVirtualizer.measureElement}
+                            data-index={virtualRow.index}
+                            className="results-virtual-item"
+                            style={{ transform: `translateY(${virtualRow.start}px)` }}
+                          >
+                            <a
+                              href="#"
+                              onClick={e => { e.preventDefault(); goToArticle(article) }}
+                              className="result-card"
+                            >
+                              {article.image && (
+                                <div className="result-image">
+                                  <OptimizedImage
+                                    src={article.image}
+                                    alt={article.title}
+                                    category="news"
+                                    sizes="(max-width: 768px) 100vw, 80vw"
+                                  />
+                                </div>
+                              )}
+                              <div className="result-content">
+                                <div className="result-content-body">
+                                  <h3 className="result-title">{article.title}</h3>
+                                  <p className="result-description">
+                                    {truncate(article.description, descriptionLimit)}
+                                  </p>
+                                </div>
+                                <div className="result-content-footer">
+                                  <div className="result-meta">
+                                    <span className="result-source">{article.source}</span>
+                                    <span className="result-date">{formatPublishedDate(article.publishedAt)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </a>
                           </div>
-                        )}
-                        <div className="result-content">
-                          <div className="result-content-body">
-                            <h3 className="result-title">{article.title}</h3>
-                            <p className="result-description">
-                              {truncate(article.description, getDescriptionLimit())}
-                            </p>
-                          </div>
-                          <div className="result-content-footer">
-                            <div className="result-meta">
-                              <span className="result-source">{article.source}</span>
-                              <span className="result-date">{formatPublishedDate(article.publishedAt)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </a>
-                    ))}
+                        )
+                      })}
+                    </div>
                   </div>
                 </>
               )}
@@ -292,13 +326,18 @@ function SearchResults() {
                       >
                         {article.image && (
                           <div className="result-image">
-                            <img {...getImageProps(article.image, article.title, 'news')} />
+                            <OptimizedImage
+                              src={article.image}
+                              alt={article.title}
+                              category="news"
+                              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                            />
                           </div>
                         )}
                         <div className="result-content">
                           <div className="result-content-body">
                             <h3 className="result-title">{article.title}</h3>
-                            <p className="result-description">{truncate(article.description, getDescriptionLimit())}</p>
+                            <p className="result-description">{truncate(article.description, descriptionLimit)}</p>
                           </div>
                           <div className="result-content-footer">
                             <div className="result-meta">
@@ -353,8 +392,7 @@ function SearchResults() {
           <div className="all-news-content">
             {feedLoading ? (
               <div className="sr-loading">
-                <div className="spinner" />
-                <p>Loading latest news…</p>
+                <CardSkeleton count={6} />
               </div>
             ) : displayFeed.length === 0 ? (
               <div className="no-results"><p>No articles found.</p></div>
