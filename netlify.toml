@@ -3,6 +3,11 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[dev]
+  command = "npm run dev -- --host 0.0.0.0 --port 5173 --strictPort"
+  targetPort = 5173
+  framework = "#custom"
+
 # ─── HTTP Cache Headers ────────────────────────────────────────────────────────
 # Vite appends a content-hash to every JS/CSS filename (e.g. index-Bk3xQp8.js)
 # so these assets are safe to cache forever — browsers only re-download when
