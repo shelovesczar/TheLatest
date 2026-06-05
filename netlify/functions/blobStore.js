@@ -1,0 +1,57 @@
+const { getStore } = require('@netlify/blobs');
+
+const STORE_NAMES = {
+  summaries: 'shared-ai-summaries',
+  articles: 'article-snapshots',
+  feeds: 'feed-health',
+  analytics: 'site-analytics',
+  follows: 'user-follows',
+  users: 'app-users',
+  sessions: 'app-sessions'
+};
+
+function getJsonStore(name, options = {}) {
+  return getStore({
+    name,
+    consistency: options.consistency || 'strong'
+  });
+}
+
+async function getJson(name, key, options = {}) {
+  const store = getJsonStore(name, options);
+  return store.get(key, { type: 'json', consistency: options.consistency || 'strong' });
+}
+
+async function getJsonWithMetadata(name, key, options = {}) {
+  const store = getJsonStore(name, options);
+  return store.getWithMetadata(key, { type: 'json', consistency: options.consistency || 'strong' });
+}
+
+async function setJson(name, key, value, options = {}) {
+  const store = getJsonStore(name, options);
+  return store.setJSON(key, value, {
+    metadata: options.metadata,
+    onlyIfMatch: options.onlyIfMatch,
+    onlyIfNew: options.onlyIfNew
+  });
+}
+
+async function listJson(name, options = {}) {
+  const store = getJsonStore(name, options);
+  return store.list({ prefix: options.prefix || '' });
+}
+
+async function deleteKey(name, key, options = {}) {
+  const store = getJsonStore(name, options);
+  return store.delete(key);
+}
+
+module.exports = {
+  STORE_NAMES,
+  getJsonStore,
+  getJson,
+  getJsonWithMetadata,
+  setJson,
+  listJson,
+  deleteKey
+};

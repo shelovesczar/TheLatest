@@ -12,12 +12,13 @@ import { filterContentByCategory } from '../utils/categoryFiltering'
 import { dedupeContentItems } from '../utils/contentDeduplication'
 import { deriveMediaOutlet } from '../utils/sourceUtils'
 import { matchesTopicQuery } from '../utils/topicFiltering'
+import { getTopicPageConfig } from '../utils/navigationConfig'
 import { isVideoItem, isPodcastItem, dedupeByMediaKey, removeCrossDuplicates } from '../utils/mediaClassification'
 import { formatDateOnly } from '../utils/dateUtils'
 import './AllNewsPage.css'
 
 function AllVideosPage({ category = null }) {
-  const { categoryName } = useParams()
+  const { categoryName, topicSlug } = useParams()
   const { topic, hasActiveTopic } = useSearch()
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
@@ -48,12 +49,19 @@ function AllVideosPage({ category = null }) {
     return `${text.substring(0, maxLength).trim()}...`
   }
 
-  const filterContext = categoryName || category || (hasActiveTopic ? topic : null)
-  const categoryConfig = getCategoryConfig(filterContext)
+  const topicConfig = getTopicPageConfig(topicSlug)
+  const activeTopicQuery = topicConfig?.query || (hasActiveTopic ? topic : null)
+  const filterContext = categoryName || category || topicConfig?.slug || activeTopicQuery
+  const categoryConfig = topicConfig ? {
+    title: topicConfig.title,
+    newsTitle: `${topicConfig.title} Videos`,
+    subtitle: topicConfig.subtitle,
+    image: topicConfig.image
+  } : getCategoryConfig(filterContext)
 
   useEffect(() => {
     loadVideos()
-  }, [categoryName, category, topic])
+  }, [activeTopicQuery, categoryName, category, topic])
 
   useEffect(() => {
     if (selectedSource !== 'ALL' && !videos.some((item) => item.source === selectedSource)) {
@@ -77,8 +85,8 @@ function AllVideosPage({ category = null }) {
         duration: toStr(item?.duration),
       })
 
-      if (hasActiveTopic && topic && topic.trim().length > 0) {
-        const searchResults = await searchRSSContent(topic)
+      if (activeTopicQuery && activeTopicQuery.trim().length > 0) {
+        const searchResults = await searchRSSContent(activeTopicQuery)
         const normalizedResults = (Array.isArray(searchResults) ? searchResults : []).map(normalizeVideoItem)
         const searchVideos = normalizedResults.filter(isVideoItem)
         const searchPodcasts = normalizedResults.filter(isPodcastItem)
@@ -90,7 +98,7 @@ function AllVideosPage({ category = null }) {
           const supplemental = (Array.isArray(videoPool) ? videoPool : [])
             .map(normalizeVideoItem)
             .filter((item) => !isPodcastItem(item))
-            .filter((item) => matchesTopicQuery(item, topic))
+            .filter((item) => matchesTopicQuery(item, activeTopicQuery))
           topicVideos = dedupeByMediaKey([...topicVideos, ...supplemental])
         }
 

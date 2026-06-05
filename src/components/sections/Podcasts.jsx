@@ -10,6 +10,7 @@ import './Podcasts.css'
 function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const itemsPerPage = 3
+  const safePodcasts = Array.isArray(podcasts) ? podcasts.filter(Boolean) : []
 
   // Truncate text helper
   const truncateText = (text, maxLength) => {
@@ -19,19 +20,19 @@ function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
   }
 
   const nextSlide = () => {
-    if (!podcasts || podcasts.length === 0) return
+    if (safePodcasts.length === 0) return
     setCurrentIndex((prev) => {
       const next = prev + itemsPerPage
-      return next >= podcasts.length ? 0 : next
+      return next >= safePodcasts.length ? 0 : next
     })
   }
 
   const prevSlide = () => {
-    if (!podcasts || podcasts.length === 0) return
+    if (safePodcasts.length === 0) return
     setCurrentIndex((prev) => {
       if (prev === 0) {
         // Jump to last complete page
-        const lastPageStart = Math.floor((podcasts.length - 1) / itemsPerPage) * itemsPerPage
+        const lastPageStart = Math.floor((safePodcasts.length - 1) / itemsPerPage) * itemsPerPage
         return lastPageStart
       }
       return prev - itemsPerPage
@@ -40,28 +41,29 @@ function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
 
   // Create circular array view - wrap around if needed
   const getVisiblePodcasts = () => {
-    if (!podcasts || podcasts.length === 0) return []
+    if (safePodcasts.length === 0) return []
     const items = []
-    const maxItems = Math.min(itemsPerPage, podcasts.length)
+    const maxItems = Math.min(itemsPerPage, safePodcasts.length)
     for (let i = 0; i < maxItems; i++) {
-      const index = (currentIndex + i) % podcasts.length
-      if (podcasts[index]) {
-        items.push(podcasts[index])
-      }
+      const index = (currentIndex + i) % safePodcasts.length
+      items.push(safePodcasts[index])
     }
     return items
   }
 
-  const visiblePodcasts = podcasts && podcasts.length > 0 ? getVisiblePodcasts() : []
+  const visiblePodcasts = safePodcasts.length > 0 ? getVisiblePodcasts() : []
 
   return (
     <section id="podcasts" className="section podcasts">
-      <h2 className="section-title">Podcasts</h2>
+      <div className="section-hdr">
+        <h2>Podcasts</h2>
+        <Link to={categoryPath || "/all-podcasts"} className="see-more">View all episodes →</Link>
+      </div>
       {loadingPodcasts ? (
         <div className="loading-container">
           <p className="loading-text">Loading podcasts...</p>
         </div>
-      ) : podcasts.length > 0 ? (
+      ) : safePodcasts.length > 0 ? (
         <>
           <div className="podcasts-slider-container">
             <button 
@@ -85,18 +87,19 @@ function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
               aria-label={`Trending: ${podcast.title}`}
               style={{ textDecoration: 'none', color: 'inherit' }}
             >
-              <div className="podcast-video-wrapper">
-                <img 
-                  {...getImageProps(podcast.image, podcast.title, 'podcasts')}
-                  className="podcast-thumbnail"
-                />
+              <div className="card-thumb">
+                <img {...getImageProps(podcast.image, podcast.title, 'podcasts')} />
               </div>
-              <div className="podcast-info">
-                <h3 className="podcast-title">{truncateText(podcast.title, 60)}</h3>
-                <p className="podcast-description">{truncateText(podcast.description, 100)}</p>
-                <div className="podcast-footer">
-                  <span className="podcast-platform">Listen on {deriveMediaOutlet(podcast)}</span>
-                  <span className="podcast-date">{formatDateOnly(podcast.date)}</span>
+              <div className="card-body-inner">
+                <div className="card-source-row">
+                  <span className="card-source">{deriveMediaOutlet(podcast)}</span>
+                  <span className="card-date">{formatDateOnly(podcast.date)}</span>
+                </div>
+                <div className="card-headline-text">{truncateText(podcast.title, 100)}</div>
+                <div className="card-excerpt">{truncateText(podcast.description, 140)}</div>
+                <div className="card-footer-row">
+                  <span className="card-author">Podcast</span>
+                  <span className="card-read-more">Listen →</span>
                 </div>
               </div>
               </a>
@@ -115,7 +118,6 @@ function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
       ) : (
         <p className="no-content">No podcasts available at this time.</p>
       )}
-      <Link to={categoryPath || "/all-podcasts"} className="see-more-btn">View All Episodes →</Link>
     </section>
   )
 }

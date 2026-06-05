@@ -6,6 +6,21 @@ const FRESH_CACHE_DURATION = 15 * 60 * 1000
 const STALE_CACHE_DURATION = 24 * 60 * 60 * 1000
 let socialFeedsAvailable = true
 
+const stripHtml = (value = '') => String(value).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+
+const normalizeSocialPost = (post = {}) => ({
+  ...post,
+  title: stripHtml(post.title || ''),
+  content: stripHtml(post.content || post.description || post.title || ''),
+  author: stripHtml(post.author || post.source || 'Social'),
+  source: stripHtml(post.source || post.platform || 'Social'),
+  engagement: typeof post.engagement === 'string' ? stripHtml(post.engagement) : (post.engagement || ''),
+  html: null
+})
+
+const normalizeSocialPosts = (posts = []) =>
+  Array.isArray(posts) ? posts.filter(Boolean).map(normalizeSocialPost) : []
+
 const shouldDisableSocialFeeds = (error) => {
   const code = error?.code
   const status = error?.response?.status
@@ -28,7 +43,13 @@ export const getCachedSocialPosts = (topic = '', limit = 12, allowStale = false)
     const maxAge = allowStale ? STALE_CACHE_DURATION : FRESH_CACHE_DURATION
 
     if (age <= maxAge) {
-      return data.posts || []
+      const normalizedPosts = normalizeSocialPosts(data.posts)
+
+      if (JSON.stringify(normalizedPosts) !== JSON.stringify(data.posts || [])) {
+        cacheSocialPosts(topic, limit, normalizedPosts)
+      }
+
+      return normalizedPosts
     }
   } catch (error) {
     console.error('Error reading cached social posts:', error)
@@ -39,10 +60,11 @@ export const getCachedSocialPosts = (topic = '', limit = 12, allowStale = false)
 
 export const cacheSocialPosts = (topic = '', limit = 12, posts = []) => {
   const cacheKey = getCacheKey(topic, limit)
+  const normalizedPosts = normalizeSocialPosts(posts)
 
   try {
     localStorage.setItem(cacheKey, JSON.stringify({
-      posts,
+      posts: normalizedPosts,
       timestamp: Date.now()
     }))
   } catch (error) {
@@ -64,7 +86,7 @@ export const fetchSocialFeedPosts = async (topic = '', limit = 12) => {
       timeout: 25000
     })
 
-    return response?.data?.data || []
+    return normalizeSocialPosts(response?.data?.data || [])
   } catch (error) {
     if (shouldDisableSocialFeeds(error)) {
       socialFeedsAvailable = false

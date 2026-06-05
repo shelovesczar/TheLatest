@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import LazyImage from '../common/LazyImage';
 import './NewsCard.css';
 
@@ -34,6 +35,11 @@ const formatTimeDisplay = (timeStr) => {
   return timeStr;
 };
 
+const getSourceIconUrl = (url) => {
+  if (!url) return '';
+  return `https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(url)}`;
+};
+
 /**
  * Apple News-style News Card Component
  * Large image with text overlay
@@ -54,6 +60,7 @@ const NewsCard = ({
   const safeCategory = safeStr(category);
   const safeImage    = safeStr(image);
   const safeUrl      = safeStr(url);
+  const sourceIconUrl = getSourceIconUrl(safeUrl);
 
   // Guard: don't render broken cards — prevents crashes from malformed API data
   if (!safeTitle) return null;
@@ -61,7 +68,7 @@ const NewsCard = ({
   return (
     <a 
       href={safeUrl || '#'} 
-      className={`news-card ${featured ? 'featured' : ''}`}
+      className={`news-card ${featured ? 'featured' : 'compact'}`}
       target="_blank"
       rel="noopener noreferrer"
     >
@@ -71,19 +78,22 @@ const NewsCard = ({
           alt={safeTitle}
           className="news-card-image"
         />
-        <div className="news-card-overlay"></div>
-        
+
         {safeCategory && (
           <div className="news-card-badge">{safeCategory}</div>
         )}
       </div>
-      
+
       <div className="news-card-content">
-        <h3 className="news-card-title">{safeTitle}</h3>
         <div className="news-card-meta">
-          <span className="news-card-source">{safeSource}</span>
+          <span className="news-card-source-wrap">
+            {sourceIconUrl ? <img className="news-card-source-icon" src={sourceIconUrl} alt="" aria-hidden="true" loading="lazy" /> : null}
+            <span className="news-card-source">{safeSource}</span>
+          </span>
           {safeTimeAgo && <span className="news-card-time">{safeTimeAgo}</span>}
         </div>
+
+        <h3 className="news-card-title">{safeTitle}</h3>
         <button className="news-card-more" onClick={(e) => e.preventDefault()}>
           <span>•••</span>
         </button>
@@ -92,4 +102,4 @@ const NewsCard = ({
   );
 };
 
-export default NewsCard;
+export default memo(NewsCard);

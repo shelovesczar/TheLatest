@@ -182,3 +182,107 @@
     padding: 12px;
   }
 }
+
+/* Compact / featured overrides for the new horizontal card layout */
+.news-card.compact {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  min-height: 132px;
+  padding: 12px;
+  gap: 0;
+  background: linear-gradient(180deg, #2c2f3b 0%, #353645 100%);
+}
+
+.news-card.compact .news-card-image-container {
+  width: 112px;
+  height: 112px;
+  border-radius: 14px;
+}
+
+.news-card.compact .news-card-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 100%;
+  padding: 10px 44px 10px 12px;
+}
+
+.news-card.compact .news-card-title {
+  font-size: 1rem;
+  line-height: 1.28;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.news-card.compact .news-card-meta {
+  margin-bottom: 0;
+  font-size: 0.84rem;
+}
+
+.news-card.compact .news-card-more {
+  right: 10px;
+  bottom: 10px;
+}
+
+.news-card.featured {
+  display: grid;
+  grid-template-columns: 1fr;
+  padding: 12px;
+}
+
+.news-card.featured .news-card-image-container {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  border-radius: 16px;
+}
+
+.news-card.featured .news-card-content {
+  padding: 0.9rem 0.2rem 0.3rem;
+}
+
+.news-card.featured .news-card-title {
+  font-size: clamp(1.05rem, 1.45vw, 1.9rem);
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+}
+
+.news-card.featured .news-card-more {
+  right: 12px;
+  bottom: 12px;
+}
+
+@media (max-width: 900px) {
+  .news-card.compact {
+    grid-template-columns: 100px minmax(0, 1fr);
+    min-height: 124px;
+  }
+
+  .news-card.compact .news-card-image-container {
+    width: 100px;
+    height: 100px;
+  }
+}
+
+@media (max-width: 768px) {
+  .news-card.compact {
+    grid-template-columns: 92px minmax(0, 1fr);
+    min-height: 112px;
+  }
+
+  .news-card.compact .news-card-image-container {
+    width: 92px;
+    height: 92px;
+    margin: 10px 0 10px 10px;
+    border-radius: 12px;
+  }
+
+  .news-card.compact .news-card-content {
+    padding: 10px 40px 10px 6px;
+  }
+
+  .news-card-source,
+  .news-card-time {
+    font-size: 0.8rem;
+  }
+}

@@ -1,11 +1,22 @@
 // AI Service for generating dynamic summaries
 // Supports OpenAI, Anthropic Claude, and Perplexity
 
+import {
+  fetchRSSNews,
+  fetchRSSOpinions,
+  fetchRSSVideos,
+  searchRSSContent
+} from '../rssService'
+import { filterContentByCategory, getCategoryKeywords } from '../utils/categoryFiltering'
+
 const AI_PROVIDERS = {
+  EDITORIAL: 'editorial',
   OPENAI: 'openai',
   ANTHROPIC: 'anthropic',
   PERPLEXITY: 'perplexity'
 }
+
+const SHARED_SUMMARY_ENDPOINT = '/.netlify/functions/sharedSummary'
 
 // Configuration - Add your API keys to .env
 const CONFIG = {
@@ -17,6 +28,389 @@ const CONFIG = {
   },
   maxTokens: 250,
   temperature: 0.7
+}
+
+const STOP_WORDS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'that', 'this', 'into', 'over', 'after',
+  'about', 'have', 'has', 'had', 'will', 'are', 'was', 'were', 'but', 'not',
+  'its', 'their', 'they', 'you', 'your', 'our', 'out', 'new', 'latest', 'says',
+  'amid', 'more', 'than', 'what', 'when', 'where', 'which', 'while', 'across'
+])
+
+const cleanText = (value = '') => String(value || '')
+  .replace(/\s+/g, ' ')
+  .replace(/\s+([,.;!?])/g, '$1')
+  .trim()
+
+const trimHeadline = (value = '', max = 95) => {
+  const text = cleanText(value)
+  if (text.length <= max) return text
+  return `${text.slice(0, max).trim().replace(/[,:;\-]+$/, '')}...`
+}
+
+const toSentence = (value = '') => {
+  const text = cleanText(value)
+  if (!text) return ''
+  if (/[.!?]$/.test(text)) return text
+  return `${text}.`
+}
+
+const normalizeTopic = (topic = '') => cleanText(topic).toLowerCase()
+
+const KNOWN_CATEGORY_SLUGS = new Set([
+  'top-stories',
+  'entertainment',
+  'sports',
+  'business-tech',
+  'lifestyle',
+  'culture'
+])
+
+const normalizeCategorySlug = (value = '') => {
+  const normalized = cleanText(value)
+    .toLowerCase()
+    .replace(/_/g, '-')
+    .replace(/\s+/g, '-')
+  if (!normalized) return ''
+  if (normalized === 'business' || normalized === 'tech' || normalized === 'technology') {
+    return 'business-tech'
+  }
+  return normalized
+}
+
+const getRssCategoryForSummary = (categorySlug = '') => {
+  if (!categorySlug || categorySlug === 'general' || categorySlug === 'top-stories') return null
+  if (categorySlug === 'business-tech') return 'tech'
+  return categorySlug
+}
+
+const resolveSummaryRequest = (requestOrTopic = '', options = {}) => {
+  if (typeof requestOrTopic === 'object' && requestOrTopic !== null) {
+    const topic = cleanText(requestOrTopic.topic || '')
+    const category = normalizeCategorySlug(requestOrTopic.category || '')
+    return {
+      topic,
+      category,
+      enforceCategory: Boolean(requestOrTopic.enforceCategory)
+    }
+  }
+
+  const topic = cleanText(requestOrTopic || '')
+  const category = normalizeCategorySlug(options.category || '')
+
+  return {
+    topic,
+    category,
+    enforceCategory: Boolean(options.enforceCategory)
+  }
+}
+
+const filterToCategoryScope = (items = [], categorySlug = '', strict = true) => {
+  if (!categorySlug || categorySlug === 'general' || categorySlug === 'top-stories') {
+    return Array.isArray(items) ? items : []
+  }
+  return filterContentByCategory(items, categorySlug, 1, { strict })
+}
+
+const getSearchableText = (item = {}) => cleanText([
+  item?.title,
+  item?.description,
+  item?.content,
+  item?.category,
+  item?.source
+].filter(Boolean).join(' ')).toLowerCase()
+
+const scoreItemCategoryRelevance = (item = {}, categorySlug = '') => {
+  const keywords = getCategoryKeywords(categorySlug)
+  if (!keywords || keywords.length === 0) return 0
+
+  const titleText = cleanText(item?.title || '').toLowerCase()
+  const bodyText = getSearchableText(item)
+
+  let score = 0
+  keywords.forEach((keyword) => {
+    const normalizedKeyword = cleanText(keyword).toLowerCase()
+    if (!normalizedKeyword) return
+
+    if (bodyText.includes(normalizedKeyword)) {
+      score += 1
+    }
+    if (titleText.includes(normalizedKeyword)) {
+      score += 1
+    }
+  })
+
+  return score
+}
+
+const prioritizeCategoryItems = (items = [], categorySlug = '') => {
+  if (!Array.isArray(items) || items.length === 0) return []
+
+  return [...items]
+    .map((item) => ({
+      item,
+      relevanceScore: scoreItemCategoryRelevance(item, categorySlug),
+      freshnessScore: scoreItemFreshness(item)
+    }))
+    .filter(({ relevanceScore }) => relevanceScore > 0)
+    .sort((a, b) => {
+      if (b.relevanceScore !== a.relevanceScore) {
+        return b.relevanceScore - a.relevanceScore
+      }
+      return b.freshnessScore - a.freshnessScore
+    })
+    .map(({ item }) => item)
+}
+
+const CATEGORY_THEME_DEFAULTS = {
+  entertainment: ['streaming', 'celebrity', 'awards'],
+  sports: ['playoffs', 'highlights', 'teams'],
+  'business-tech': ['innovation', 'markets', 'technology'],
+  lifestyle: ['wellness', 'travel', 'health'],
+  culture: ['arts', 'society', 'ideas'],
+  'top-stories': ['breaking', 'global', 'analysis']
+}
+
+const buildCategoryKeywordTokenSet = (categorySlug = '') => {
+  const keywords = getCategoryKeywords(categorySlug)
+  const tokens = new Set()
+
+  keywords.forEach((keyword) => {
+    cleanText(keyword)
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((token) => token.length >= 4 && !STOP_WORDS.has(token))
+      .forEach((token) => tokens.add(token))
+  })
+
+  return tokens
+}
+
+const getCategoryThemeTerms = (items = [], categorySlug = '', limit = 3) => {
+  const topTerms = getTopTerms(items, Math.max(limit * 3, 8))
+  const keywordTokenSet = buildCategoryKeywordTokenSet(categorySlug)
+
+  const aligned = topTerms
+    .filter((term) => keywordTokenSet.has(String(term || '').toLowerCase()))
+    .slice(0, limit)
+
+  if (aligned.length > 0) return aligned
+  return (CATEGORY_THEME_DEFAULTS[categorySlug] || CATEGORY_THEME_DEFAULTS['top-stories']).slice(0, limit)
+}
+
+const scoreItemFreshness = (item) => {
+  const stamp = item?.publishedAt || item?.date || item?.time || ''
+  const parsed = Date.parse(stamp)
+  if (Number.isNaN(parsed)) return 0
+  const ageHours = Math.max(0, (Date.now() - parsed) / (1000 * 60 * 60))
+  return Math.max(0, 48 - ageHours)
+}
+
+const getTopTerms = (items = [], limit = 3) => {
+  const counts = new Map()
+
+  items.forEach((item) => {
+    const tokens = cleanText(`${item?.title || ''} ${item?.description || ''}`)
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((token) => token.length >= 4 && !STOP_WORDS.has(token))
+
+    tokens.forEach((token) => {
+      counts.set(token, (counts.get(token) || 0) + 1)
+    })
+  })
+
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([token]) => token)
+}
+
+const toTitleCase = (value = '') => cleanText(value)
+  .split(' ')
+  .filter(Boolean)
+  .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+  .join(' ')
+
+const buildThemePhrase = (terms = []) => {
+  const cleanTerms = terms
+    .map((term) => toTitleCase(term))
+    .filter(Boolean)
+    .slice(0, 3)
+
+  if (cleanTerms.length === 0) return 'Key Trends and Developments'
+  if (cleanTerms.length === 1) return `${cleanTerms[0]} in Focus`
+  if (cleanTerms.length === 2) return `${cleanTerms[0]} and ${cleanTerms[1]} in Focus`
+  return `${cleanTerms[0]}, ${cleanTerms[1]}, and ${cleanTerms[2]} in Focus`
+}
+
+const buildEditorialHeadline = (topic, lead, terms) => {
+  const normalizedTopic = normalizeTopic(topic)
+  const themePhrase = buildThemePhrase(terms)
+
+  if (normalizedTopic) {
+    const explicitTopic = toTitleCase(topic)
+    return trimHeadline(`${explicitTopic} Brief: ${themePhrase}`, 92)
+  }
+
+  return trimHeadline(`Today in Focus: ${themePhrase}`, 92)
+}
+
+async function generateEditorialSummary(topic = '', context = {}) {
+  const normalizedTopic = normalizeTopic(topic)
+  const normalizedCategory = normalizeCategorySlug(context.category || '')
+  const hasCategoryScope = Boolean(
+    normalizedCategory &&
+    normalizedCategory !== 'general' &&
+    normalizedCategory !== 'top-stories' &&
+    KNOWN_CATEGORY_SLUGS.has(normalizedCategory)
+  )
+  const rssCategory = getRssCategoryForSummary(normalizedCategory)
+
+  let pool = []
+  let categoryPool = []
+
+  if (normalizedTopic) {
+    pool = await searchRSSContent(normalizedTopic, {
+      strictSearch: true,
+      relaxSearchFallback: true,
+      minStrictResults: 6
+    })
+  }
+
+  if (hasCategoryScope) {
+    const [newsByCategory, opinionsByCategory, videosByCategory] = await Promise.allSettled([
+      fetchRSSNews(rssCategory),
+      fetchRSSOpinions(rssCategory),
+      fetchRSSVideos(rssCategory)
+    ])
+
+    categoryPool = [
+      ...(newsByCategory.status === 'fulfilled' ? (newsByCategory.value || []) : []),
+      ...(opinionsByCategory.status === 'fulfilled' ? (opinionsByCategory.value || []) : []),
+      ...(videosByCategory.status === 'fulfilled' ? (videosByCategory.value || []) : [])
+    ]
+
+    const strictScoped = filterToCategoryScope([...pool, ...categoryPool], normalizedCategory, true)
+    pool = strictScoped.length > 0 ? strictScoped : [...categoryPool]
+  }
+
+  if (!Array.isArray(pool) || pool.length === 0) {
+    const [news, opinions, videos] = await Promise.allSettled([
+      fetchRSSNews(rssCategory),
+      fetchRSSOpinions(rssCategory),
+      fetchRSSVideos(rssCategory)
+    ])
+
+    pool = [
+      ...(news.status === 'fulfilled' ? (news.value || []) : []),
+      ...(opinions.status === 'fulfilled' ? (opinions.value || []) : []),
+      ...(videos.status === 'fulfilled' ? (videos.value || []) : [])
+    ]
+
+    if (hasCategoryScope) {
+      const strictScoped = filterToCategoryScope(pool, normalizedCategory, true)
+      const looseScoped = filterToCategoryScope(pool, normalizedCategory, false)
+      pool = strictScoped.length > 0
+        ? strictScoped
+        : (looseScoped.length > 0 ? looseScoped : pool)
+    }
+  }
+
+  const unique = []
+  const seen = new Set()
+  for (const item of (pool || [])) {
+    const key = String(item?.url || item?.link || `${item?.source || ''}|${item?.title || ''}`).trim().toLowerCase()
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    unique.push(item)
+  }
+
+  if (hasCategoryScope) {
+    const scopedStrict = filterToCategoryScope(unique, normalizedCategory, true)
+    const scopedLoose = filterToCategoryScope(unique, normalizedCategory, false)
+    const scopedUnique = scopedStrict.length > 0
+      ? scopedStrict
+      : (scopedLoose.length > 0 ? scopedLoose : [])
+
+    if (scopedUnique.length === 0 && categoryPool.length > 0) {
+      const seedUnique = []
+      const seedSeen = new Set()
+      for (const item of categoryPool) {
+        const seedKey = String(item?.url || item?.link || `${item?.source || ''}|${item?.title || ''}`).trim().toLowerCase()
+        if (!seedKey || seedSeen.has(seedKey)) continue
+        seedSeen.add(seedKey)
+        seedUnique.push(item)
+      }
+      if (seedUnique.length > 0) {
+        unique.length = 0
+        unique.push(...seedUnique)
+      }
+    } else if (scopedUnique.length > 0) {
+      const prioritizedScoped = prioritizeCategoryItems(scopedUnique, normalizedCategory)
+
+      unique.length = 0
+      if (prioritizedScoped.length > 0) {
+        unique.push(...prioritizedScoped)
+      } else {
+        unique.push(
+          ...[...scopedUnique].sort((a, b) => scoreItemFreshness(b) - scoreItemFreshness(a))
+        )
+      }
+    }
+
+    if (unique.length === 0) return null
+  }
+
+  if (unique.length === 0) return null
+
+  const ranked = [...unique]
+    .sort((a, b) => scoreItemFreshness(b) - scoreItemFreshness(a))
+    .slice(0, 12)
+
+  const lead = ranked[0]
+  const second = ranked[1]
+  const third = ranked[2]
+  const terms = hasCategoryScope
+    ? getCategoryThemeTerms(ranked, normalizedCategory, 3)
+    : getTopTerms(ranked, 3)
+  const theme = terms.length > 0 ? terms.join(', ') : 'policy, markets, and culture'
+
+  const sourceCount = new Set(ranked.map((item) => String(item?.source || '').trim()).filter(Boolean)).size
+  const sourcePreview = [...new Set(ranked.map((item) => String(item?.source || '').trim()).filter(Boolean))]
+    .slice(0, 2)
+    .join(' and ')
+
+  const intro = normalizedTopic
+    ? toSentence(`${topic} is moving fast: ${trimHeadline(lead?.title || '')}`)
+    : toSentence(`Today's biggest moves center on ${theme}: ${trimHeadline(lead?.title || '')}`)
+
+  const follow = second
+    ? toSentence(`Also in focus, ${trimHeadline(second?.title || '')}${third ? `, while ${trimHeadline(third?.title || '')}` : ''}`)
+    : ''
+
+  const closer = toSentence(
+    `Across ${sourceCount || 1} outlets${sourcePreview ? `, including ${sourcePreview},` : ''} the direction is clear: fast updates, high stakes, and practical impact for readers`
+  )
+
+  const summary = cleanText([intro, follow, closer].filter(Boolean).join(' '))
+  const headlineTopic = normalizedTopic || (hasCategoryScope ? normalizedCategory.replace(/-/g, ' ') : '')
+  const headline = buildEditorialHeadline(headlineTopic, lead, terms)
+  const image = lead?.image || lead?.thumbnail || second?.image || second?.thumbnail || ''
+  const url = lead?.url || lead?.link || ''
+
+  return {
+    headline,
+    image,
+    url,
+    summary,
+    provider: 'Editorial Digest',
+    timestamp: new Date().toISOString(),
+    isFallback: false,
+    modelFree: true
+  }
 }
 
 /**
@@ -178,7 +572,16 @@ async function generatePerplexitySummary(topic = '') {
  * Main function to generate AI summary
  * Automatically falls back to next provider if one fails
  */
-export async function generateAISummary(topic = '') {
+export async function generateAISummary(requestOrTopic = '', options = {}) {
+  const request = resolveSummaryRequest(requestOrTopic, options)
+  const effectiveQuery = request.topic || request.category || ''
+
+  if (CONFIG.provider === AI_PROVIDERS.EDITORIAL) {
+    const editorialOnly = await generateEditorialSummary(effectiveQuery, request)
+    if (editorialOnly) return editorialOnly
+    return getFallbackSummary(effectiveQuery, request.category)
+  }
+
   const providers = [
     { name: AI_PROVIDERS.PERPLEXITY, fn: generatePerplexitySummary },
     { name: AI_PROVIDERS.OPENAI, fn: generateOpenAISummary },
@@ -188,20 +591,70 @@ export async function generateAISummary(topic = '') {
   // Try configured provider first
   const primaryProvider = providers.find(p => p.name === CONFIG.provider)
   if (primaryProvider) {
-    const result = await primaryProvider.fn(topic)
+    const result = await primaryProvider.fn(effectiveQuery)
     if (result) return result
   }
 
   // Fallback to other providers
   for (const provider of providers) {
     if (provider.name !== CONFIG.provider) {
-      const result = await provider.fn(topic)
+      const result = await provider.fn(effectiveQuery)
       if (result) return result
     }
   }
 
+  // Model-free live fallback generated from our own RSS content.
+  const editorialSummary = await generateEditorialSummary(effectiveQuery, request)
+  if (editorialSummary) return editorialSummary
+
   // If all AI providers fail, return fallback static summary
-  return getFallbackSummary(topic)
+  return getFallbackSummary(effectiveQuery, request.category)
+}
+
+export async function getSharedSummary(requestOrTopic = '', options = {}) {
+  const request = resolveSummaryRequest(requestOrTopic, options)
+  const params = new URLSearchParams()
+
+  if (request.topic) params.set('topic', request.topic)
+  if (request.category) params.set('category', request.category)
+  params.set('allowStale', '1')
+
+  try {
+    const response = await fetch(`${SHARED_SUMMARY_ENDPOINT}?${params.toString()}`)
+    if (!response.ok) return null
+
+    const payload = await response.json()
+    return payload?.data || null
+  } catch (error) {
+    console.warn('Shared summary unavailable:', error)
+    return null
+  }
+}
+
+export async function persistSharedSummary(requestOrTopic = '', summaryData, options = {}) {
+  const request = resolveSummaryRequest(requestOrTopic, options)
+  if (!summaryData?.summary) return null
+
+  try {
+    const response = await fetch(SHARED_SUMMARY_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        topic: request.topic,
+        category: request.category,
+        summaryData
+      })
+    })
+
+    if (!response.ok) return null
+    const payload = await response.json()
+    return payload?.data || null
+  } catch (error) {
+    console.warn('Failed to persist shared summary:', error)
+    return null
+  }
 }
 
 /**
@@ -243,7 +696,7 @@ export function cacheSummary(topic = '', summaryData) {
 /**
  * Fallback summary when AI APIs are unavailable
  */
-function getFallbackSummary(topic = '') {
+function getFallbackSummary(topic = '', category = '') {
   const generalSummary = "Today's news cycle is dominated by analysis of President Donald Trump's first year back in office, with intense focus on immigration, trade, and sweeping executive actions that are testing relationships with allies and critics alike. Social media is simplifying political polarization while also obsessing over fast-moving pop culture, new record-topping album releases to fan debates about superstar tours and awards."
   
   // Enhanced topic-specific fallback summaries
@@ -270,14 +723,16 @@ function getFallbackSummary(topic = '') {
   }
   
   const normalizedTopic = topic.toLowerCase().trim()
+  const normalizedCategory = normalizeCategorySlug(category)
+  const fallbackLookupKey = normalizedCategory || normalizedTopic
   
   // Check for exact match or partial match in topic summaries
-  let topicSummary = topicSummaries[normalizedTopic]
+  let topicSummary = topicSummaries[fallbackLookupKey]
   
   if (!topicSummary) {
     // Try partial match
     for (const [key, summary] of Object.entries(topicSummaries)) {
-      if (normalizedTopic.includes(key) || key.includes(normalizedTopic)) {
+      if (fallbackLookupKey.includes(key) || key.includes(fallbackLookupKey)) {
         topicSummary = summary
         break
       }
@@ -285,8 +740,9 @@ function getFallbackSummary(topic = '') {
   }
   
   // Fallback to generic topic message if no specific summary found
-  if (!topicSummary && topic) {
-    topicSummary = `Latest developments regarding ${topic} include ongoing discussions and analysis from various perspectives. Real-time AI analysis will provide more specific insights when API keys are configured.`
+  if (!topicSummary && (topic || category)) {
+    const target = topic || category
+    topicSummary = `Latest developments regarding ${target} include ongoing discussions and analysis from various perspectives. Real-time AI analysis will provide more specific insights when API keys are configured.`
   }
 
   return {
@@ -299,6 +755,8 @@ function getFallbackSummary(topic = '') {
 
 export default {
   generateAISummary,
+  getSharedSummary,
+  persistSharedSummary,
   getCachedSummary,
   cacheSummary
 }

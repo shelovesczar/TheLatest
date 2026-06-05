@@ -2,6 +2,7 @@
   "name": "netlify-functions",
   "version": "1.0.0",
   "dependencies": {
+    "@netlify/blobs": "^10.7.9",
     "axios": "^1.7.9",
     "rss-parser": "^3.13.0"
   }

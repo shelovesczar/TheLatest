@@ -4,6 +4,14 @@
  */
 
 export const CATEGORY_KEYWORDS = {
+  politics: {
+    keywords: [
+      'politics', 'political', 'president', 'white house', 'congress', 'senate', 'campaign',
+      'election', 'poll', 'ballot', 'democrat', 'republican', 'governor', 'mayor',
+      'cabinet', 'supreme court', 'justice department', 'foreign policy', 'trump', 'biden',
+      'state department', 'parliament', 'prime minister', 'executive order', 'legislation'
+    ]
+  },
   'top-stories': {
     keywords: [
       'breaking', 'urgent', 'alert', 'emergency', 'crisis', 'disaster',
@@ -55,6 +63,22 @@ export const CATEGORY_KEYWORDS = {
       'fintech', 'edtech', 'proptech'
     ]
   },
+  tech: {
+    keywords: [
+      'tech', 'technology', 'ai', 'artificial intelligence', 'machine learning', 'openai', 'chatgpt',
+      'google', 'apple', 'microsoft', 'meta', 'amazon', 'nvidia', 'tesla', 'spacex', 'startup',
+      'software', 'hardware', 'chip', 'semiconductor', 'cloud', 'saas', 'cybersecurity', 'privacy',
+      'developer', 'platform', 'app', 'gadgets', 'gaming', 'robotics', 'automation'
+    ]
+  },
+  business: {
+    keywords: [
+      'business', 'economy', 'finance', 'market', 'markets', 'stock', 'stocks', 'wall street',
+      'nasdaq', 'dow', 'trading', 'investor', 'earnings', 'revenue', 'profit', 'loss', 'inflation',
+      'recession', 'employment', 'jobs', 'layoffs', 'company', 'companies', 'ceo', 'merger',
+      'acquisition', 'banking', 'retail', 'manufacturing', 'supply chain', 'real estate', 'ipo', 'trade deal'
+    ]
+  },
   'lifestyle': {
     keywords: [
       'health', 'wellness', 'fitness', 'exercise', 'workout', 'gym', 'yoga', 'meditation',
@@ -84,10 +108,62 @@ export const CATEGORY_KEYWORDS = {
   }
 }
 
+const CATEGORY_STRICT_MIN_MATCHES = {
+  politics: 2,
+  'top-stories': 1,
+  entertainment: 2,
+  sports: 2,
+  'business-tech': 2,
+  tech: 2,
+  business: 2,
+  lifestyle: 2,
+  culture: 2
+}
+
+const CATEGORY_EXCLUSION_KEYWORDS = {
+  politics: [
+    'movie premiere', 'box office', 'fashion week', 'workout routine', 'recipe', 'travel guide'
+  ],
+  entertainment: [
+    'president', 'election', 'congress', 'senate', 'white house', 'campaign',
+    'republican', 'democrat', 'parliament', 'prime minister', 'ceasefire',
+    'geopolitics', 'military conflict', 'cabinet', 'foreign policy'
+  ],
+  sports: [
+    'president', 'election', 'congress', 'senate', 'white house', 'campaign',
+    'republican', 'democrat', 'parliament', 'prime minister', 'ceasefire',
+    'geopolitics', 'military conflict', 'cabinet', 'foreign policy'
+  ],
+  'business-tech': [
+    'president', 'election', 'congress', 'senate', 'white house', 'campaign',
+    'republican', 'democrat', 'parliament', 'prime minister', 'ceasefire',
+    'military conflict'
+  ],
+  tech: [
+    'election', 'congress', 'senate', 'white house', 'campaign', 'ceasefire',
+    'playoff game', 'touchdown', 'world cup', 'recipe', 'travel guide'
+  ],
+  business: [
+    'movie premiere', 'concert tour', 'fashion week', 'travel guide', 'playoff game',
+    'touchdown', 'recipe', 'celebrity breakup'
+  ],
+  lifestyle: [
+    'president', 'election', 'congress', 'senate', 'white house', 'campaign',
+    'republican', 'democrat', 'parliament', 'prime minister', 'ceasefire',
+    'geopolitics', 'military conflict', 'cabinet', 'foreign policy'
+  ],
+  culture: [
+    'president', 'election', 'congress', 'senate', 'white house', 'campaign',
+    'republican', 'democrat', 'parliament', 'prime minister', 'ceasefire',
+    'geopolitics', 'military conflict', 'cabinet', 'foreign policy'
+  ]
+}
+
 const CATEGORY_ALIASES = {
+  politics: 'politics',
   'business-tech': 'business-tech',
-  business: 'business-tech',
-  tech: 'business-tech',
+  business: 'business',
+  tech: 'tech',
   technology: 'business-tech',
   businesstech: 'business-tech',
   'top-stories': 'top-stories',
@@ -107,19 +183,34 @@ const resolveCategoryName = (categoryName) => {
   return normalized
 }
 
+const normalizeForMatching = (value) => String(value || '')
+  .toLowerCase()
+  .replace(/[^a-z0-9\s]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+
 const getSearchText = (item = {}) =>
-  [
+  normalizeForMatching([
     item.title,
     item.description,
     item.content,
+    item.source,
     item.category,
   ]
     .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
+    .join(' '))
+
+const containsKeyword = (searchText, keyword) => {
+  const normalizedKeyword = normalizeForMatching(keyword)
+  if (!normalizedKeyword) return false
+  return ` ${searchText} `.includes(` ${normalizedKeyword} `)
+}
 
 const getKeywordMatchCount = (searchText, keywords) =>
-  keywords.filter((keyword) => searchText.includes(keyword.toLowerCase())).length
+  keywords.filter((keyword) => containsKeyword(searchText, keyword)).length
+
+const getExclusionMatchCount = (searchText, exclusionKeywords = []) =>
+  exclusionKeywords.filter((keyword) => containsKeyword(searchText, keyword)).length
 
 /**
  * Filter content by category using keyword matching
@@ -143,6 +234,9 @@ export function filterContentByCategory(items, categoryName, minKeywordMatches =
 
   const resolvedCategory = resolveCategoryName(categoryName)
   const keywords = CATEGORY_KEYWORDS[resolvedCategory]?.keywords
+  const exclusionKeywords = CATEGORY_EXCLUSION_KEYWORDS[resolvedCategory] || []
+  const strictMin = CATEGORY_STRICT_MIN_MATCHES[resolvedCategory] || minKeywordMatches
+  const requiredMatches = strict ? Math.max(minKeywordMatches, strictMin) : minKeywordMatches
 
   if (!keywords || keywords.length === 0) {
     return items;
@@ -151,28 +245,35 @@ export function filterContentByCategory(items, categoryName, minKeywordMatches =
   const scoredItems = items.map((item) => {
     const searchText = getSearchText(item)
     const matchCount = getKeywordMatchCount(searchText, keywords)
-    return { item, matchCount }
+    const exclusionCount = getExclusionMatchCount(searchText, exclusionKeywords)
+    return { item, matchCount, exclusionCount }
   })
 
   const strictlyMatched = scoredItems
-    .filter(({ matchCount }) => matchCount >= minKeywordMatches)
+    .filter(({ matchCount, exclusionCount }) => matchCount >= requiredMatches && exclusionCount === 0)
+    .sort((a, b) => b.matchCount - a.matchCount)
     .map(({ item }) => item)
 
   if (strictlyMatched.length > 0) {
     return strictlyMatched
   }
 
+  if (strict) {
+    return []
+  }
+
   const looselyMatched = scoredItems
-    .filter(({ matchCount }) => matchCount > 0)
-    .sort((a, b) => b.matchCount - a.matchCount)
+    .filter(({ matchCount, exclusionCount }) => matchCount > 0 && exclusionCount === 0)
+    .sort((a, b) => {
+      if (b.matchCount !== a.matchCount) {
+        return b.matchCount - a.matchCount
+      }
+      return a.exclusionCount - b.exclusionCount
+    })
     .map(({ item }) => item)
 
   if (looselyMatched.length > 0) {
     return looselyMatched
-  }
-
-  if (strict) {
-    return []
   }
 
   return items
@@ -195,12 +296,13 @@ export function getCategoryKeywords(categoryName) {
  * @returns {boolean} True if content matches category
  */
 export function belongsToCategory(item, categoryName) {
+  const resolvedCategory = resolveCategoryName(categoryName)
+  const exclusionKeywords = CATEGORY_EXCLUSION_KEYWORDS[resolvedCategory] || []
   const keywords = getCategoryKeywords(categoryName);
   if (keywords.length === 0) return false;
 
   const searchText = getSearchText(item)
+  if (getExclusionMatchCount(searchText, exclusionKeywords) > 0) return false
 
-  return keywords.some((keyword) =>
-    searchText.includes(keyword.toLowerCase())
-  );
+  return keywords.some((keyword) => containsKeyword(searchText, keyword));
 }

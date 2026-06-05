@@ -1,4 +1,11 @@
 export const CATEGORY_CONFIG = {
+  politics: {
+    title: 'Politics',
+    newsTitle: 'Top Politics Stories',
+    subtitle: 'White House, Congress, campaigns, courts, and the political fight shaping the day.',
+    aiPrompt: 'politics news and analysis',
+    image: 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=800&h=500&fit=crop',
+  },
   'top-stories': {
     title: 'Top Stories',
     newsTitle: 'Top Stories',
@@ -26,6 +33,20 @@ export const CATEGORY_CONFIG = {
     subtitle: 'Latest updates in business, technology, and innovation.',
     aiPrompt: 'business and technology news',
     image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&h=500&fit=crop',
+  },
+  tech: {
+    title: 'Tech',
+    newsTitle: 'Top Tech Stories',
+    subtitle: 'AI, software, devices, startups, and the companies shaping the next platform shift.',
+    aiPrompt: 'technology, AI, and startup news',
+    image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&h=500&fit=crop',
+  },
+  business: {
+    title: 'Business',
+    newsTitle: 'Top Business Stories',
+    subtitle: 'Markets, companies, macro signals, and the executive decisions moving the economy.',
+    aiPrompt: 'business, markets, and finance news',
+    image: 'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?w=800&h=500&fit=crop',
   },
   'lifestyle': {
     title: 'Lifestyle',

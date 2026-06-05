@@ -8,6 +8,11 @@
   width: 100%;
 }
 
+.category-page-body {
+  padding-top: 0.5rem;
+  padding-bottom: 1.5rem;
+}
+
 .category-hero {
   background: var(--gradient-brand);
   background-size: 300% 300%;
@@ -91,11 +96,11 @@
 .category-page .videos-section,
 .category-page .podcasts-section,
 .category-page .subscribe-section {
-  max-width: 1400px;
+  max-width: 100%;
   margin-left: auto;
   margin-right: auto;
-  padding-left: clamp(1rem, 3vw, 2rem);
-  padding-right: clamp(1rem, 3vw, 2rem);
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .category-page .ad-placeholder {

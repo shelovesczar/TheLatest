@@ -1,28 +1,65 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSun, faMoon, faChevronLeft, faSearch } from '@fortawesome/free-solid-svg-icons'
-import { useState, useRef, useEffect } from 'react'
+import { faSun, faMoon, faSearch } from '@fortawesome/free-solid-svg-icons'
+import { useState, useRef, useEffect, memo } from 'react'
+import { useAuth } from '../../context/AuthContext'
 import { useSearch } from '../../context/SearchContext'
+import { NAV_ITEMS } from '../../utils/navigationConfig'
 import LoginModal from './LoginModal'
 import './Header.css'
 
-function Header({ menuOpen, toggleMenu, darkMode, toggleTheme, newsDropdownOpen, setNewsDropdownOpen, setMenuOpen }) {
+function Header({ darkMode, toggleTheme, setMenuOpen }) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const { isAuthenticated, user, signOut } = useAuth()
   const { clearTopic } = useSearch()
+  const navShellRef = useRef(null)
+  const flyoutRef = useRef(null)
+  const profileMenuRef = useRef(null)
+  const navItemRefs = useRef({})
   const [searchQuery, setSearchQuery] = useState('')
   const [loginModalOpen, setLoginModalOpen] = useState(false)
-  const dropdownRef = useRef(null)
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [openDropdown, setOpenDropdown] = useState(null)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [flyoutPosition, setFlyoutPosition] = useState({ left: 0 })
+  const navRef = useRef(null)
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDate(new Date())
+    }, 60000)
+
+    return () => clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     const handlePointerDown = (event) => {
-      if (!dropdownRef.current) return
-      if (dropdownRef.current.contains(event.target)) return
-      setNewsDropdownOpen(false)
+      if (!navRef.current) return
+      const clickedInsideNav = navRef.current.contains(event.target)
+      const clickedNavTrigger = Object.values(navItemRefs.current).some((element) => element?.contains(event.target))
+      const clickedFlyout = flyoutRef.current?.contains(event.target)
+      const clickedProfileMenu = profileMenuRef.current?.contains(event.target)
+
+      if (!clickedInsideNav) {
+        setOpenDropdown(null)
+        setProfileMenuOpen(false)
+        return
+      }
+
+      if (!clickedNavTrigger && !clickedFlyout) {
+        setOpenDropdown(null)
+      }
+
+      if (!clickedProfileMenu) {
+        setProfileMenuOpen(false)
+      }
     }
 
     const handleEscape = (event) => {
       if (event.key === 'Escape') {
-        setNewsDropdownOpen(false)
+        setOpenDropdown(null)
+        setProfileMenuOpen(false)
       }
     }
 
@@ -33,36 +70,98 @@ function Header({ menuOpen, toggleMenu, darkMode, toggleTheme, newsDropdownOpen,
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleEscape)
     }
-  }, [setNewsDropdownOpen])
+  }, [])
+
+  useEffect(() => {
+    setOpenDropdown(null)
+    setProfileMenuOpen(false)
+  }, [location.pathname, location.search])
+
+  useEffect(() => {
+    if (!openDropdown) return
+
+    const updateFlyoutPosition = () => {
+      const navElement = navRef.current
+      const itemElement = navItemRefs.current?.[openDropdown]
+
+      if (!navElement || !itemElement) return
+
+      const navRect = navElement.getBoundingClientRect()
+      const itemRect = itemElement.getBoundingClientRect()
+      const idealLeft = itemRect.left - navRect.left
+      const maxLeft = Math.max(0, navRect.width - 260)
+
+      setFlyoutPosition({
+        left: Math.max(0, Math.min(idealLeft, maxLeft))
+      })
+    }
+
+    updateFlyoutPosition()
+
+    const shellElement = navShellRef.current
+    window.addEventListener('resize', updateFlyoutPosition)
+    shellElement?.addEventListener('scroll', updateFlyoutPosition, { passive: true })
+
+    return () => {
+      window.removeEventListener('resize', updateFlyoutPosition)
+      shellElement?.removeEventListener('scroll', updateFlyoutPosition)
+    }
+  }, [openDropdown])
 
   const handleLogoClick = () => {
-    setSearchQuery('')   // clear the header search bar
-    clearTopic()         // clear context topic & navigate to '/'
+    setSearchQuery('')
+    clearTopic()
+    setOpenDropdown(null)
+    setProfileMenuOpen(false)
   }
 
   const handleSearch = (e) => {
     e.preventDefault()
     if (searchQuery.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`)
+      clearTopic()
+      setOpenDropdown(null)
+      setProfileMenuOpen(false)
       setMenuOpen(false)
     }
   }
 
-  const handleCategoryClick = (path) => {
+  const handleNavClick = (path) => {
     setMenuOpen(false)
-    setNewsDropdownOpen(false)
+    setOpenDropdown(null)
+    setProfileMenuOpen(false)
+    clearTopic()
     navigate(path)
   }
 
-  const handleSectionClick = (sectionId) => {
-    setMenuOpen(false)
-    // If not on home page, go to home page first
-    navigate('/')
-    // Wait for navigation then scroll
-    setTimeout(() => {
-      document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' })
-    }, 100)
+  const handleProfileToggle = () => {
+    setOpenDropdown(null)
+    setProfileMenuOpen((current) => !current)
   }
+
+  const handleProfileAction = (action) => {
+    setProfileMenuOpen(false)
+    setMenuOpen(false)
+    action()
+  }
+
+  const isItemActive = (item) => {
+    if (item.label === 'News' && location.pathname === '/') {
+      return true
+    }
+
+    return (item.matchPaths || []).some((path) => location.pathname.startsWith(path))
+  }
+
+  const formattedHeaderDate = currentDate.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  })
+
+  const openItem = NAV_ITEMS.find((item) => item.label === openDropdown)
+  const profileLabel = isAuthenticated ? (user?.name?.split(' ')[0] || 'Profile') : 'Profile'
 
   return (
     <>
@@ -71,18 +170,9 @@ function Header({ menuOpen, toggleMenu, darkMode, toggleTheme, newsDropdownOpen,
           <span className="logo-main">THE</span>
           <span className="logo-accent">LATEST</span>
         </Link>
-        
-        <button 
-          className={`hamburger ${menuOpen ? 'active' : ''}`}
-          onClick={toggleMenu}
-          aria-label="Toggle menu"
-        >
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
 
-        {/* Theme toggle visible only on mobile — replaces the hamburger */}
+        <span className="header-date">{formattedHeaderDate}</span>
+
         <button
           className="mobile-theme-toggle"
           onClick={toggleTheme}
@@ -91,69 +181,170 @@ function Header({ menuOpen, toggleMenu, darkMode, toggleTheme, newsDropdownOpen,
           <FontAwesomeIcon icon={darkMode ? faSun : faMoon} />
         </button>
 
-        <nav className={`nav ${menuOpen ? 'active' : ''}`}>
-          <form className="header-search-form" onSubmit={handleSearch}>
-            <input
-              type="text"
-              className="header-search-input"
-              placeholder="Search all news..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              aria-label="Search news"
-            />
-            <button type="submit" className="header-search-btn" aria-label="Search">
-              <FontAwesomeIcon icon={faSearch} />
-            </button>
-          </form>
-          
-          <div 
-            className="nav-item-dropdown"
-            ref={dropdownRef}
-            onMouseEnter={() => setNewsDropdownOpen(true)}
-            onMouseLeave={() => setNewsDropdownOpen(false)}
-          >
-            <button
-              type="button"
-              className="nav-link nav-link-trigger"
-              onClick={(e) => {
-                e.stopPropagation()
-                setNewsDropdownOpen(!newsDropdownOpen)
-              }}
-              aria-expanded={newsDropdownOpen}
-              aria-haspopup="menu"
-            >
-              NEWS <FontAwesomeIcon icon={faChevronLeft} rotation={270} className={`dropdown-arrow ${newsDropdownOpen ? 'active' : ''}`} />
-            </button>
-            <div className={`dropdown-menu ${newsDropdownOpen ? 'active' : ''}`}>
-              <Link to="/category/top-stories" onClick={() => handleCategoryClick('/category/top-stories')}>Top Stories</Link>
-              <Link to="/category/business-tech" onClick={() => handleCategoryClick('/category/business-tech')}>Business/Tech</Link>
-              <Link to="/category/entertainment" onClick={() => handleCategoryClick('/category/entertainment')}>Entertainment</Link>
-              <Link to="/category/sports" onClick={() => handleCategoryClick('/category/sports')}>Sports</Link>
-              <Link to="/category/lifestyle" onClick={() => handleCategoryClick('/category/lifestyle')}>Lifestyle</Link>
-              <Link to="/category/culture" onClick={() => handleCategoryClick('/category/culture')}>Culture</Link>
-            </div>
-          </div>
-          
-          {/* Navigate to Following page for sections */}
-          <Link to="/following" className="nav-link-button following-link">
-            MORE
-          </Link>
-          
-          <button 
-            className="login-button-header"
-            onClick={() => setLoginModalOpen(true)}
-            aria-label="Open login"
-          >
-            LOGIN
-          </button>
+        <nav className="nav" ref={navRef} aria-label="Primary">
+          <div className="header-nav-shell" onMouseLeave={() => setOpenDropdown(null)}>
+            <div className="header-nav-scroll" ref={navShellRef}>
+              <div className="header-nav">
+                {NAV_ITEMS.map((item) => {
+                  const isOpen = openDropdown === item.label
+                  const isActive = isItemActive(item)
 
-          <button 
-            className="theme-toggle"
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-          >
-            <FontAwesomeIcon icon={darkMode ? faSun : faMoon} />
-          </button>
+                  return (
+                    <div
+                      key={item.label}
+                      ref={(element) => {
+                        if (element) {
+                          navItemRefs.current[item.label] = element
+                        } else {
+                          delete navItemRefs.current[item.label]
+                        }
+                      }}
+                      className={`header-nav-item ${isOpen ? 'open' : ''} ${isActive ? 'active' : ''}`}
+                      onMouseEnter={() => {
+                        if (item.items.length > 0) {
+                          setProfileMenuOpen(false)
+                          setOpenDropdown(item.label)
+                        }
+                      }}
+                    >
+                      {item.items.length > 0 ? (
+                        <button
+                          type="button"
+                          className="header-nav-button"
+                          onClick={() => {
+                            setProfileMenuOpen(false)
+                            setOpenDropdown((current) => current === item.label ? null : item.label)
+                          }}
+                          onFocus={() => {
+                            setProfileMenuOpen(false)
+                            setOpenDropdown(item.label)
+                          }}
+                          aria-expanded={isOpen}
+                          aria-haspopup="menu"
+                        >
+                          {item.label}
+                          <span className="header-nav-arrow" aria-hidden="true"></span>
+                        </button>
+                      ) : (
+                        <Link to={item.target} className="header-nav-button header-nav-link" onClick={() => handleNavClick(item.target)}>
+                          {item.label}
+                        </Link>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {openItem && openItem.items.length > 0 && (
+              <div ref={flyoutRef} className="header-nav-flyout open" style={{ left: `${flyoutPosition.left}px` }} role="menu">
+                <Link
+                  to={openItem.target}
+                  className="header-nav-dropdown-link header-nav-dropdown-overview"
+                  onClick={() => handleNavClick(openItem.target)}
+                >
+                  All {openItem.label}
+                </Link>
+                <div className="header-nav-divider"></div>
+                {openItem.items.map((dropdownItem) => (
+                  <Link
+                    key={dropdownItem.label}
+                    to={dropdownItem.target}
+                    className="header-nav-dropdown-link"
+                    onClick={() => handleNavClick(dropdownItem.target)}
+                  >
+                    {dropdownItem.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="header-utilities">
+            <form className="header-search-form" onSubmit={handleSearch}>
+              <input
+                type="text"
+                className="header-search-input"
+                placeholder="Search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Search news"
+              />
+              <button type="submit" className="header-search-btn" aria-label="Search">
+                <FontAwesomeIcon icon={faSearch} />
+              </button>
+            </form>
+
+            <div
+              className={`header-profile ${profileMenuOpen ? 'open' : ''}`}
+              ref={profileMenuRef}
+              onMouseLeave={() => setProfileMenuOpen(false)}
+            >
+              <button
+                type="button"
+                className="login-button-header header-profile-button"
+                onClick={handleProfileToggle}
+                onFocus={() => setProfileMenuOpen(true)}
+                aria-haspopup="menu"
+                aria-expanded={profileMenuOpen}
+              >
+                {profileLabel}
+                <span className="header-nav-arrow" aria-hidden="true"></span>
+              </button>
+
+              <div className={`header-profile-menu ${profileMenuOpen ? 'open' : ''}`} role="menu">
+                {isAuthenticated ? (
+                  <>
+                    <span className="header-profile-eyebrow">Signed in as</span>
+                    <span className="header-profile-name">{user?.name || 'Member'}</span>
+                    <div className="header-nav-divider"></div>
+                    <Link
+                      to="/dashboard"
+                      className="header-profile-link"
+                      onClick={() => handleProfileAction(() => navigate('/dashboard'))}
+                    >
+                      Dashboard
+                    </Link>
+                    <Link
+                      to="/following"
+                      className="header-profile-link"
+                      onClick={() => handleProfileAction(() => navigate('/following'))}
+                    >
+                      Following
+                    </Link>
+                    <button
+                      type="button"
+                      className="header-profile-link header-profile-action"
+                      onClick={() => handleProfileAction(signOut)}
+                    >
+                      Sign Out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="header-profile-eyebrow">Account</span>
+                    <span className="header-profile-name">Sign in to personalize</span>
+                    <div className="header-nav-divider"></div>
+                    <button
+                      type="button"
+                      className="header-profile-link header-profile-action"
+                      onClick={() => handleProfileAction(() => setLoginModalOpen(true))}
+                    >
+                      Login / Sign Up
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <button
+              className="theme-toggle"
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
+            >
+              <FontAwesomeIcon icon={darkMode ? faSun : faMoon} />
+            </button>
+          </div>
         </nav>
       </header>
 
@@ -165,4 +356,4 @@ function Header({ menuOpen, toggleMenu, darkMode, toggleTheme, newsDropdownOpen,
   )
 }
 
-export default Header
+export default memo(Header)

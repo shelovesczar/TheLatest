@@ -10,6 +10,7 @@ import './Opinions.css'
 function Opinions({ loadingOpinions, opinions, categoryPath }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const itemsPerPage = 3
+  const safeOpinions = Array.isArray(opinions) ? opinions.filter(Boolean) : []
 
   // Helper function to truncate text
   const truncateText = (text, maxLength) => {
@@ -19,19 +20,19 @@ function Opinions({ loadingOpinions, opinions, categoryPath }) {
   }
 
   const nextSlide = () => {
-    if (!opinions || opinions.length === 0) return
+    if (safeOpinions.length === 0) return
     setCurrentIndex((prev) => {
       const next = prev + itemsPerPage
-      return next >= opinions.length ? 0 : next
+      return next >= safeOpinions.length ? 0 : next
     })
   }
 
   const prevSlide = () => {
-    if (!opinions || opinions.length === 0) return
+    if (safeOpinions.length === 0) return
     setCurrentIndex((prev) => {
       if (prev === 0) {
         // Jump to last complete page
-        const lastPageStart = Math.floor((opinions.length - 1) / itemsPerPage) * itemsPerPage
+        const lastPageStart = Math.floor((safeOpinions.length - 1) / itemsPerPage) * itemsPerPage
         return lastPageStart
       }
       return prev - itemsPerPage
@@ -40,28 +41,29 @@ function Opinions({ loadingOpinions, opinions, categoryPath }) {
 
   // Create circular array view - wrap around if needed
   const getVisibleOpinions = () => {
-    if (!opinions || opinions.length === 0) return []
+    if (safeOpinions.length === 0) return []
     const items = []
-    const maxItems = Math.min(itemsPerPage, opinions.length)
+    const maxItems = Math.min(itemsPerPage, safeOpinions.length)
     for (let i = 0; i < maxItems; i++) {
-      const index = (currentIndex + i) % opinions.length
-      if (opinions[index]) {
-        items.push(opinions[index])
-      }
+      const index = (currentIndex + i) % safeOpinions.length
+      items.push(safeOpinions[index])
     }
     return items
   }
 
-  const visibleOpinions = opinions && opinions.length > 0 ? getVisibleOpinions() : []
+  const visibleOpinions = safeOpinions.length > 0 ? getVisibleOpinions() : []
 
   return (
     <section id="opinions" className="section opinions">
-      <h2 className="section-title">Opinions</h2>
+      <div className="section-hdr">
+        <h2>Opinions</h2>
+        <Link to={categoryPath || "/all-opinions"} className="see-more">See more opinions →</Link>
+      </div>
       {loadingOpinions ? (
         <div className="loading-container">
           <p className="loading-text">Loading opinions...</p>
         </div>
-      ) : opinions.length > 0 ? (
+      ) : safeOpinions.length > 0 ? (
         <>
           <div className="opinions-slider-container">
             <button 
@@ -85,14 +87,19 @@ function Opinions({ loadingOpinions, opinions, categoryPath }) {
               aria-label={`Opinion by ${opinion.author} from ${deriveMediaOutlet(opinion)}`}
               style={{ textDecoration: 'none', color: 'inherit' }}
             >
-              <img {...getImageProps(opinion.image, opinion.author, 'opinions')} className="opinion-image" />
-              <div className="opinion-content">
-                <h3 className="opinion-headline">{truncateText(opinion.title, 80)}</h3>
-                <p className="opinion-excerpt">{truncateText(opinion.description, 120)}</p>
-                <div className="opinion-meta">
-                  <span className="opinion-author">{opinion.author}</span>
-                  <span className="opinion-source">{deriveMediaOutlet(opinion)}</span>
-                  <span className="opinion-date">{formatDateOnly(opinion.date)}</span>
+              <div className="card-thumb">
+                <img {...getImageProps(opinion.image, opinion.author, 'opinions')} />
+              </div>
+              <div className="card-body-inner">
+                <div className="card-source-row">
+                  <span className="card-source">{deriveMediaOutlet(opinion)}</span>
+                  <span className="card-date">{formatDateOnly(opinion.date)}</span>
+                </div>
+                <div className="card-headline-text">{truncateText(opinion.title, 120)}</div>
+                <div className="card-excerpt">{truncateText(opinion.description, 160)}</div>
+                <div className="card-footer-row">
+                  <span className="card-author">{opinion.author}</span>
+                  <span className="card-read-more">Read →</span>
                 </div>
               </div>
               </a>
@@ -111,7 +118,6 @@ function Opinions({ loadingOpinions, opinions, categoryPath }) {
       ) : (
         <p className="no-content">No opinion articles available at this time.</p>
       )}
-      <Link to={categoryPath || "/all-opinions"} className="see-more-btn">See More Opinions</Link>
     </section>
   )
 }

@@ -12,11 +12,12 @@ import { filterContentByCategory } from '../utils/categoryFiltering'
 import { dedupeContentItems } from '../utils/contentDeduplication'
 import { deriveMediaOutlet } from '../utils/sourceUtils'
 import { matchesTopicQuery } from '../utils/topicFiltering'
+import { getTopicPageConfig } from '../utils/navigationConfig'
 import { formatDateOnly } from '../utils/dateUtils'
 import './AllNewsPage.css'
 
 function AllOpinionsPage({ category = null }) {
-  const { categoryName } = useParams()
+  const { categoryName, topicSlug } = useParams()
   const { topic, hasActiveTopic } = useSearch()
   const [opinions, setOpinions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -47,12 +48,19 @@ function AllOpinionsPage({ category = null }) {
     return `${text.substring(0, maxLength).trim()}...`
   }
 
-  const filterContext = categoryName || category || (hasActiveTopic ? topic : null)
-  const categoryConfig = getCategoryConfig(filterContext)
+  const topicConfig = getTopicPageConfig(topicSlug)
+  const activeTopicQuery = topicConfig?.query || (hasActiveTopic ? topic : null)
+  const filterContext = categoryName || category || topicConfig?.slug || activeTopicQuery
+  const categoryConfig = topicConfig ? {
+    title: topicConfig.title,
+    newsTitle: `${topicConfig.title} Opinions`,
+    subtitle: topicConfig.subtitle,
+    image: topicConfig.image
+  } : getCategoryConfig(filterContext)
 
   useEffect(() => {
     loadOpinions()
-  }, [categoryName, category, topic])
+  }, [activeTopicQuery, categoryName, category, topic])
 
   useEffect(() => {
     if (selectedSource !== 'ALL' && !opinions.some((item) => item.source === selectedSource)) {
@@ -77,8 +85,8 @@ function AllOpinionsPage({ category = null }) {
         image: toStr(item?.image) || toStr(item?.thumbnail),
       })
 
-      if (hasActiveTopic && topic && topic.trim().length > 0) {
-        const searchResults = await searchRSSContent(topic)
+      if (activeTopicQuery && activeTopicQuery.trim().length > 0) {
+        const searchResults = await searchRSSContent(activeTopicQuery)
         const normalizedResults = (Array.isArray(searchResults) ? searchResults : []).map(normalizeOpinionItem)
         let topicOpinions = dedupeContentItems(normalizedResults.filter((item) => {
           const typeText = toStr(item?.type).toLowerCase()
@@ -98,7 +106,7 @@ function AllOpinionsPage({ category = null }) {
           const opinionsPool = await fetchRSSOpinions()
           const supplemental = (Array.isArray(opinionsPool) ? opinionsPool : [])
             .map(normalizeOpinionItem)
-            .filter((item) => matchesTopicQuery(item, topic))
+            .filter((item) => matchesTopicQuery(item, activeTopicQuery))
           topicOpinions = dedupeContentItems([...topicOpinions, ...supplemental])
         }
 

@@ -64,9 +64,9 @@ function SavedPage() {
         <div className="saved-hero-inner">
           <h1 className="saved-title">
             <FontAwesomeIcon icon={faBookmark} style={{ marginRight: '0.6rem', color: 'var(--accent-color)' }} />
-            Following
+            Saved
           </h1>
-          <p className="saved-subtitle">Your saved stories and reading history — all searchable, all offline.</p>
+          <p className="saved-subtitle">Your saved stories and reading history, searchable in one place.</p>
 
           {/* search within archive */}
           <div className="saved-search-wrap">

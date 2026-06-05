@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
 import { dedupeContentItems } from './utils/contentDeduplication'
 import './App.css'
 
@@ -66,6 +66,7 @@ import { fallbackSocialPosts, getRandomCategoryPosts } from './socialMediaPosts'
 import { getRandomTrendingPosts } from './socialMediaService'
 
 // Import context
+import { AuthProvider } from './context/AuthContext'
 import { SearchProvider } from './context/SearchContext'
 
 // Always-visible layout — keep eager so there's no flash on any route
@@ -87,8 +88,11 @@ const AllOpinionsPage = lazy(() => import('./pages/AllOpinionsPage'))
 const AllVideosPage   = lazy(() => import('./pages/AllVideosPage'))
 const AllPodcastsPage = lazy(() => import('./pages/AllPodcastsPage'))
 const SearchResults   = lazy(() => import('./pages/SearchResults'))
+const TopicPage       = lazy(() => import('./pages/TopicPage'))
 const SportsPage      = lazy(() => import('./components/sections/Sports'))
 const SavedPage       = lazy(() => import('./pages/SavedPage'))
+const FollowingPage   = lazy(() => import('./pages/FollowingPage'))
+const DashboardPage   = lazy(() => import('./pages/DashboardPage'))
 const ArticleReader   = lazy(() => import('./pages/ArticleReader'))
 
 // Minimal spinner shown while a route chunk is downloading
@@ -107,13 +111,45 @@ const RouteLoader = () => (
   </div>
 )
 
+function AnalyticsTracker() {
+  const location = useLocation()
+
+  useEffect(() => {
+    const payload = JSON.stringify({
+      eventType: 'page-view',
+      path: `${location.pathname}${location.search}`,
+      pageTitle: document.title
+    })
+
+    try {
+      if (navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: 'application/json' })
+        navigator.sendBeacon('/.netlify/functions/trackEngagement', blob)
+        return
+      }
+
+      fetch('/.netlify/functions/trackEngagement', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: payload,
+        keepalive: true
+      }).catch(() => {})
+    } catch {
+      // Ignore analytics failures.
+    }
+  }, [location.pathname, location.search])
+
+  return null
+}
+
 function App() {
   // State management
   const [searchQuery, setSearchQuery] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [activeStory, setActiveStory] = useState(0)
   const [email, setEmail] = useState('')
-  const [newsDropdownOpen, setNewsDropdownOpen] = useState(false)
   const [darkMode, setDarkMode] = useState(() => {
     // Check localStorage first
     const saved = localStorage.getItem('darkMode')
@@ -148,23 +184,23 @@ function App() {
     console.log('Searching for:', searchQuery)
   }
 
-  const handleSubscribe = (e) => {
+  const handleSubscribe = useCallback((e) => {
     e.preventDefault()
     console.log('Subscribing email:', email)
     alert('Thank you for subscribing!')
     setEmail('')
-  }
+  }, [email])
 
-  const toggleMenu = () => {
-    setMenuOpen(!menuOpen)
-  }
+  const toggleMenu = useCallback(() => {
+    setMenuOpen(prev => !prev)
+  }, [])
 
-  const toggleTheme = () => {
-    setDarkMode(!darkMode)
-  }
+  const toggleTheme = useCallback(() => {
+    setDarkMode(prev => !prev)
+  }, [])
 
   // Rotate social media posts - fetch real content
-  const rotateSocialPosts = async () => {
+  const rotateSocialPosts = useCallback(async () => {
     setLoadingSocial(true)
     try {
       const realPosts = await getRandomTrendingPosts(6)
@@ -182,7 +218,7 @@ function App() {
     } finally {
       setLoadingSocial(false)
     }
-  }
+  }, [])
 
   // Effects
   useEffect(() => {
@@ -313,15 +349,13 @@ function App() {
 
   return (
     <Router>
+      <AuthProvider>
       <SearchProvider>
+        <AnalyticsTracker />
         <div className={`app ${darkMode ? 'dark-mode' : 'light-mode'}`}>
           <Header 
-            menuOpen={menuOpen}
-            toggleMenu={toggleMenu}
             darkMode={darkMode}
             toggleTheme={toggleTheme}
-            newsDropdownOpen={newsDropdownOpen}
-            setNewsDropdownOpen={setNewsDropdownOpen}
             setMenuOpen={setMenuOpen}
           />
 
@@ -363,7 +397,9 @@ function App() {
             
             {/* Apple News-style pages */}
             <Route path="/sports" element={<SportsPage />} />
-            <Route path="/following" element={<SavedPage />} />
+            <Route path="/following" element={<FollowingPage />} />
+            <Route path="/saved" element={<SavedPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
 
             {/* On-site article reader */}
             <Route path="/article" element={<ArticleReader />} />
@@ -376,6 +412,11 @@ function App() {
             
             {/* Search page */}
             <Route path="/search" element={<SearchResults />} />
+            <Route path="/topic/:topicSlug" element={<TopicPage />} />
+            <Route path="/topic/:topicSlug/all-news" element={<AllNewsPage />} />
+            <Route path="/topic/:topicSlug/all-opinions" element={<AllOpinionsPage />} />
+            <Route path="/topic/:topicSlug/all-videos" element={<AllVideosPage />} />
+            <Route path="/topic/:topicSlug/all-podcasts" element={<AllPodcastsPage />} />
             
             {/* Category-specific All pages */}
             <Route path="/category/:categoryName/all-news" element={<AllNewsPage />} />
@@ -384,6 +425,39 @@ function App() {
             <Route path="/category/:categoryName/all-podcasts" element={<AllPodcastsPage />} />
             
             {/* Category pages */}
+            <Route 
+              path="/category/politics" 
+              element={
+                <CategoryPage 
+                  category="politics"
+                  email={email}
+                  setEmail={setEmail}
+                  handleSubscribe={handleSubscribe}
+                />
+              } 
+            />
+            <Route 
+              path="/category/tech" 
+              element={
+                <CategoryPage 
+                  category="tech"
+                  email={email}
+                  setEmail={setEmail}
+                  handleSubscribe={handleSubscribe}
+                />
+              } 
+            />
+            <Route 
+              path="/category/business" 
+              element={
+                <CategoryPage 
+                  category="business"
+                  email={email}
+                  setEmail={setEmail}
+                  handleSubscribe={handleSubscribe}
+                />
+              } 
+            />
             <Route 
               path="/category/top-stories" 
               element={
@@ -458,6 +532,7 @@ function App() {
           <Footer />
         </div>
       </SearchProvider>
+      </AuthProvider>
     </Router>
   )
 }

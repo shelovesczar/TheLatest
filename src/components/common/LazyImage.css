@@ -8,17 +8,15 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: opacity 0.3s ease-in-out, filter 0.3s ease-in-out;
+  transition: opacity 0.3s ease;
 }
 
 .lazy-image.loading {
-  opacity: 0.6;
-  filter: blur(5px);
+  opacity: 0;
 }
 
 .lazy-image.loaded {
   opacity: 1;
-  filter: blur(0);
 }
 
 .lazy-image.error {

@@ -2,6 +2,16 @@
 
 A modern news app that pulls stories from many trusted publishers into one place.
 
+## 2026 update highlights
+
+Recent work in this repo now includes:
+- A redesigned editorial homepage and section layout with stronger Apple News style structure.
+- A rebuilt desktop header with scrollable navigation, working dropdown flyouts, a profile menu, integrated date treatment, and tighter utility spacing.
+- Dedicated topic destinations from navigation dropdowns, plus topic-specific all-news, all-opinions, all-videos, and all-podcasts pages.
+- Shared Jeff-style ad treatments through the reusable ad component, including rotating creative variations so placements do not feel static.
+- Netlify-backed auth, session persistence, following, dashboard flows, shared summaries, feed health endpoints, trending analytics, and engagement tracking.
+- Broader caching and resilience improvements across RSS aggregation, topic/search loading, stale-cache fallback, and repeat-query performance.
+
 ## What this app does
 
 TheLatest combines:
@@ -16,6 +26,24 @@ Instead of opening 10+ websites, you can browse everything in one feed.
 ---
 
 ## What was recently fixed and improved
+
+### 0) Design structure and navigation were overhauled
+The app now follows a more structured editorial design system across the homepage, category pages, topic pages, and shared content sections.
+
+This includes:
+- A stronger hero, summary, section, and card hierarchy.
+- Desktop nav dropdowns that remain accessible even with a scrollable tab lane.
+- A combined desktop profile menu for dashboard, following, and auth actions.
+- Topic-aware routes from navigation dropdown items instead of generic search-only destinations.
+- Topic collection routes such as `/topic/:topicSlug/all-news` and companion media pages.
+
+### 0.1) Shared ads now use richer creative variations
+The shared ad component was rewritten so existing placements inherit a more polished leaderboard/sidebar treatment automatically.
+
+What changed:
+- Shared slot presets now render richer placeholder creatives.
+- Creative variations rotate by slot and time key so ad surfaces feel less repetitive.
+- Category pages, homepage placements, and sidebar ad surfaces now stay visually consistent through one component.
 
 ### 0) RSS bundle is now centralized and prioritized
 The RSS aggregator can now prepend one RSS.app bundle feed across key feed groups (news, opinions, videos, podcasts, and category feeds) without duplicating URLs.
@@ -103,6 +131,16 @@ Expected user-facing impact:
 - Smoother scrolling in long result pages.
 - Reduced layout jumping during asynchronous loads.
 - Better performance consistency on older phones and budget laptops.
+
+### 10) Auth, follows, summaries, and operational endpoints were added
+The app now supports a fuller logged-in experience and more backend operational tooling.
+
+This includes:
+- Session-backed authentication.
+- Following and dashboard pages.
+- Shared summary storage.
+- Feed health and warm-content endpoints.
+- Engagement tracking and trending data collection.
 
 ---
 

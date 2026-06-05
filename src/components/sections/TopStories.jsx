@@ -1,18 +1,33 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getImageProps } from '../../utils/imageUtils'
 import { recordHistory } from '../../utils/savedArticles'
-import AdBreak from '../common/AdBreak'
 import './TopStories.css'
 
-function TopStories({ loading, topStories, activeStory, setActiveStory, categoryTitle, categorySources, categoryPath }) {
-  const tickerRef = useRef(null)
-  const imageRef = useRef(null)
-  const cardRef = useRef(null)
+const PERSPECTIVE_MAP = [
+  {
+    key: 'left',
+    label: 'Left-Center',
+    sourceStyle: { background: '#dbeafe', color: '#1e40af' }
+  },
+  {
+    key: 'center',
+    label: 'Center',
+    sourceStyle: { background: '#d1fae5', color: '#065f46' }
+  },
+  {
+    key: 'right',
+    label: 'Right-Center',
+    sourceStyle: { background: '#fef3c7', color: '#92400e' }
+  }
+]
+
+function TopStories({ loading, topStories, activeStory, setActiveStory, categoryTitle, categoryPath }) {
   const navigate = useNavigate()
-  const [descriptionLength, setDescriptionLength] = useState(150)
+  const [showPerspectives, setShowPerspectives] = useState(false)
+  const [perspectiveFilter, setPerspectiveFilter] = useState('all')
 
   const getMediaOutlet = useCallback((story) => {
     if (!story) return 'Unknown Source'
@@ -47,7 +62,7 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
         const hostname = new URL(story.url).hostname.replace(/^www\./, '')
         if (domainMap[hostname]) return domainMap[hostname]
 
-        const matchingDomain = Object.keys(domainMap).find(domain => hostname === domain || hostname.endsWith(`.${domain}`))
+        const matchingDomain = Object.keys(domainMap).find((domain) => hostname === domain || hostname.endsWith(`.${domain}`))
         if (matchingDomain) return domainMap[matchingDomain]
       } catch {
         // ignore URL parsing errors and fall through
@@ -57,24 +72,10 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
     return sourceText || 'Unknown Source'
   }, [])
 
-  const goToArticle = useCallback((article) => {
-    recordHistory(article)
-    navigate('/article', { state: { article } })
-  }, [navigate])
-
-  const getOriginalUrl = useCallback((story) => {
-    if (!story) return ''
-    const candidate = (story.url || story.link || '').trim()
-    if (!candidate) return ''
-    if (/^https?:\/\//i.test(candidate)) return candidate
-    return ''
-  }, [])
-
-  // Truncate text helper
   const truncateText = (text, maxLength) => {
-    if (!text) return '';
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength).trim() + '...';
+    if (!text) return ''
+    if (text.length <= maxLength) return text
+    return `${text.substring(0, maxLength).trim()}...`
   }
 
   const getStoryDescription = (story, maxLength) => {
@@ -82,10 +83,8 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
 
     const primary = String(story.description || '').trim()
     const secondary = String(story.content || '').trim()
-
     let combined = primary
 
-    // If description is short, use content as a continuation to avoid a sparse card.
     if (secondary && combined.length < maxLength * 0.72) {
       if (combined && secondary.toLowerCase().startsWith(combined.toLowerCase().slice(0, 60))) {
         combined = secondary
@@ -101,196 +100,204 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
     return truncateText(combined, maxLength)
   }
 
-  // Dynamically adjust description length based on the rendered card width
-  useEffect(() => {
-    const updateDescriptionLength = () => {
-      const cardWidth = cardRef.current?.offsetWidth || window.innerWidth
+  const getStoryTime = (story) => {
+    const directTime = String(story?.time || '').trim()
+    if (directTime) return directTime
 
-      if (cardWidth >= 1200) {
-        setDescriptionLength(420)
-      } else if (cardWidth >= 960) {
-        setDescriptionLength(330)
-      } else if (cardWidth >= 768) {
-        setDescriptionLength(260)
-      } else if (cardWidth >= 560) {
-        setDescriptionLength(200)
-      } else {
-        setDescriptionLength(140)
-      }
-    }
+    const candidate = story?.date || story?.pubDate || story?.isoDate
+    if (!candidate) return 'Latest'
 
-    updateDescriptionLength()
+    const parsed = new Date(candidate)
+    if (Number.isNaN(parsed.getTime())) return 'Latest'
 
-    if (!cardRef.current || typeof ResizeObserver === 'undefined') {
-      return undefined
-    }
+    const diffMs = Date.now() - parsed.getTime()
+    const diffHours = Math.max(1, Math.round(diffMs / (1000 * 60 * 60)))
+    if (diffHours < 24) return `${diffHours}h ago`
 
-    const observer = new ResizeObserver(() => {
-      updateDescriptionLength()
-    })
+    const diffDays = Math.round(diffHours / 24)
+    return `${diffDays}d ago`
+  }
 
-    observer.observe(cardRef.current)
-    return () => observer.disconnect()
-  }, [activeStory, topStories])
+  const goToArticle = useCallback((article) => {
+    recordHistory(article)
+    navigate('/article', { state: { article } })
+  }, [navigate])
 
-  // Clamp activeStory if topStories reloads with fewer items
   useEffect(() => {
     if (topStories.length > 0 && activeStory >= topStories.length) {
       setActiveStory(0)
     }
   }, [topStories, activeStory, setActiveStory])
 
+  const visibleStories = useMemo(() => {
+    if (!Array.isArray(topStories) || topStories.length === 0) return []
+
+    const maxItems = Math.min(3, topStories.length)
+    const items = []
+    for (let index = 0; index < maxItems; index += 1) {
+      items.push(topStories[(activeStory + index) % topStories.length])
+    }
+    return items
+  }, [activeStory, topStories])
+
+  const perspectiveStories = useMemo(() => {
+    return visibleStories.map((story, index) => ({
+      story,
+      perspective: PERSPECTIVE_MAP[index] || PERSPECTIVE_MAP[PERSPECTIVE_MAP.length - 1]
+    }))
+  }, [visibleStories])
+
+  const filteredPerspectiveStories = useMemo(() => {
+    if (perspectiveFilter === 'all') return perspectiveStories
+    return perspectiveStories.filter((item) => item.perspective.key === perspectiveFilter)
+  }, [perspectiveFilter, perspectiveStories])
+
   const nextStory = () => {
+    if (topStories.length === 0) return
     setActiveStory((prev) => (prev + 1) % topStories.length)
   }
 
   const prevStory = () => {
+    if (topStories.length === 0) return
     setActiveStory((prev) => (prev - 1 + topStories.length) % topStories.length)
   }
 
-  // Determine section title
   const sectionTitle = categoryTitle && categoryTitle.toLowerCase() !== 'top stories'
     ? `TOP ${categoryTitle.toUpperCase()} STORIES`
     : 'TOP STORIES'
 
-  // Scroll active pill into view
-  useEffect(() => {
-    if (tickerRef.current && topStories.length > 0) {
-      const activePill = tickerRef.current.querySelector('.source-pill.active')
-      if (activePill) {
-        const container = tickerRef.current
-        
-        // For first item, scroll to start
-        if (activeStory === 0) {
-          container.scrollTo({
-            left: 0,
-            behavior: 'smooth'
-          })
-          return
-        }
-        
-        // For last item, scroll to end
-        if (activeStory === topStories.length - 1) {
-          container.scrollTo({
-            left: container.scrollWidth,
-            behavior: 'smooth'
-          })
-          return
-        }
-        
-        // For middle items, center them
-        const containerWidth = container.offsetWidth
-        const scrollLeft = activePill.offsetLeft - (containerWidth / 2) + (activePill.offsetWidth / 2)
-        
-        container.scrollTo({
-          left: scrollLeft,
-          behavior: 'smooth'
-        })
-      }
-    }
-  }, [activeStory, topStories])
+  const perspectiveTopic = visibleStories[0]?.title
+    ? truncateText(visibleStories[0].title, 36)
+    : 'Latest coverage'
 
   return (
     <section id="news" className="section top-stories-section">
-      <h2 className="section-title">{sectionTitle}</h2>
+      <div className="section-hdr top-stories-hdr">
+        <h2>{sectionTitle}</h2>
+        <div className="top-stories-actions">
+          <button
+            type="button"
+            className="top-stories-toggle"
+            onClick={() => setShowPerspectives((value) => !value)}
+          >
+            {showPerspectives ? '✕ Back to Top Stories' : '⇄ See Multiple Perspectives'}
+          </button>
+          <Link to={categoryPath || '/all-news'} className="see-more">See all stories →</Link>
+        </div>
+      </div>
 
       {loading ? (
         <div className="loading-container">
           <p className="loading-text">Loading top stories...</p>
         </div>
-      ) : topStories.length > 0 && topStories[activeStory] ? (
-        <>
-          <div className="source-ticker-container">
-            <button 
-              className="slider-btn ticker-btn" 
-              onClick={prevStory}
-              aria-label="Previous story"
-            >
-              <FontAwesomeIcon icon={faChevronLeft} />
-            </button>
+      ) : visibleStories.length > 0 ? (
+        !showPerspectives ? (
+          <div id="storiesCarousel">
+            <div className="carousel-wrap">
+              <button className="carousel-arrow prev" onClick={prevStory} aria-label="Previous stories">
+                <FontAwesomeIcon icon={faChevronLeft} />
+              </button>
 
-            <div className="source-ticker" ref={tickerRef}>
-              {topStories.map((story, index) => (
-                <button
-                  key={index}
-                  className={`source-pill ${index === activeStory ? 'active' : ''}`}
-                  onClick={() => setActiveStory(index)}
-                  title={`Media outlet: ${getMediaOutlet(story)}`}
-                  aria-label={`Show stories from media outlet ${getMediaOutlet(story)}`}
-                >
-                  <span className="pill-source">{truncateText(getMediaOutlet(story), 20)}</span>
-                </button>
-              ))}
-            </div>
-
-            <button 
-              className="slider-btn ticker-btn" 
-              onClick={nextStory}
-              aria-label="Next story"
-            >
-              <FontAwesomeIcon icon={faChevronRight} />
-            </button>
-          </div>
-
-          <div className="story-with-ad-container">
-            <article className="story-card-large" ref={cardRef}>
-              <div className="story-card-image" ref={imageRef}>
-                <img 
-                  {...getImageProps(topStories[activeStory].image, topStories[activeStory].title, 'news')}
-                />
+              <div className="carousel-track">
+                {visibleStories.map((story, index) => (
+                  <article key={`${story.url || story.title || 'story'}-${index}`} className="content-card">
+                    <div className="card-thumb">
+                      <img {...getImageProps(story.image, story.title, 'news')} />
+                    </div>
+                    <div className="card-body-inner">
+                      <div className="card-source-row">
+                        <span className="card-source">{getMediaOutlet(story)}</span>
+                        <span className="card-date">{getStoryTime(story)}</span>
+                      </div>
+                      <div className="card-headline-text">
+                        <a
+                          href="#"
+                          onClick={(event) => {
+                            event.preventDefault()
+                            goToArticle(story)
+                          }}
+                        >
+                          {story.title}
+                        </a>
+                      </div>
+                      <div className="card-excerpt">{getStoryDescription(story, 150)}</div>
+                      <div className="card-footer-row">
+                        <span className="card-author">{story.author || getMediaOutlet(story)}</span>
+                        <span className="persp-dot"></span>
+                      </div>
+                    </div>
+                  </article>
+                ))}
               </div>
-              <div className="story-card-content">
-                <div className="story-card-body">
-                  <a 
-                    href="#"
-                    onClick={e => { e.preventDefault(); goToArticle(topStories[activeStory]) }}
-                    style={{ textDecoration: 'none', color: 'inherit' }}
-                  >
-                    <h3 className="story-card-headline">{topStories[activeStory].title}</h3>
-                  </a>
-                  <div className="story-card-meta">
-                    <span className="story-card-source">{getMediaOutlet(topStories[activeStory])}</span>
-                    <span className="story-card-time">{topStories[activeStory].time}</span>
-                  </div>
-                  <p className="story-card-description">{getStoryDescription(topStories[activeStory], descriptionLength)}</p>
-                </div>
-                <div className="story-card-footer">
-                  <div className="story-source-credit">
-                    <span className="story-source-label">Source:</span>
-                    {getOriginalUrl(topStories[activeStory]) ? (
-                      <a
-                        className="story-source-link"
-                        href={getOriginalUrl(topStories[activeStory])}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {getMediaOutlet(topStories[activeStory])}
-                      </a>
-                    ) : (
-                      <span className="story-source-name">{getMediaOutlet(topStories[activeStory])}</span>
-                    )}
-                  </div>
-                  <a 
-                    href="#"
-                    onClick={e => { e.preventDefault(); goToArticle(topStories[activeStory]) }}
-                    className="read-more-link"
-                  >
-                    Read full story →
-                  </a>
-                </div>
-              </div>
-            </article>
-            
-            <div className="section-ad-sidebar">
-              <AdBreak type="sidebar" />
+
+              <button className="carousel-arrow next" onClick={nextStory} aria-label="Next stories">
+                <FontAwesomeIcon icon={faChevronRight} />
+              </button>
             </div>
           </div>
-        </>
+        ) : (
+          <div id="storiesSBS">
+            <div className="sbs-filter-row">
+              <span className="sbs-filter-label">Filter:</span>
+              <button type="button" onClick={() => setPerspectiveFilter('all')} className={`sbs-pill${perspectiveFilter === 'all' ? ' sbs-active' : ''}`}>All</button>
+              <button type="button" onClick={() => setPerspectiveFilter('left')} className={`sbs-pill${perspectiveFilter === 'left' ? ' sbs-active' : ''}`}>● Left</button>
+              <button type="button" onClick={() => setPerspectiveFilter('center')} className={`sbs-pill${perspectiveFilter === 'center' ? ' sbs-active' : ''}`}>● Center</button>
+              <button type="button" onClick={() => setPerspectiveFilter('right')} className={`sbs-pill${perspectiveFilter === 'right' ? ' sbs-active' : ''}`}>● Right</button>
+            </div>
+
+            <div className="sbs-story">
+              <div className="sbs-story-label">
+                <div className="sbs-topic-tag">{perspectiveTopic}</div>
+                <div className="sbs-story-count">{filteredPerspectiveStories.length} sources shown</div>
+              </div>
+
+              <div className="sbs-grid">
+                {filteredPerspectiveStories.map(({ story, perspective }, index) => (
+                  <article key={`${story.url || story.title || 'perspective'}-${index}`} className="sbs-card" data-persp={perspective.key}>
+                    <div className="sbs-card-img">
+                      <img {...getImageProps(story.image, story.title, 'news')} />
+                    </div>
+                    <div className="sbs-card-body">
+                      <div className="sbs-source-row">
+                        <span className="sbs-source-badge" style={perspective.sourceStyle}>● {getMediaOutlet(story)}</span>
+                        <span className="sbs-persp-label" style={perspective.sourceStyle}>{perspective.label}</span>
+                        <span className="sbs-time">{getStoryTime(story)}</span>
+                      </div>
+                      <div className="sbs-headline">
+                        <a
+                          href="#"
+                          onClick={(event) => {
+                            event.preventDefault()
+                            goToArticle(story)
+                          }}
+                        >
+                          {story.title}
+                        </a>
+                      </div>
+                      <div className="sbs-excerpt">{getStoryDescription(story, 170)}</div>
+                      <div className="sbs-footer">
+                        <span className="sbs-author">{story.author || getMediaOutlet(story)}</span>
+                        <a
+                          href="#"
+                          className="sbs-read"
+                          onClick={(event) => {
+                            event.preventDefault()
+                            goToArticle(story)
+                          }}
+                        >
+                          Read →
+                        </a>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </div>
+        )
       ) : (
         <p className="no-content">No stories available at this time.</p>
       )}
-
-      <Link to={categoryPath || "/all-news"} className="see-more-btn">See More Stories</Link>
     </section>
   )
 }

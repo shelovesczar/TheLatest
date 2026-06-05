@@ -30,3 +30,7 @@ dist-ssr
 
 # Local Netlify folder
 .netlify
+
+# Local demo artifacts
+jeffhall/
+jeffhall.zip

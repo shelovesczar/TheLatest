@@ -11,6 +11,7 @@ function Videos({ loadingVideos, videos, categoryPath }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [hoveredVideoKey, setHoveredVideoKey] = useState(null)
   const itemsPerPage = 3
+  const safeVideos = Array.isArray(videos) ? videos.filter(Boolean) : []
 
   const isYouTubeUrl = (url) => {
     if (!url) return false
@@ -71,49 +72,50 @@ function Videos({ loadingVideos, videos, categoryPath }) {
   }
 
   const nextSlide = () => {
-    if (!videos || videos.length === 0) return
+    if (safeVideos.length === 0) return
     setCurrentIndex((prev) => {
       const next = prev + itemsPerPage
-      return next >= videos.length ? 0 : next
+      return next >= safeVideos.length ? 0 : next
     })
   }
 
   const prevSlide = () => {
-    if (!videos || videos.length === 0) return
+    if (safeVideos.length === 0) return
     setCurrentIndex((prev) => {
       if (prev === 0) {
         // Jump to last complete page
-        const lastPageStart = Math.floor((videos.length - 1) / itemsPerPage) * itemsPerPage
+        const lastPageStart = Math.floor((safeVideos.length - 1) / itemsPerPage) * itemsPerPage
         return lastPageStart
       }
       return prev - itemsPerPage
     })
   }
 
-  // Create circular array view - wrap around if needed
+  // Render up to 3 unique cards from the live data pool.
   const getVisibleVideos = () => {
-    if (!videos || videos.length === 0) return []
+    if (safeVideos.length === 0) return []
     const items = []
-    const maxItems = Math.min(itemsPerPage, videos.length)
+    const maxItems = Math.min(itemsPerPage, safeVideos.length)
     for (let i = 0; i < maxItems; i++) {
-      const index = (currentIndex + i) % videos.length
-      if (videos[index]) {
-        items.push(videos[index])
-      }
+      const index = (currentIndex + i) % safeVideos.length
+      items.push(safeVideos[index])
     }
     return items
   }
 
-  const visibleVideos = videos && videos.length > 0 ? getVisibleVideos() : []
+  const visibleVideos = safeVideos.length > 0 ? getVisibleVideos() : []
 
   return (
     <section id="videos" className="section videos">
-      <h2 className="section-title">Videos</h2>
+      <div className="section-hdr">
+        <h2>Videos</h2>
+        <Link to={categoryPath || "/all-videos"} className="see-more">See more videos →</Link>
+      </div>
       {loadingVideos ? (
         <div className="loading-container">
           <p className="loading-text">Loading videos...</p>
         </div>
-      ) : videos.length > 0 ? (
+      ) : safeVideos.length > 0 ? (
         <>
           <div className="videos-slider-container">
             <button 
@@ -148,7 +150,7 @@ function Videos({ loadingVideos, videos, categoryPath }) {
               onFocus={() => setHoveredVideoKey(cardKey)}
               onBlur={() => setHoveredVideoKey(null)}
             >
-              <div className="video-thumbnail">
+              <div className="card-thumb video-thumbnail">
                 <img {...getImageProps(video.image, video.title, 'videos')} />
                 {canPreview && isHovered && (
                   <div className="video-preview-layer" aria-hidden="true">
@@ -165,11 +167,16 @@ function Videos({ loadingVideos, videos, categoryPath }) {
                 <div className={`play-button${isHovered && canPreview ? ' is-hidden' : ''}`} aria-hidden="true"><FontAwesomeIcon icon={faPlay} /></div>
                 <span className="video-duration">{video.duration}</span>
               </div>
-              <h3 className="video-title">{video.title}</h3>
-              <div className="video-meta">
-                <span className="video-source">{sourceLabel.primary}</span>
-                {sourceLabel.secondary && <span className="video-source-platform">{sourceLabel.secondary}</span>}
-                <span className="video-date">{formatDateOnly(video.date)}</span>
+              <div className="card-body-inner">
+                <div className="card-source-row">
+                  <span className="card-source">{sourceLabel.primary}</span>
+                  <span className="card-date">{formatDateOnly(video.date)}</span>
+                </div>
+                <div className="card-headline-text">{video.title}</div>
+                <div className="card-footer-row">
+                  <span className="card-author">{sourceLabel.secondary || ''}</span>
+                  <span className="card-read-more">Watch →</span>
+                </div>
               </div>
               </a>
               )
@@ -188,7 +195,6 @@ function Videos({ loadingVideos, videos, categoryPath }) {
       ) : (
         <p className="no-content">No videos available at this time.</p>
       )}
-      <Link to={categoryPath || "/all-videos"} className="see-more-btn">See More Videos</Link>
     </section>
   )
 }

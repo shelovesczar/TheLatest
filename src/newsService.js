@@ -1012,30 +1012,47 @@ export const fetchOpinions = async (category = null, topic = '') => {
   try {
     console.log(`Fetching opinions from RSS feeds${category ? ` (${category})` : ''}...`);
 
-    const scopedOpinions = applyTopicFilter(await getRSSOpinions(category), topic);
-    if (scopedOpinions && scopedOpinions.length > 0) {
-      console.log(`Successfully fetched ${scopedOpinions.length} opinion pieces from scoped RSS`);
-      return scopedOpinions;
-    }
+    const MIN_UNIQUE_OPINIONS = 3;
 
-    const generalOpinions = applyTopicFilter(await getRSSOpinions(null), topic);
-    if (generalOpinions && generalOpinions.length > 0) {
-      console.log(`Scoped opinions empty; using ${generalOpinions.length} general opinion items`);
-      return generalOpinions;
-    }
-
-    // Live failover: derive opinion-like items from news feed.
-    const newsPool = await fetchTopNews(category, topic);
-    const derivedOpinions = (newsPool || []).filter((item) => {
-      const text = `${item?.title || ''} ${item?.description || ''} ${item?.category || ''} ${item?.source || ''}`.toLowerCase();
-      return text.includes('opinion') || text.includes('analysis') || text.includes('editorial') || text.includes('commentary');
-    }).map((item) => ({
+    const normalizeOpinionItem = (item) => ({
       ...item,
       author: item?.author || item?.source || 'Editorial',
       date: item?.date || item?.publishedAt || item?.time || 'Recently'
-    }));
+    });
 
-    return derivedOpinions;
+    const isOpinionLike = (item) => {
+      const text = `${item?.title || ''} ${item?.description || ''} ${item?.category || ''} ${item?.source || ''}`.toLowerCase();
+      return text.includes('opinion') || text.includes('analysis') || text.includes('editorial') || text.includes('commentary');
+    };
+
+    const mergeUniqueOpinions = (...groups) => dedupeContentItems(
+      groups
+        .flat()
+        .filter(Boolean)
+        .map(normalizeOpinionItem)
+    );
+
+    const scopedOpinions = dedupeContentItems(applyTopicFilter(await getRSSOpinions(category), topic));
+    const generalOpinions = dedupeContentItems(applyTopicFilter(await getRSSOpinions(null), topic));
+
+    const newsPool = await fetchTopNews(category, topic);
+    const topicDerivedOpinions = dedupeContentItems((newsPool || []).filter(isOpinionLike).map(normalizeOpinionItem));
+
+    let mergedOpinions = mergeUniqueOpinions(scopedOpinions, generalOpinions, topicDerivedOpinions);
+
+    if (mergedOpinions.length < MIN_UNIQUE_OPINIONS) {
+      const broaderOpinions = dedupeContentItems(await getRSSOpinions(null));
+      mergedOpinions = mergeUniqueOpinions(mergedOpinions, broaderOpinions);
+    }
+
+    if (mergedOpinions.length < MIN_UNIQUE_OPINIONS) {
+      const broaderNewsPool = await fetchTopNews(null, '');
+      const broaderDerivedOpinions = dedupeContentItems((broaderNewsPool || []).filter(isOpinionLike).map(normalizeOpinionItem));
+      mergedOpinions = mergeUniqueOpinions(mergedOpinions, broaderDerivedOpinions);
+    }
+
+    console.log(`Resolved ${mergedOpinions.length} unique live opinions`);
+    return mergedOpinions;
   } catch (error) {
     console.error('Error fetching opinions:', error);
     return [];
@@ -1047,32 +1064,54 @@ export const fetchVideos = async (category = null, topic = '') => {
   try {
     console.log(`Fetching videos from RSS feeds${category ? ` (${category})` : ''}...`);
 
+    const MIN_UNIQUE_VIDEOS = 3;
+
+    const mergeUniqueVideos = (...groups) => dedupeByMediaKey(
+      groups
+        .flat()
+        .filter((item) => item && !isPodcastItem(item))
+    );
+
+    const normalizeVideoItem = (item) => ({
+      ...item,
+      thumbnail: item?.thumbnail || item?.image,
+      duration: item?.duration || '5:30'
+    });
+
     const scopedVideos = dedupeByMediaKey(
       applyTopicFilter(await getRSSVideos(category), topic).filter((item) => !isPodcastItem(item))
     );
-    if (scopedVideos && scopedVideos.length > 0) {
-      console.log(`Successfully fetched ${scopedVideos.length} scoped videos from RSS`);
-      return scopedVideos;
-    }
 
     const generalVideos = dedupeByMediaKey(
       applyTopicFilter(await getRSSVideos(null), topic).filter((item) => !isPodcastItem(item))
     );
-    if (generalVideos && generalVideos.length > 0) {
-      console.log(`Scoped videos empty; using ${generalVideos.length} general video items`);
-      return generalVideos;
+
+    const topicNewsPool = await fetchTopNews(category, topic);
+    const topicDerivedVideos = dedupeByMediaKey(
+      (topicNewsPool || []).filter(isVideoItem).map(normalizeVideoItem)
+    );
+
+    let mergedVideos = mergeUniqueVideos(scopedVideos, generalVideos, topicDerivedVideos);
+
+    if (mergedVideos.length < MIN_UNIQUE_VIDEOS) {
+      // Real-content backfill: widen the pool to non-topic RSS videos first.
+      const broaderRSSVideos = dedupeByMediaKey(
+        (await getRSSVideos(null)).filter((item) => !isPodcastItem(item))
+      );
+      mergedVideos = mergeUniqueVideos(mergedVideos, broaderRSSVideos);
     }
 
-    // Live failover: only items with a real YouTube URL qualify as videos.
-    // Returning generic news articles here would cause videos & podcasts to show identical content.
-    const newsPool = await fetchTopNews(category, topic);
-    const derivedVideos = dedupeByMediaKey((newsPool || []).filter(isVideoItem).map((item) => ({
-      ...item,
-      thumbnail: item?.thumbnail || item?.image,
-      duration: item?.duration || '5:30'
-    })));
+    if (mergedVideos.length < MIN_UNIQUE_VIDEOS) {
+      // Last live backfill: derive video items from broader news feeds.
+      const broaderNewsPool = await fetchTopNews(null, '');
+      const broaderDerivedVideos = dedupeByMediaKey(
+        (broaderNewsPool || []).filter(isVideoItem).map(normalizeVideoItem)
+      );
+      mergedVideos = mergeUniqueVideos(mergedVideos, broaderDerivedVideos);
+    }
 
-    return derivedVideos;
+    console.log(`Resolved ${mergedVideos.length} unique live videos`);
+    return mergedVideos;
   } catch (error) {
     console.error('Error fetching videos:', error);
     return [];
@@ -1084,32 +1123,50 @@ export const fetchTrendingContent = async (category = null, topic = '') => {
   try {
     console.log(`Fetching podcasts from RSS feeds${category ? ` (${category})` : ''}...`);
 
-    const scopedPodcasts = dedupeByMediaKey(applyTopicFilter(await getRSSPodcasts(category), topic).filter(isPodcastItem));
-    if (scopedPodcasts && scopedPodcasts.length > 0) {
-      console.log(`Successfully fetched ${scopedPodcasts.length} scoped podcasts from RSS`);
-      return scopedPodcasts;
-    }
+    const MIN_UNIQUE_PODCASTS = 3;
 
-    const generalPodcasts = dedupeByMediaKey(applyTopicFilter(await getRSSPodcasts(null), topic).filter(isPodcastItem));
-    if (generalPodcasts && generalPodcasts.length > 0) {
-      console.log(`Scoped podcasts empty; using ${generalPodcasts.length} general podcast items`);
-      return generalPodcasts;
-    }
-
-    // Live failover: only items from known podcast/audio sources qualify as podcasts.
-    // Never return generic news articles here — they would duplicate the videos feed.
-    const newsPool = await fetchTopNews(category, topic);
-    const rawPodcasts = (newsPool || []).filter(isPodcastItem).map((item) => ({
+    const normalizePodcastItem = (item) => ({
       ...item,
       thumbnail: item?.thumbnail || item?.image,
-      hosts: item?.hosts || item?.source,
+      hosts: item?.hosts || item?.author || item?.source || '',
       date: item?.date || item?.publishedAt || item?.time || 'Recently'
-    }));
+    });
 
+    const mergeUniquePodcasts = (...groups) => dedupeByMediaKey(
+      groups
+        .flat()
+        .filter(Boolean)
+        .map(normalizePodcastItem)
+        .filter(isPodcastItem)
+    );
+
+    const scopedPodcasts = dedupeByMediaKey(applyTopicFilter(await getRSSPodcasts(category), topic).filter(isPodcastItem));
+    const generalPodcasts = dedupeByMediaKey(applyTopicFilter(await getRSSPodcasts(null), topic).filter(isPodcastItem));
+
+    const newsPool = await fetchTopNews(category, topic);
+    const rawPodcasts = (newsPool || []).filter(isPodcastItem).map(normalizePodcastItem);
     const rawVideos = (newsPool || []).filter(isVideoItem);
-    const derivedPodcasts = dedupeByMediaKey(removeCrossDuplicates(rawPodcasts, rawVideos));
+    const topicDerivedPodcasts = dedupeByMediaKey(removeCrossDuplicates(rawPodcasts, rawVideos));
 
-    return derivedPodcasts;
+    let mergedPodcasts = mergeUniquePodcasts(scopedPodcasts, generalPodcasts, topicDerivedPodcasts);
+
+    if (mergedPodcasts.length < MIN_UNIQUE_PODCASTS) {
+      const broaderPodcasts = dedupeByMediaKey((await getRSSPodcasts(null)).filter(isPodcastItem).map(normalizePodcastItem));
+      const broaderVideos = dedupeByMediaKey((await getRSSVideos(null)).filter(isVideoItem));
+      const nonOverlappingBroaderPodcasts = dedupeByMediaKey(removeCrossDuplicates(broaderPodcasts, broaderVideos));
+      mergedPodcasts = mergeUniquePodcasts(mergedPodcasts, nonOverlappingBroaderPodcasts);
+    }
+
+    if (mergedPodcasts.length < MIN_UNIQUE_PODCASTS) {
+      const broaderNewsPool = await fetchTopNews(null, '');
+      const broaderRawPodcasts = (broaderNewsPool || []).filter(isPodcastItem).map(normalizePodcastItem);
+      const broaderRawVideos = (broaderNewsPool || []).filter(isVideoItem);
+      const broaderDerivedPodcasts = dedupeByMediaKey(removeCrossDuplicates(broaderRawPodcasts, broaderRawVideos));
+      mergedPodcasts = mergeUniquePodcasts(mergedPodcasts, broaderDerivedPodcasts);
+    }
+
+    console.log(`Resolved ${mergedPodcasts.length} unique live podcasts`);
+    return mergedPodcasts;
   } catch (error) {
     console.error('Error fetching podcasts:', error);
     return [];

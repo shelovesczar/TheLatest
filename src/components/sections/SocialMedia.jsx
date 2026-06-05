@@ -12,21 +12,21 @@ const faTruthSocial = faXTwitter
 function SocialMedia({ socialPosts, loadingSocial }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const itemsPerPage = 3
+  const safeSocialPosts = Array.isArray(socialPosts) ? socialPosts.filter(Boolean) : []
 
   const nextSlide = () => {
-    if (!socialPosts || socialPosts.length === 0) return
+    if (safeSocialPosts.length === 0) return
     setCurrentIndex((prev) => {
       const next = prev + itemsPerPage
-      return next >= socialPosts.length ? 0 : next
+      return next >= safeSocialPosts.length ? 0 : next
     })
   }
 
   const prevSlide = () => {
-    if (!socialPosts || socialPosts.length === 0) return
+    if (safeSocialPosts.length === 0) return
     setCurrentIndex((prev) => {
       if (prev === 0) {
-        // Jump to last complete page
-        const lastPageStart = Math.floor((socialPosts.length - 1) / itemsPerPage) * itemsPerPage
+        const lastPageStart = Math.floor((safeSocialPosts.length - 1) / itemsPerPage) * itemsPerPage
         return lastPageStart
       }
       return prev - itemsPerPage
@@ -35,18 +35,18 @@ function SocialMedia({ socialPosts, loadingSocial }) {
 
   // Create circular array view - wrap around if needed
   const getVisiblePosts = () => {
-    if (!socialPosts || socialPosts.length === 0) return []
+    if (safeSocialPosts.length === 0) return []
     const posts = []
     for (let i = 0; i < itemsPerPage; i++) {
-      const index = (currentIndex + i) % socialPosts.length
-      if (socialPosts[index]) {
-        posts.push(socialPosts[index])
+      const index = (currentIndex + i) % safeSocialPosts.length
+      if (safeSocialPosts[index]) {
+        posts.push(safeSocialPosts[index])
       }
     }
     return posts
   }
 
-  const visiblePosts = socialPosts && socialPosts.length > 0 ? getVisiblePosts() : []
+  const visiblePosts = safeSocialPosts.length > 0 ? getVisiblePosts() : []
   const getIcon = (platform) => {
     switch (platform) {
       case 'X':
@@ -64,13 +64,16 @@ function SocialMedia({ socialPosts, loadingSocial }) {
 
   return (
     <section id="social-media" className="section social-media">
-      <h2 className="section-title">Social Media</h2>
+      <div className="section-hdr">
+        <h2>Social Media</h2>
+        <Link to="/social" className="see-more">See more posts →</Link>
+      </div>
       
       {loadingSocial ? (
         <div className="loading-container">
           <p className="loading-text">Loading trending content...</p>
         </div>
-      ) : socialPosts.length > 0 ? (
+      ) : safeSocialPosts.length > 0 ? (
         <>
           <div className="social-slider-container">
             <button 
@@ -83,15 +86,6 @@ function SocialMedia({ socialPosts, loadingSocial }) {
 
             <div className="social-slider">
               {visiblePosts.map((post, index) => (
-            post.html ? (
-              // Render embedded social media posts
-              <div 
-                key={currentIndex + index}
-                className="social-card social-embed"
-                dangerouslySetInnerHTML={{ __html: post.html }}
-              />
-            ) : (
-              // Render fallback content
               <a 
                 key={currentIndex + index} 
                 href={post.url}
@@ -119,7 +113,6 @@ function SocialMedia({ socialPosts, loadingSocial }) {
                   <span className="social-engagement">{post.engagement}</span>
                 </div>
               </a>
-            )
           ))}
             </div>
 
@@ -136,7 +129,6 @@ function SocialMedia({ socialPosts, loadingSocial }) {
         <p className="no-content">No trending content available at this time.</p>
       )}
       
-      <Link to="/social" className="see-more-btn">See More Posts</Link>
     </section>
   )
 }

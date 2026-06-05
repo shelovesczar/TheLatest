@@ -9,6 +9,7 @@ import { fetchRSSNews } from '../newsService'
 import { searchRSSContent } from '../rssService'
 import OptimizedImage from '../components/common/OptimizedImage'
 import { getCategoryConfig } from '../utils/categoryConfig'
+import { getTopicPageConfig } from '../utils/navigationConfig'
 import { filterContentByCategory } from '../utils/categoryFiltering'
 import { dedupeContentItems } from '../utils/contentDeduplication'
 import { formatDateOnly } from '../utils/dateUtils'
@@ -17,7 +18,7 @@ import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons
 import './AllNewsPage.css'
 
 function AllNewsPage({ category = null }) {
-  const { categoryName } = useParams()
+  const { categoryName, topicSlug } = useParams()
   const navigate = useNavigate()
   const { topic, hasActiveTopic } = useSearch()
   const [news, setNews] = useState([])
@@ -85,12 +86,19 @@ function AllNewsPage({ category = null }) {
     return `${text.substring(0, maxLength).trim()}...`
   }
 
-  const filterContext = categoryName || category || (hasActiveTopic ? topic : null)
-  const categoryConfig = getCategoryConfig(filterContext)
+  const topicConfig = getTopicPageConfig(topicSlug)
+  const activeTopicQuery = topicConfig?.query || (hasActiveTopic ? topic : null)
+  const filterContext = categoryName || category || topicConfig?.slug || activeTopicQuery
+  const categoryConfig = topicConfig ? {
+    title: topicConfig.title,
+    newsTitle: `${topicConfig.title} Coverage`,
+    subtitle: topicConfig.subtitle,
+    image: topicConfig.image
+  } : getCategoryConfig(filterContext)
 
   useEffect(() => {
     loadNews()
-  }, [categoryName, category, topic])
+  }, [activeTopicQuery, categoryName, category, topic])
 
   useEffect(() => {
     if (selectedSource !== 'ALL' && !news.some((item) => item.source === selectedSource)) {
@@ -102,10 +110,10 @@ function AllNewsPage({ category = null }) {
     setLoading(true)
     try {
       let newsData
-      if (hasActiveTopic && topic && topic.trim().length > 0) {
+      if (activeTopicQuery && activeTopicQuery.trim().length > 0) {
         // Use the search endpoint so the server fetches topic-specific RSS content
-        console.log('[AllNewsPage] Searching by topic:', topic)
-        newsData = await searchRSSContent(topic)
+        console.log('[AllNewsPage] Searching by topic:', activeTopicQuery)
+        newsData = await searchRSSContent(activeTopicQuery)
         console.log('[AllNewsPage] Search returned:', newsData?.length || 0, 'articles')
       } else if (filterContext) {
         console.log('[AllNewsPage] Loading by category:', filterContext)
@@ -417,7 +425,7 @@ function AllNewsPage({ category = null }) {
               </div>
 
               <aside className="sidebar-column">
-                <AdBreak type="sidebar" />
+                <AdBreak slot="article-sidebar" />
 
                 <div className="quick-updates-panel">
                 <div className="panel-header">

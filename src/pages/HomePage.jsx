@@ -437,7 +437,7 @@ function HomePage({
     <main className="main-content home-main-content">
 
       {/* ── Breaking news ticker ── */}
-      <DateTicker breakingNews={topStories.slice(0, 10).map(s => s.title).filter(Boolean)} />
+      <DateTicker breakingNews={topStories.slice(0, 10).map(s => s.title).filter(Boolean)} showDate={false} />
 
       {/* ── Fuzzy-match suggestion banner ── */}
       {suggestedTopic && (
@@ -474,6 +474,8 @@ function HomePage({
         visibleTopics={hotTopics}
         handleTopicClick={handleTopicClick}
       />
+
+      <div className="page-body">
 
       {/* ── 2. AI Summary — editorial lead-in ── */}
       <Suspense fallback={<SectionLoader />}>
@@ -536,7 +538,7 @@ function HomePage({
       {/* <TrendingStories stories={topStories} loading={loading} limit={6} /> */}
 
       {/* ── Single strategic ad placement ── */}
-      <AdBreak type="standard" />
+      <AdBreak slot="home-feed-inline" />
 
       {/* ── 6. Opinions ── */}
       <div ref={opinionsRef} data-section="opinions">
@@ -548,7 +550,7 @@ function HomePage({
         </Suspense>
       </div>
 
-      <AdBreak type="compact" />
+      <AdBreak slot="section-break" />
 
       {/* ── 7. Videos ── */}
       <div ref={videosRef} data-section="videos">
@@ -560,7 +562,7 @@ function HomePage({
         </Suspense>
       </div>
 
-      <AdBreak type="compact" />
+      <AdBreak slot="section-break" />
 
       {/* ── 8. Podcasts ── */}
       <div ref={podcastsRef} data-section="podcasts">
@@ -572,7 +574,7 @@ function HomePage({
         </Suspense>
       </div>
 
-      <AdBreak type="compact" />
+      <AdBreak slot="section-break" />
 
       {/* ── 9. Social Media ── */}
       <div ref={socialRef} data-section="social">
@@ -584,9 +586,10 @@ function HomePage({
         </Suspense>
       </div>
 
-      <Suspense fallback={<SectionLoader />}>
-        <Search />
-      </Suspense>
+        <Suspense fallback={<SectionLoader />}>
+          <Search />
+        </Suspense>
+      </div>
 
     </main>
   )

@@ -1,4 +1,5 @@
 const Parser = require('rss-parser');
+const { STORE_NAMES, getJson, getJsonWithMetadata, setJson } = require('./blobStore');
 const parser = new Parser({
   timeout: 5000, // 5 seconds — fail fast on slow feeds
   customFields: {
@@ -43,6 +44,7 @@ const MAX_IMAGE_ENRICH_ITEMS = 0;       // disabled — images come from feed me
 const IMAGE_ENRICH_CONCURRENCY = 5;
 const PERMANENT_FEED_FAILURE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 const TRANSIENT_FEED_FAILURE_TTL = 30 * 60 * 1000; // 30 minutes
+const SNAPSHOT_STALE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 const FALLBACK_IMAGE_URLS = new Set([
   'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=1600&q=85',
@@ -50,6 +52,109 @@ const FALLBACK_IMAGE_URLS = new Set([
   'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=1600&q=85',
   'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=1600&q=85'
 ]);
+
+function normalizeKeyPart(value = '') {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120);
+}
+
+function stableHash(value = '') {
+  const source = String(value || '');
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (Math.imul(31, hash) + source.charCodeAt(index)) | 0;
+  }
+  return String(Math.abs(hash));
+}
+
+function buildSnapshotKey(cacheKey) {
+  return `snapshots/${normalizeKeyPart(cacheKey) || 'news'}`;
+}
+
+function buildFeedHealthKey(feedConfig = {}) {
+  return `feeds/${stableHash(feedConfig.url || feedConfig.source || 'feed')}`;
+}
+
+function isFreshTimestamp(timestamp, maxAge = CACHE_DURATION) {
+  const parsed = Date.parse(timestamp || '');
+  if (Number.isNaN(parsed)) return false;
+  return (Date.now() - parsed) < maxAge;
+}
+
+async function getPersistedSnapshot(cacheKey, maxAge = CACHE_DURATION) {
+  try {
+    const snapshot = await getJsonWithMetadata(STORE_NAMES.articles, buildSnapshotKey(cacheKey));
+    if (!snapshot || !snapshot.data) return null;
+    if (!isFreshTimestamp(snapshot.data.timestamp, maxAge)) return null;
+    return snapshot.data;
+  } catch (error) {
+    console.warn(`[SNAPSHOT] Failed to read persisted snapshot for ${cacheKey}:`, error.message);
+    return null;
+  }
+}
+
+async function persistSnapshot(cacheKey, items = [], context = {}) {
+  if (!Array.isArray(items) || items.length === 0) return;
+
+  const payload = {
+    cacheKey,
+    items,
+    count: items.length,
+    timestamp: new Date().toISOString(),
+    context
+  };
+
+  try {
+    await setJson(STORE_NAMES.articles, buildSnapshotKey(cacheKey), payload, {
+      metadata: {
+        cacheKey,
+        type: String(context.type || '').slice(0, 40),
+        category: String(context.category || '').slice(0, 40),
+        updatedAt: payload.timestamp
+      }
+    });
+  } catch (error) {
+    console.warn(`[SNAPSHOT] Failed to persist snapshot for ${cacheKey}:`, error.message);
+  }
+}
+
+async function recordFeedHealth(feedConfig = {}, update = {}) {
+  if (!feedConfig?.url) return;
+
+  const key = buildFeedHealthKey(feedConfig);
+
+  try {
+    const existing = await getJson(STORE_NAMES.feeds, key);
+    const nextValue = {
+      feedKey: key,
+      url: feedConfig.url,
+      source: feedConfig.source || 'Unknown Source',
+      status: update.status || existing?.status || 'unknown',
+      lastHttpStatus: update.httpStatus ?? existing?.lastHttpStatus ?? null,
+      lastMessage: update.message || existing?.lastMessage || '',
+      itemCount: Number(update.itemCount ?? existing?.itemCount ?? 0),
+      successCount: Number(existing?.successCount || 0) + (update.status === 'healthy' ? 1 : 0),
+      failureCount: Number(existing?.failureCount || 0) + (update.status === 'failed' ? 1 : 0),
+      lastSuccessAt: update.status === 'healthy' ? new Date().toISOString() : (existing?.lastSuccessAt || null),
+      lastFailureAt: update.status === 'failed' ? new Date().toISOString() : (existing?.lastFailureAt || null),
+      updatedAt: new Date().toISOString()
+    };
+
+    await setJson(STORE_NAMES.feeds, key, nextValue, {
+      metadata: {
+        status: nextValue.status,
+        source: String(nextValue.source || '').slice(0, 80),
+        updatedAt: nextValue.updatedAt
+      }
+    });
+  } catch (error) {
+    console.warn(`[FEEDS] Failed to persist feed health for ${feedConfig.source || feedConfig.url}:`, error.message);
+  }
+}
 
 function toPlainText(value) {
   if (value === null || value === undefined) return '';
@@ -925,6 +1030,9 @@ const RSS_FEEDS = {
     { url: 'https://rss.app/feeds/wGtHhwQaOwup8JQs.xml', source: 'New York Post' }
   ],
   entertainment: [
+    // Priority Entertainment Feed - Featured
+    { url: 'https://rss.app/feeds/_D360VlaVzhpeXSVR.xml', source: 'Entertainment RSS Bundle', priority: 'high', maxItems: 30 },
+
     // Entertainment Publications
     { url: 'https://variety.com/feed/', source: 'Variety' },
     { url: 'https://ew.com/feed/', source: 'Entertainment Weekly' },
@@ -965,6 +1073,9 @@ const RSS_FEEDS = {
     { url: 'https://www.latimes.com/business/rss2.0.xml', source: 'LA Times Business' }
   ],
   lifestyle: [
+    // Priority Lifestyle Feed - Featured
+    { url: 'https://rss.app/feeds/_z0pmqqR3Yi6s5A5e.xml', source: 'Lifestyle RSS Bundle', priority: 'high', maxItems: 30 },
+
     // Health & Wellness
     { url: 'https://www.health.com/syndication/feed', source: 'Health.com' },
     { url: 'https://rss.medicalnewstoday.com/featurednews.xml', source: 'Medical News Today' },
@@ -1016,8 +1127,11 @@ const RSS_FEEDS = {
 const RSS_APP_BUNDLE_FEED_URL = process.env.RSS_APP_BUNDLE_FEED_URL || 'https://rss.app/feeds/_iIjbt3XTnFFpU0Cv.xml';
 const RSS_APP_BUNDLE_SOURCE = process.env.RSS_APP_BUNDLE_SOURCE || 'The Latest Bundle';
 const BUNDLE_ELIGIBLE_FEED_KEYS = new Set([
+  // Keep the global bundle on generic feed groups only.
+  // Category groups with dedicated bundles (e.g. sports/entertainment/lifestyle)
+  // should not get this extra prepend to avoid timeout-heavy duplication.
   'news', 'opinions', 'videos', 'podcasts',
-  'sports', 'tech', 'entertainment', 'business', 'lifestyle', 'culture'
+  'tech', 'business', 'culture'
 ]);
 
 function prependBundleFeed(feedList = [], feedKey = 'news') {
@@ -1472,6 +1586,13 @@ async function parseFeed(feedConfig, options = {}) {
         category: toPlainText(item.categories ? item.categories[0] : 'News') || 'News',
         _feedUrl: feedConfig.url  // internal: used for bundle classification; stripped before response
       }));
+
+    await recordFeedHealth(feedConfig, {
+      status: 'healthy',
+      httpStatus: 200,
+      itemCount: filteredItems.length,
+      message: ''
+    });
     
     console.log(`${feedConfig.source}: ${rawItems.length} sampled, ${filteredItems.length} after filtering`);
     return filteredItems;
@@ -1479,6 +1600,12 @@ async function parseFeed(feedConfig, options = {}) {
     cacheFeedFailure(feedConfig.url, error);
 
     const status = getFeedFailureStatus(error);
+    await recordFeedHealth(feedConfig, {
+      status: 'failed',
+      httpStatus: status,
+      itemCount: 0,
+      message: toPlainText(error?.message)
+    });
     const prefix = status && [401, 403, 404, 406].includes(status) ? 'Skipped feed' : 'Error parsing feed';
     console.warn(`${prefix} ${feedConfig.source}:`, error.message);
     return [];
@@ -1575,7 +1702,14 @@ function logSourceBreakdown(label, items = []) {
 function isCacheValid(cacheKey) {
   const cached = cache[cacheKey];
   if (!cached) return false; // Cache key doesn't exist yet
-  return cached.data && (Date.now() - cached.timestamp < CACHE_DURATION);
+  if (Date.now() - cached.timestamp >= CACHE_DURATION) return false;
+
+  // Do not treat empty arrays as valid cache; allow immediate refetch.
+  if (Array.isArray(cached.data)) {
+    return cached.data.length > 0;
+  }
+
+  return Boolean(cached.data);
 }
 
 exports.handler = async (event, context) => {
@@ -1584,6 +1718,7 @@ exports.handler = async (event, context) => {
   const useStrictSearch = ['1', 'true', 'yes'].includes(String(strictSearch || '').toLowerCase());
   const allowRelaxedFallback = ['1', 'true', 'yes'].includes(String(relaxSearchFallback || '').toLowerCase());
   const strictMinimum = Math.max(1, Math.min(parseInt(minStrictResults, 10) || 6, 20));
+  let cacheKey = category ? `${type}_${category}` : type;
   
   // Set CORS headers
   const headers = {
@@ -1600,7 +1735,6 @@ exports.handler = async (event, context) => {
 
   try {
     let data;
-    const cacheKey = category ? `${type}_${category}` : type;
 
     // SEARCH FUNCTIONALITY - Cache-first, future-proof search across ALL RSS feeds
     // Automatically includes any new categories/feeds added to RSS_FEEDS
@@ -1777,6 +1911,27 @@ exports.handler = async (event, context) => {
       };
     }
 
+    const persistedSnapshot = await getPersistedSnapshot(cacheKey, CACHE_DURATION);
+    if (persistedSnapshot?.items?.length) {
+      console.log(`Returning persisted snapshot for ${cacheKey}`);
+      cache[cacheKey] = {
+        data: persistedSnapshot.items,
+        timestamp: Date.parse(persistedSnapshot.timestamp) || Date.now()
+      };
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          data: persistedSnapshot.items,
+          cached: true,
+          persisted: true,
+          timestamp: persistedSnapshot.timestamp,
+          count: persistedSnapshot.count || persistedSnapshot.items.length,
+          ...(includeSourceStats ? { sourceStats: buildSourceBreakdown(persistedSnapshot.items) } : {})
+        })
+      };
+    }
+
     // Determine which feeds to fetch
     let activeFeedKey = RSS_FEEDS[type] ? type : 'news';
     let feedsToFetch = prependBundleFeed(RSS_FEEDS[activeFeedKey] || RSS_FEEDS.news, activeFeedKey);
@@ -1851,6 +2006,12 @@ exports.handler = async (event, context) => {
       timestamp: Date.now()
     };
 
+    await persistSnapshot(cacheKey, data, {
+      type,
+      category: category || '',
+      feedKey: activeFeedKey
+    });
+
     return {
       statusCode: 200,
       headers,
@@ -1872,6 +2033,24 @@ exports.handler = async (event, context) => {
       type: event.queryStringParameters?.type,
       search: event.queryStringParameters?.search
     });
+
+    if (!search) {
+      const staleSnapshot = await getPersistedSnapshot(cacheKey, SNAPSHOT_STALE_DURATION);
+      if (staleSnapshot?.items?.length) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            data: staleSnapshot.items,
+            cached: true,
+            persisted: true,
+            stale: true,
+            timestamp: staleSnapshot.timestamp,
+            count: staleSnapshot.count || staleSnapshot.items.length
+          })
+        };
+      }
+    }
     
     return {
       statusCode: 500,

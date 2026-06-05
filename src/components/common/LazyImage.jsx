@@ -21,16 +21,15 @@ const LazyImage = ({
   const processedSrc = processImageUrl(src, { width, quality, sharpen: true });
   const isProxied = processedSrc !== src;
   const [imageSrc, setImageSrc] = useState(placeholder);
-  const [imageRef, setImageRef] = useState();
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
-  const imgRef = useRef();
+  const imageRef = useRef(null);
 
   useEffect(() => {
     let observer;
     let didCancel = false;
 
-    if (imageRef && imageSrc === placeholder) {
+    if (imageRef.current && imageSrc === placeholder) {
       if (IntersectionObserver) {
         observer = new IntersectionObserver(
           entries => {
@@ -42,7 +41,7 @@ const LazyImage = ({
               ) {
                 setIsLoading(true);
                 setImageSrc(processedSrc);
-                observer.unobserve(imageRef);
+                observer.unobserve(imageRef.current);
               }
             });
           },
@@ -51,7 +50,7 @@ const LazyImage = ({
             rootMargin: '200px' // Start loading 200px before image is visible
           }
         );
-        observer.observe(imageRef);
+        observer.observe(imageRef.current);
       } else {
         // Fallback for browsers that don't support IntersectionObserver
         setImageSrc(processedSrc);
@@ -65,7 +64,7 @@ const LazyImage = ({
         observer.disconnect();
       }
     };
-  }, [src, imageSrc, imageRef, placeholder]);
+  }, [src, imageSrc, placeholder]);
 
   const handleLoad = () => {
     setIsLoading(false);
@@ -88,7 +87,7 @@ const LazyImage = ({
   return (
     <div className={`lazy-image-container ${className}`}>
       <img
-        ref={setImageRef}
+        ref={imageRef}
         src={imageSrc}
         alt={alt}
         className={`lazy-image ${isLoading ? 'loading' : 'loaded'} ${hasError ? 'error' : ''}`}

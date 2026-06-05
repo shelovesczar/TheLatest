@@ -4,6 +4,7 @@ import TopStories from '../components/sections/TopStories'
 import Opinions from '../components/sections/Opinions'
 import Videos from '../components/sections/Videos'
 import Podcasts from '../components/sections/Podcasts'
+import AdBreak from '../components/common/AdBreak'
 
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
 import { filterContentByCategory } from '../utils/categoryFiltering'
@@ -27,6 +28,14 @@ function CategoryPage({
   const [loadingPodcasts, setLoadingPodcasts] = useState(true)
 
   const categoryConfig = {
+    'politics': {
+      title: 'Politics',
+      description: 'The White House, Congress, courts, elections, and the political stories driving the cycle.',
+      aiPrompt: 'politics news and analysis',
+      image: 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=800&h=500&fit=crop',
+      keywords: ['politics', 'president', 'white house', 'congress', 'senate', 'election', 'campaign', 'supreme court', 'trump', 'biden'],
+      sources: ['Associated Press', 'Reuters', 'CNN', 'BBC News', 'Politico', 'The Hill']
+    },
     'top-stories': {
       title: 'Top Stories',
       description: 'Breaking news and trending stories from around the world.',
@@ -112,6 +121,22 @@ function CategoryPage({
       ],
       sources: ['TechCrunch', 'The Verge', 'Bloomberg', 'CNBC', 'Wall Street Journal', 'Financial Times']
     },
+    'tech': {
+      title: 'Tech',
+      description: 'AI, startups, cybersecurity, devices, and the platforms moving the industry.',
+      aiPrompt: 'technology, AI, and startup news',
+      image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&h=500&fit=crop',
+      keywords: ['technology', 'ai', 'software', 'startup', 'cybersecurity', 'cloud', 'gadgets'],
+      sources: ['The Verge', 'TechCrunch', 'Wired', 'MIT Technology Review', 'Ars Technica', 'Bloomberg Tech']
+    },
+    'business': {
+      title: 'Business',
+      description: 'Markets, the economy, dealmaking, and the companies setting the pace.',
+      aiPrompt: 'business, markets, and finance news',
+      image: 'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?w=800&h=500&fit=crop',
+      keywords: ['business', 'markets', 'economy', 'stocks', 'earnings', 'ceo', 'merger'],
+      sources: ['Bloomberg', 'CNBC', 'Wall Street Journal', 'Financial Times', 'Reuters', 'Fortune']
+    },
     'lifestyle': {
       title: 'Lifestyle',
       description: 'Health, wellness, travel, and lifestyle trends.',
@@ -190,10 +215,13 @@ function CategoryPage({
         // Map category to RSS category name - ALWAYS pass a category to get relevant feeds
         let rssCategory = 'news'; // Default
         if (category === 'sports') rssCategory = 'sports';
+        else if (category === 'business') rssCategory = 'business';
+        else if (category === 'tech') rssCategory = 'tech';
         else if (category === 'business-tech') rssCategory = 'tech';
         else if (category === 'entertainment') rssCategory = 'entertainment';
         else if (category === 'lifestyle') rssCategory = 'lifestyle';
         else if (category === 'culture') rssCategory = 'culture';
+        else if (category === 'politics') rssCategory = 'news';
         else if (category === 'top-stories') rssCategory = 'news';
         
         console.log(`[CategoryPage] Loading ${category} → RSS category: ${rssCategory}`);
@@ -281,49 +309,51 @@ function CategoryPage({
         <p className="category-description">{config.description}</p>
       </div>
 
-      <AISummary 
-        category={category}
-        description={`AI-generated summary of ${config.aiPrompt}.`}
-        categoryImage={config.image}
-        categoryTitle={config.title}
-        ignoreTopic={true}
-      />
+      <div className="page-body category-page-body">
+        <AISummary 
+          category={category}
+          description={`AI-generated summary of ${config.aiPrompt}.`}
+          categoryImage={config.image}
+          categoryTitle={config.title}
+          ignoreTopic={true}
+        />
 
-      <TopStories 
-        topStories={categoryNews} 
-        loading={loading}
-        activeStory={activeStory}
-        setActiveStory={setActiveStory}
-        categoryTitle={config.title}
-        categorySources={config.sources}
-        categoryPath={`/category/${category}/all-news`}
-      />
+        <TopStories 
+          topStories={categoryNews} 
+          loading={loading}
+          activeStory={activeStory}
+          setActiveStory={setActiveStory}
+          categoryTitle={config.title}
+          categorySources={config.sources}
+          categoryPath={`/category/${category}/all-news`}
+        />
 
-      <div className="ad-placeholder">AD</div>
+        <AdBreak slot="home-feed-inline" />
 
-      <Opinions 
-        opinions={opinions}
-        loadingOpinions={loadingOpinions}
-        categoryPath={`/category/${category}/all-opinions`}
-      />
+        <Opinions 
+          opinions={opinions}
+          loadingOpinions={loadingOpinions}
+          categoryPath={`/category/${category}/all-opinions`}
+        />
 
-      <div className="ad-placeholder">AD</div>
+        <AdBreak slot="section-break" />
 
-      <Videos 
-        videos={videos}
-        loadingVideos={loadingVideos}
-        categoryPath={`/category/${category}/all-videos`}
-      />
+        <Videos 
+          videos={videos}
+          loadingVideos={loadingVideos}
+          categoryPath={`/category/${category}/all-videos`}
+        />
 
-      <div className="ad-placeholder">AD</div>
+        <AdBreak slot="section-break" />
 
-      <Podcasts 
-        podcasts={podcasts}
-        loadingPodcasts={loadingPodcasts}
-        categoryPath={`/category/${category}/all-podcasts`}
-      />
+        <Podcasts 
+          podcasts={podcasts}
+          loadingPodcasts={loadingPodcasts}
+          categoryPath={`/category/${category}/all-podcasts`}
+        />
 
-      <div className="ad-placeholder">AD</div>
+        <AdBreak slot="section-break" />
+      </div>
     </main>
   )
 }

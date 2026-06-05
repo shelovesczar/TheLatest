@@ -47,12 +47,41 @@ export default function ArticleReader() {
   const [copied, setCopied]       = useState(false)
   const [fontSize, setFontSize]   = useState(18)     // px
 
+  const trackEngagement = useCallback((payload) => {
+    try {
+      const body = JSON.stringify(payload)
+
+      if (navigator.sendBeacon) {
+        const blob = new Blob([body], { type: 'application/json' })
+        navigator.sendBeacon('/.netlify/functions/trackEngagement', blob)
+        return
+      }
+
+      fetch('/.netlify/functions/trackEngagement', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body,
+        keepalive: true
+      }).catch(() => {})
+    } catch {
+      // Ignore analytics failures.
+    }
+  }, [])
+
   // ── Record history + set initial saved state ────────────────────────────────
   useEffect(() => {
     if (!article) return
     recordHistory(article)
     setSaved(isArticleSaved(article))
-  }, [article])
+    trackEngagement({
+      eventType: 'article-view',
+      path: location.pathname,
+      pageTitle: article.title,
+      article
+    })
+  }, [article, location.pathname, trackEngagement])
 
   // ── Fetch full article content via Netlify function ─────────────────────────
   useEffect(() => {
