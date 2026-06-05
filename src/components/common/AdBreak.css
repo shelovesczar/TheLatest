@@ -3,7 +3,7 @@
   --ad-height-current: var(--ad-height-desktop, 90px);
   --ad-ratio-current: var(--ad-ratio-desktop, 970 / 90);
   background: transparent;
-  padding: 1.6rem 0 0;
+  padding: 1.6rem 0;
   margin: 0;
   display: flex;
   flex-direction: column;
