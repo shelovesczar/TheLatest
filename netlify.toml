@@ -9,6 +9,9 @@
 [functions."warmContent"]
   schedule = "@hourly"
 
+[[plugins]]
+  package = "@netlify/plugin-functions-install-core"
+
 # ─── HTTP Cache Headers ────────────────────────────────────────────────────────
 # Vite appends a content-hash to every JS/CSS filename (e.g. index-Bk3xQp8.js)
 # so these assets are safe to cache forever — browsers only re-download when
