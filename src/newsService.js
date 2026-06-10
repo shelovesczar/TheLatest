@@ -7,6 +7,7 @@ import {
 } from './rssService';
 import { dedupeContentItems } from './utils/contentDeduplication';
 import { filterItemsByTopic } from './utils/topicFiltering';
+import { filterContentByCategory } from './utils/categoryFiltering';
 import { isVideoItem, isPodcastItem, dedupeByMediaKey, removeCrossDuplicates } from './utils/mediaClassification';
 
 // Check if running in development mode
@@ -976,6 +977,98 @@ const getFallbackTrendingContent = () => {
 
 const applyTopicFilter = (items, topic) => filterItemsByTopic(items || [], topic || '')
 
+const slugifyFallbackValue = (value = '') => String(value || '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+
+const normalizeFallbackNews = (items = [], prefix = 'curated') => dedupeContentItems(
+  (Array.isArray(items) ? items : []).map((item, index) => {
+    const titleSlug = slugifyFallbackValue(item?.title || `story-${index}`) || `story-${index}`
+    const sourceSlug = slugifyFallbackValue(item?.source || 'desk') || 'desk'
+    const fallbackUrl = `https://fallback.thelatest.local/${prefix}/${index + 1}-${sourceSlug}-${titleSlug}`
+
+    return {
+      ...item,
+      url: item?.url && item.url !== '#' ? item.url : fallbackUrl,
+      link: item?.link && item.link !== '#' ? item.link : fallbackUrl,
+      author: item?.author || item?.source || 'The Latest Desk',
+      time: item?.time || (item?.date ? formatTime(item.date) : 'Recently'),
+      isFallback: true,
+      fallbackLabel: 'Editorial fallback'
+    }
+  })
+)
+
+const buildGeneratedTopicFallback = (topic = '', category = null) => {
+  const normalizedTopic = String(topic || '').trim()
+  if (!normalizedTopic) return []
+
+  const resolvedCategory = String(category || 'news').trim() || 'news'
+  const categoryLabel = resolvedCategory === 'news'
+    ? 'News'
+    : resolvedCategory.replace(/-/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase())
+
+  return normalizeFallbackNews([
+    {
+      title: `${normalizedTopic}: what changed overnight`,
+      source: 'The Latest Wire',
+      image: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&h=500&fit=crop',
+      time: 'Recently',
+      category: categoryLabel,
+      description: `A live fallback briefing on ${normalizedTopic}, built to keep the story page populated while upstream feeds recover.`,
+      content: `${normalizedTopic} remains active in the news cycle. This fallback briefing highlights the latest developments, the main players, and the immediate stakes for readers.`,
+      url: '#'
+    },
+    {
+      title: `${normalizedTopic}: why this story matters now`,
+      source: 'The Latest Analysis',
+      image: 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&h=500&fit=crop',
+      time: 'Recently',
+      category: categoryLabel,
+      description: `Context and analysis around ${normalizedTopic}, intended as a resilient fallback when live article volume is temporarily thin.`,
+      content: `Readers searching for ${normalizedTopic} typically want context as much as headlines. This fallback card frames the broader forces and why the topic continues to matter.`,
+      url: '#'
+    },
+    {
+      title: `${normalizedTopic}: the key questions to watch`,
+      source: 'The Latest Briefing',
+      image: 'https://images.unsplash.com/photo-1584036561566-baf8f5f1b144?w=800&h=500&fit=crop',
+      time: 'Recently',
+      category: categoryLabel,
+      description: `A structured fallback explainer for ${normalizedTopic}, designed to keep search and topic pages useful even before fresh feed items arrive.`,
+      content: `This fallback coverage outlines the unresolved questions around ${normalizedTopic}, the signals to monitor next, and the angles readers are most likely to compare across outlets.`,
+      url: '#'
+    }
+  ], 'generated-topic')
+}
+
+const getFallbackNewsPool = (category = null, topic = '') => {
+  const curatedPool = normalizeFallbackNews(getFallbackNews())
+  const categoryPool = category ? filterContentByCategory(curatedPool, category, 1, { strict: true }) : curatedPool
+  const topicWithinCategory = applyTopicFilter(categoryPool, topic)
+
+  if (topicWithinCategory.length > 0) {
+    return topicWithinCategory
+  }
+
+  const generatedTopicPool = buildGeneratedTopicFallback(topic, category)
+  if (generatedTopicPool.length > 0) {
+    return generatedTopicPool
+  }
+
+  if (categoryPool.length > 0) {
+    return categoryPool
+  }
+
+  const topicPool = applyTopicFilter(curatedPool, topic)
+  if (topicPool.length > 0) {
+    return topicPool
+  }
+
+  return curatedPool
+}
+
 // Fetch top news stories
 export const fetchTopNews = async (category = null, topic = '') => {
   try {
@@ -994,11 +1087,12 @@ export const fetchTopNews = async (category = null, topic = '') => {
       return generalNews;
     }
 
-    console.warn('No live RSS news available right now. Returning empty list.');
-    return [];
+    const fallbackNews = getFallbackNewsPool(category, topic)
+    console.warn(`No live RSS news available right now. Using ${fallbackNews.length} fallback stories instead.`);
+    return fallbackNews;
   } catch (error) {
     console.error('Error fetching news (RSS failed):', error.message);
-    return [];
+    return getFallbackNewsPool(category, topic);
   }
 };
 

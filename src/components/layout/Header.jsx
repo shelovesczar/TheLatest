@@ -119,7 +119,7 @@ function Header({ darkMode, toggleTheme, setMenuOpen }) {
     e.preventDefault()
     if (searchQuery.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`)
-      clearTopic()
+      clearTopic({ navigateHome: false })
       setOpenDropdown(null)
       setProfileMenuOpen(false)
       setMenuOpen(false)
@@ -161,107 +161,21 @@ function Header({ darkMode, toggleTheme, setMenuOpen }) {
   })
 
   const openItem = NAV_ITEMS.find((item) => item.label === openDropdown)
-  const profileLabel = isAuthenticated ? (user?.name?.split(' ')[0] || 'Profile') : 'Profile'
+  const profileLabel = isAuthenticated ? (user?.name?.split(' ')[0] || 'Profile') : 'Log In'
 
   return (
     <>
-      <header className="header">
-        <Link to="/" className="logo" onClick={handleLogoClick}>
-          <span className="logo-main">THE</span>
-          <span className="logo-accent">LATEST</span>
-        </Link>
+      <div className="header-shell">
+        <header className="header">
+          <div className="header-top-row">
+            <Link to="/" className="logo" onClick={handleLogoClick}>
+              <span className="logo-main">THE</span>
+              <span className="logo-accent">LATEST</span>
+            </Link>
 
-        <span className="header-date">{formattedHeaderDate}</span>
+            <span className="header-date">{formattedHeaderDate}</span>
 
-        <button
-          className="mobile-theme-toggle"
-          onClick={toggleTheme}
-          aria-label="Toggle theme"
-        >
-          <FontAwesomeIcon icon={darkMode ? faSun : faMoon} />
-        </button>
-
-        <nav className="nav" ref={navRef} aria-label="Primary">
-          <div className="header-nav-shell" onMouseLeave={() => setOpenDropdown(null)}>
-            <div className="header-nav-scroll" ref={navShellRef}>
-              <div className="header-nav">
-                {NAV_ITEMS.map((item) => {
-                  const isOpen = openDropdown === item.label
-                  const isActive = isItemActive(item)
-
-                  return (
-                    <div
-                      key={item.label}
-                      ref={(element) => {
-                        if (element) {
-                          navItemRefs.current[item.label] = element
-                        } else {
-                          delete navItemRefs.current[item.label]
-                        }
-                      }}
-                      className={`header-nav-item ${isOpen ? 'open' : ''} ${isActive ? 'active' : ''}`}
-                      onMouseEnter={() => {
-                        if (item.items.length > 0) {
-                          setProfileMenuOpen(false)
-                          setOpenDropdown(item.label)
-                        }
-                      }}
-                    >
-                      {item.items.length > 0 ? (
-                        <button
-                          type="button"
-                          className="header-nav-button"
-                          onClick={() => {
-                            setProfileMenuOpen(false)
-                            setOpenDropdown((current) => current === item.label ? null : item.label)
-                          }}
-                          onFocus={() => {
-                            setProfileMenuOpen(false)
-                            setOpenDropdown(item.label)
-                          }}
-                          aria-expanded={isOpen}
-                          aria-haspopup="menu"
-                        >
-                          {item.label}
-                          <span className="header-nav-arrow" aria-hidden="true"></span>
-                        </button>
-                      ) : (
-                        <Link to={item.target} className="header-nav-button header-nav-link" onClick={() => handleNavClick(item.target)}>
-                          {item.label}
-                        </Link>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            {openItem && openItem.items.length > 0 && (
-              <div ref={flyoutRef} className="header-nav-flyout open" style={{ left: `${flyoutPosition.left}px` }} role="menu">
-                <Link
-                  to={openItem.target}
-                  className="header-nav-dropdown-link header-nav-dropdown-overview"
-                  onClick={() => handleNavClick(openItem.target)}
-                >
-                  All {openItem.label}
-                </Link>
-                <div className="header-nav-divider"></div>
-                {openItem.items.map((dropdownItem) => (
-                  <Link
-                    key={dropdownItem.label}
-                    to={dropdownItem.target}
-                    className="header-nav-dropdown-link"
-                    onClick={() => handleNavClick(dropdownItem.target)}
-                  >
-                    {dropdownItem.label}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="header-utilities">
-            <form className="header-search-form" onSubmit={handleSearch}>
+            <form className="header-search-form header-search-form--top" onSubmit={handleSearch}>
               <input
                 type="text"
                 className="header-search-input"
@@ -283,70 +197,153 @@ function Header({ darkMode, toggleTheme, setMenuOpen }) {
               <button
                 type="button"
                 className="login-button-header header-profile-button"
-                onClick={handleProfileToggle}
-                onFocus={() => setProfileMenuOpen(true)}
-                aria-haspopup="menu"
-                aria-expanded={profileMenuOpen}
+                onClick={() => {
+                  if (!isAuthenticated) {
+                    setOpenDropdown(null)
+                    setProfileMenuOpen(false)
+                    setLoginModalOpen(true)
+                    return
+                  }
+
+                  handleProfileToggle()
+                }}
+                onFocus={() => {
+                  if (isAuthenticated) {
+                    setProfileMenuOpen(true)
+                  }
+                }}
+                aria-haspopup={isAuthenticated ? 'menu' : undefined}
+                aria-expanded={isAuthenticated ? profileMenuOpen : undefined}
               >
                 {profileLabel}
-                <span className="header-nav-arrow" aria-hidden="true"></span>
+                {isAuthenticated && <span className="header-nav-arrow" aria-hidden="true"></span>}
               </button>
 
-              <div className={`header-profile-menu ${profileMenuOpen ? 'open' : ''}`} role="menu">
-                {isAuthenticated ? (
-                  <>
-                    <span className="header-profile-eyebrow">Signed in as</span>
-                    <span className="header-profile-name">{user?.name || 'Member'}</span>
-                    <div className="header-nav-divider"></div>
-                    <Link
-                      to="/dashboard"
-                      className="header-profile-link"
-                      onClick={() => handleProfileAction(() => navigate('/dashboard'))}
-                    >
-                      Dashboard
-                    </Link>
-                    <Link
-                      to="/following"
-                      className="header-profile-link"
-                      onClick={() => handleProfileAction(() => navigate('/following'))}
-                    >
-                      Following
-                    </Link>
-                    <button
-                      type="button"
-                      className="header-profile-link header-profile-action"
-                      onClick={() => handleProfileAction(signOut)}
-                    >
-                      Sign Out
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span className="header-profile-eyebrow">Account</span>
-                    <span className="header-profile-name">Sign in to personalize</span>
-                    <div className="header-nav-divider"></div>
-                    <button
-                      type="button"
-                      className="header-profile-link header-profile-action"
-                      onClick={() => handleProfileAction(() => setLoginModalOpen(true))}
-                    >
-                      Login / Sign Up
-                    </button>
-                  </>
-                )}
-              </div>
+              {isAuthenticated && (
+                <div className={`header-profile-menu ${profileMenuOpen ? 'open' : ''}`} role="menu">
+                  <span className="header-profile-eyebrow">Signed in as</span>
+                  <span className="header-profile-name">{user?.name || 'Member'}</span>
+                  <div className="header-nav-divider"></div>
+                  <Link
+                    to="/dashboard"
+                    className="header-profile-link"
+                    onClick={() => handleProfileAction(() => navigate('/dashboard'))}
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    to="/following"
+                    className="header-profile-link"
+                    onClick={() => handleProfileAction(() => navigate('/following'))}
+                  >
+                    Following
+                  </Link>
+                  <button
+                    type="button"
+                    className="header-profile-link header-profile-action"
+                    onClick={() => handleProfileAction(signOut)}
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              )}
             </div>
 
             <button
-              className="theme-toggle"
+              className="mobile-theme-toggle"
               onClick={toggleTheme}
               aria-label="Toggle theme"
             >
               <FontAwesomeIcon icon={darkMode ? faSun : faMoon} />
             </button>
           </div>
-        </nav>
-      </header>
+
+          <nav className="nav" ref={navRef} aria-label="Primary">
+            <div className="header-nav-shell" onMouseLeave={() => setOpenDropdown(null)}>
+              <div className="header-nav-scroll" ref={navShellRef}>
+                <div className="header-nav">
+                  {NAV_ITEMS.map((item) => {
+                    const isOpen = openDropdown === item.label
+                    const isActive = isItemActive(item)
+
+                    return (
+                      <div
+                        key={item.label}
+                        ref={(element) => {
+                          if (element) {
+                            navItemRefs.current[item.label] = element
+                          } else {
+                            delete navItemRefs.current[item.label]
+                          }
+                        }}
+                        className={`header-nav-item ${isOpen ? 'open' : ''} ${isActive ? 'active' : ''}`}
+                        onMouseEnter={() => {
+                          if (item.items.length > 0) {
+                            setProfileMenuOpen(false)
+                            setOpenDropdown(item.label)
+                          }
+                        }}
+                      >
+                        {item.items.length > 0 ? (
+                          <Link
+                            to={item.target}
+                            className="header-nav-button header-nav-link"
+                            onClick={() => handleNavClick(item.target)}
+                            onFocus={() => {
+                              setProfileMenuOpen(false)
+                              setOpenDropdown(item.label)
+                            }}
+                          >
+                            {item.label}
+                            <span className="header-nav-arrow" aria-hidden="true"></span>
+                          </Link>
+                        ) : (
+                          <Link to={item.target} className="header-nav-button header-nav-link" onClick={() => handleNavClick(item.target)}>
+                            {item.label}
+                          </Link>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {openItem && openItem.items.length > 0 && (
+                <div ref={flyoutRef} className="header-nav-flyout open" style={{ left: `${flyoutPosition.left}px` }} role="menu">
+                  <Link
+                    to={openItem.target}
+                    className="header-nav-dropdown-link header-nav-dropdown-overview"
+                    onClick={() => handleNavClick(openItem.target)}
+                  >
+                    All {openItem.label}
+                  </Link>
+                  <div className="header-nav-divider"></div>
+                  {openItem.items.map((dropdownItem) => (
+                    <Link
+                      key={dropdownItem.label}
+                      to={dropdownItem.target}
+                      className="header-nav-dropdown-link"
+                      onClick={() => handleNavClick(dropdownItem.target)}
+                    >
+                      {dropdownItem.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="header-utilities">
+              <button
+                className="theme-toggle"
+                onClick={toggleTheme}
+                aria-label="Toggle theme"
+              >
+                <FontAwesomeIcon icon={darkMode ? faSun : faMoon} />
+              </button>
+            </div>
+          </nav>
+        </header>
+      </div>
 
       <LoginModal 
         isOpen={loginModalOpen} 

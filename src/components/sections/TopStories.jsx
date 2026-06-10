@@ -24,10 +24,27 @@ const PERSPECTIVE_MAP = [
   }
 ]
 
-function TopStories({ loading, topStories, activeStory, setActiveStory, categoryTitle, categoryPath }) {
+function TopStories({
+  loading,
+  topStories,
+  activeStory,
+  setActiveStory,
+  categoryTitle,
+  categoryPath,
+  defaultPerspectiveView = false,
+  showPerspectiveToggle = true,
+  sectionTitle,
+  seeMoreLabel,
+  sideBySideTitle
+}) {
   const navigate = useNavigate()
-  const [showPerspectives, setShowPerspectives] = useState(false)
+  const [showPerspectives, setShowPerspectives] = useState(defaultPerspectiveView)
   const [perspectiveFilter, setPerspectiveFilter] = useState('all')
+  const [activePerspectiveSourceIndex, setActivePerspectiveSourceIndex] = useState(0)
+
+  useEffect(() => {
+    setShowPerspectives(defaultPerspectiveView)
+  }, [defaultPerspectiveView])
 
   const getMediaOutlet = useCallback((story) => {
     if (!story) return 'Unknown Source'
@@ -129,6 +146,20 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
     }
   }, [topStories, activeStory, setActiveStory])
 
+  const storyGroupCount = useMemo(() => {
+    if (!Array.isArray(topStories) || topStories.length === 0) return 0
+    return Math.ceil(topStories.length / 3)
+  }, [topStories])
+
+  const perspectiveGroupIndex = useMemo(() => {
+    if (storyGroupCount === 0) return 0
+    return Math.floor(activeStory / 3) % storyGroupCount
+  }, [activeStory, storyGroupCount])
+
+  useEffect(() => {
+    setActivePerspectiveSourceIndex(0)
+  }, [perspectiveFilter, perspectiveGroupIndex])
+
   const visibleStories = useMemo(() => {
     if (!Array.isArray(topStories) || topStories.length === 0) return []
 
@@ -141,16 +172,33 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
   }, [activeStory, topStories])
 
   const perspectiveStories = useMemo(() => {
-    return visibleStories.map((story, index) => ({
+    if (!Array.isArray(topStories) || topStories.length === 0) return []
+
+    const startIndex = perspectiveGroupIndex * 3
+    const items = topStories.slice(startIndex, startIndex + 3)
+
+    return items.map((story, index) => ({
       story,
       perspective: PERSPECTIVE_MAP[index] || PERSPECTIVE_MAP[PERSPECTIVE_MAP.length - 1]
     }))
-  }, [visibleStories])
+  }, [perspectiveGroupIndex, topStories])
 
   const filteredPerspectiveStories = useMemo(() => {
     if (perspectiveFilter === 'all') return perspectiveStories
     return perspectiveStories.filter((item) => item.perspective.key === perspectiveFilter)
   }, [perspectiveFilter, perspectiveStories])
+
+  const visiblePerspectiveStories = useMemo(() => {
+    if (filteredPerspectiveStories.length > 0) return filteredPerspectiveStories
+    return perspectiveStories
+  }, [filteredPerspectiveStories, perspectiveStories])
+
+  const resolvedPerspectiveSourceIndex = useMemo(() => {
+    if (visiblePerspectiveStories.length === 0) return 0
+    return Math.min(activePerspectiveSourceIndex, visiblePerspectiveStories.length - 1)
+  }, [activePerspectiveSourceIndex, visiblePerspectiveStories])
+
+  const activePerspectiveItem = visiblePerspectiveStories[resolvedPerspectiveSourceIndex] || null
 
   const nextStory = () => {
     if (topStories.length === 0) return
@@ -162,27 +210,54 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
     setActiveStory((prev) => (prev - 1 + topStories.length) % topStories.length)
   }
 
-  const sectionTitle = categoryTitle && categoryTitle.toLowerCase() !== 'top stories'
-    ? `TOP ${categoryTitle.toUpperCase()} STORIES`
-    : 'TOP STORIES'
+  const nextPerspectiveGroup = () => {
+    if (storyGroupCount === 0) return
+    setActiveStory(((perspectiveGroupIndex + 1) % storyGroupCount) * 3)
+  }
 
-  const perspectiveTopic = visibleStories[0]?.title
-    ? truncateText(visibleStories[0].title, 36)
+  const prevPerspectiveGroup = () => {
+    if (storyGroupCount === 0) return
+    setActiveStory(((perspectiveGroupIndex - 1 + storyGroupCount) % storyGroupCount) * 3)
+  }
+
+  const resolvedSectionTitle = sectionTitle || (categoryTitle && categoryTitle.toLowerCase() !== 'top stories'
+    ? `TOP ${categoryTitle.toUpperCase()} STORIES`
+    : 'TOP STORIES')
+
+  const resolvedSeeMoreLabel = seeMoreLabel || 'See all stories →'
+  const resolvedSideBySideTitle = sideBySideTitle || 'Top Stories - Side by Side'
+
+  const perspectiveTopic = perspectiveStories[0]?.story?.title
+    ? truncateText(perspectiveStories[0].story.title, 70)
     : 'Latest coverage'
+
+  const coverageLabel = categoryTitle
+    ? `${categoryTitle} coverage`
+    : 'Coverage cluster'
+
+  const cyclePerspectiveSource = (delta) => {
+    if (visiblePerspectiveStories.length === 0) return
+    setActivePerspectiveSourceIndex((prev) => {
+      const total = visiblePerspectiveStories.length
+      return (prev + delta + total) % total
+    })
+  }
 
   return (
     <section id="news" className="section top-stories-section">
       <div className="section-hdr top-stories-hdr">
-        <h2>{sectionTitle}</h2>
+        <h2>{showPerspectives ? resolvedSideBySideTitle : resolvedSectionTitle}</h2>
         <div className="top-stories-actions">
-          <button
-            type="button"
-            className="top-stories-toggle"
-            onClick={() => setShowPerspectives((value) => !value)}
-          >
-            {showPerspectives ? '✕ Back to Top Stories' : '⇄ See Multiple Perspectives'}
-          </button>
-          <Link to={categoryPath || '/all-news'} className="see-more">See all stories →</Link>
+          {showPerspectiveToggle && (
+            <button
+              type="button"
+              className="top-stories-toggle"
+              onClick={() => setShowPerspectives((value) => !value)}
+            >
+              {showPerspectives ? '✕ Back to Top Stories' : '⇄ See Multiple Perspectives'}
+            </button>
+          )}
+          <Link to={categoryPath || '/all-news'} className="see-more">{resolvedSeeMoreLabel}</Link>
         </div>
       </div>
 
@@ -237,60 +312,128 @@ function TopStories({ loading, topStories, activeStory, setActiveStory, category
           </div>
         ) : (
           <div id="storiesSBS">
-            <div className="sbs-filter-row">
-              <span className="sbs-filter-label">Filter:</span>
-              <button type="button" onClick={() => setPerspectiveFilter('all')} className={`sbs-pill${perspectiveFilter === 'all' ? ' sbs-active' : ''}`}>All</button>
-              <button type="button" onClick={() => setPerspectiveFilter('left')} className={`sbs-pill${perspectiveFilter === 'left' ? ' sbs-active' : ''}`}>● Left</button>
-              <button type="button" onClick={() => setPerspectiveFilter('center')} className={`sbs-pill${perspectiveFilter === 'center' ? ' sbs-active' : ''}`}>● Center</button>
-              <button type="button" onClick={() => setPerspectiveFilter('right')} className={`sbs-pill${perspectiveFilter === 'right' ? ' sbs-active' : ''}`}>● Right</button>
-            </div>
-
-            <div className="sbs-story">
-              <div className="sbs-story-label">
-                <div className="sbs-topic-tag">{perspectiveTopic}</div>
-                <div className="sbs-story-count">{filteredPerspectiveStories.length} sources shown</div>
+            <div className="top-stories-nav-row">
+              <div className="sbs-filter-row">
+                <span className="sbs-filter-label">Filter:</span>
+                <button type="button" onClick={() => setPerspectiveFilter('all')} className={`sbs-pill${perspectiveFilter === 'all' ? ' sbs-active' : ''}`}>All</button>
+                <button type="button" onClick={() => setPerspectiveFilter('left')} className={`sbs-pill${perspectiveFilter === 'left' ? ' sbs-active' : ''}`}>● Left</button>
+                <button type="button" onClick={() => setPerspectiveFilter('center')} className={`sbs-pill${perspectiveFilter === 'center' ? ' sbs-active' : ''}`}>● Center</button>
+                <button type="button" onClick={() => setPerspectiveFilter('right')} className={`sbs-pill${perspectiveFilter === 'right' ? ' sbs-active' : ''}`}>● Right</button>
               </div>
 
-              <div className="sbs-grid">
-                {filteredPerspectiveStories.map(({ story, perspective }, index) => (
-                  <article key={`${story.url || story.title || 'perspective'}-${index}`} className="sbs-card" data-persp={perspective.key}>
-                    <div className="sbs-card-img">
-                      <img {...getImageProps(story.image, story.title, 'news')} />
-                    </div>
-                    <div className="sbs-card-body">
-                      <div className="sbs-source-row">
-                        <span className="sbs-source-badge" style={perspective.sourceStyle}>● {getMediaOutlet(story)}</span>
-                        <span className="sbs-persp-label" style={perspective.sourceStyle}>{perspective.label}</span>
-                        <span className="sbs-time">{getStoryTime(story)}</span>
+              {storyGroupCount > 1 && (
+                <span className="sbs-counter">Story {perspectiveGroupIndex + 1} of {storyGroupCount}</span>
+              )}
+            </div>
+
+            <div className="sbs-story editorial-sbs">
+              <div className="sbs-cluster-meta">
+                <div className="sbs-cluster-copy">
+                  <div className="sbs-topic-tag">{coverageLabel}</div>
+                  <h3 className="sbs-cluster-topic">{perspectiveTopic}</h3>
+                </div>
+                <div className="sbs-cluster-badges">
+                  <span className="sbs-cluster-badge sbs-cluster-badge-sources">{visiblePerspectiveStories.length} sources</span>
+                  <span className="sbs-cluster-badge sbs-cluster-badge-mode">
+                    {perspectiveFilter === 'all' ? 'Multiple perspectives' : activePerspectiveItem?.perspective.label || 'Focused view'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="sbs-source-nav">
+                <button className="sbs-source-arrow" type="button" onClick={() => cyclePerspectiveSource(-1)} aria-label="Previous source comparison">
+                  <FontAwesomeIcon icon={faChevronLeft} />
+                </button>
+
+                <div className="sbs-source-tabs">
+                  {visiblePerspectiveStories.map(({ story, perspective }, index) => (
+                    <button
+                      key={`${story.url || story.title || 'source'}-${index}`}
+                      type="button"
+                      className={`sbs-source-tab${index === resolvedPerspectiveSourceIndex ? ' active' : ''}`}
+                      onClick={() => setActivePerspectiveSourceIndex(index)}
+                    >
+                      {getMediaOutlet(story)}
+                      <span className="sbs-source-tab-perspective">{perspective.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <button className="sbs-source-arrow" type="button" onClick={() => cyclePerspectiveSource(1)} aria-label="Next source comparison">
+                  <FontAwesomeIcon icon={faChevronRight} />
+                </button>
+
+                <span className="sbs-story-count">{resolvedPerspectiveSourceIndex + 1} of {visiblePerspectiveStories.length}</span>
+              </div>
+
+              <div className="sbs-stage sbs-stage-editorial">
+                <button className="sbs-nav-btn" type="button" onClick={prevPerspectiveGroup} aria-label="Previous side-by-side story">
+                  <FontAwesomeIcon icon={faChevronLeft} />
+                </button>
+
+                <div className="sbs-feature-shell">
+                  {activePerspectiveItem && (
+                    <article className="sbs-feature-card" data-persp={activePerspectiveItem.perspective.key}>
+                      <div className="sbs-feature-media">
+                        <img {...getImageProps(activePerspectiveItem.story.image, activePerspectiveItem.story.title, 'news')} />
                       </div>
-                      <div className="sbs-headline">
-                        <a
-                          href="#"
-                          onClick={(event) => {
-                            event.preventDefault()
-                            goToArticle(story)
-                          }}
+                      <div className="sbs-feature-body">
+                        <div className="sbs-source-row">
+                          <span className="sbs-source-badge" style={activePerspectiveItem.perspective.sourceStyle}>● {getMediaOutlet(activePerspectiveItem.story)}</span>
+                          <span className="sbs-persp-label" style={activePerspectiveItem.perspective.sourceStyle}>{activePerspectiveItem.perspective.label}</span>
+                          <span className="sbs-time">{getStoryTime(activePerspectiveItem.story)}</span>
+                        </div>
+                        <div className="sbs-headline sbs-headline-feature">
+                          <a
+                            href="#"
+                            onClick={(event) => {
+                              event.preventDefault()
+                              goToArticle(activePerspectiveItem.story)
+                            }}
+                          >
+                            {activePerspectiveItem.story.title}
+                          </a>
+                        </div>
+                        <div className="sbs-excerpt sbs-excerpt-feature">{getStoryDescription(activePerspectiveItem.story, 240)}</div>
+                        <div className="sbs-footer">
+                          <span className="sbs-author">{activePerspectiveItem.story.author || getMediaOutlet(activePerspectiveItem.story)}</span>
+                          <a
+                            href="#"
+                            className="sbs-read"
+                            onClick={(event) => {
+                              event.preventDefault()
+                              goToArticle(activePerspectiveItem.story)
+                            }}
+                          >
+                            Read full story →
+                          </a>
+                        </div>
+                      </div>
+                    </article>
+                  )}
+
+                  <aside className="sbs-rail" aria-label="Coverage comparison list">
+                    <div className="sbs-rail-title">Coverage snapshot</div>
+                    <div className="sbs-rail-list">
+                      {visiblePerspectiveStories.map(({ story, perspective }, index) => (
+                        <button
+                          key={`${story.url || story.title || 'rail'}-${index}`}
+                          type="button"
+                          className={`sbs-rail-item${index === resolvedPerspectiveSourceIndex ? ' active' : ''}`}
+                          onClick={() => setActivePerspectiveSourceIndex(index)}
                         >
-                          {story.title}
-                        </a>
-                      </div>
-                      <div className="sbs-excerpt">{getStoryDescription(story, 170)}</div>
-                      <div className="sbs-footer">
-                        <span className="sbs-author">{story.author || getMediaOutlet(story)}</span>
-                        <a
-                          href="#"
-                          className="sbs-read"
-                          onClick={(event) => {
-                            event.preventDefault()
-                            goToArticle(story)
-                          }}
-                        >
-                          Read →
-                        </a>
-                      </div>
+                          <span className="sbs-rail-source" style={perspective.sourceStyle}>{getMediaOutlet(story)}</span>
+                          <span className="sbs-rail-headline">{truncateText(story.title, 88)}</span>
+                          <span className="sbs-rail-meta">{perspective.label} · {getStoryTime(story)}</span>
+                        </button>
+                      ))}
                     </div>
-                  </article>
-                ))}
+                  </aside>
+                </div>
+
+                <button className="sbs-nav-btn" type="button" onClick={nextPerspectiveGroup} aria-label="Next side-by-side story">
+                  <FontAwesomeIcon icon={faChevronRight} />
+                </button>
               </div>
             </div>
           </div>

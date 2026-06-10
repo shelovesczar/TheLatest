@@ -16,7 +16,7 @@
         "npm:@fortawesome/free-brands-svg-icons@^7.1.0",
         "npm:@fortawesome/free-solid-svg-icons@^7.1.0",
         "npm:@fortawesome/react-fontawesome@^3.1.1",
-        "npm:@tanstack/react-virtual@^3.13.12",
+        "npm:@tanstack/react-virtual@^3.13.26",
         "npm:@types/react-dom@^19.2.3",
         "npm:@types/react@^19.2.5",
         "npm:@vitejs/plugin-react@^5.1.1",

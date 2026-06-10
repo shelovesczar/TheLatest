@@ -18,7 +18,8 @@ function Search() {
       searchUrl: 'https://chat.openai.com/?q=',
       icon: faOpenai,
       color: '#10a37f',
-      description: 'AI-powered search & analysis'
+      description: 'AI-powered search and synthesis for fast briefing.',
+      eyebrow: 'AI Analysis'
     },
     {
       name: 'Perplexity',
@@ -26,7 +27,8 @@ function Search() {
       searchUrl: 'https://www.perplexity.ai/search?q=',
       icon: faLightbulb,
       color: '#20808d',
-      description: 'AI research assistant'
+      description: 'Research assistant with citations and quick follow-ups.',
+      eyebrow: 'Research'
     },
     {
       name: 'Google',
@@ -34,7 +36,8 @@ function Search() {
       searchUrl: 'https://www.google.com/search?q=',
       icon: faGoogle,
       color: '#4285f4',
-      description: 'Search the world\'s information'
+      description: 'Broad web search for coverage, sourcing, and context.',
+      eyebrow: 'Search'
     },
     {
       name: 'Wikipedia',
@@ -42,7 +45,8 @@ function Search() {
       searchUrl: 'https://en.wikipedia.org/wiki/Special:Search?search=',
       icon: faWikipediaW,
       color: '#000000',
-      description: 'Free online encyclopedia'
+      description: 'Reference background for people, institutions, and events.',
+      eyebrow: 'Reference'
     },
     {
       name: 'DuckDuckGo',
@@ -50,7 +54,8 @@ function Search() {
       searchUrl: 'https://duckduckgo.com/?q=',
       logo: 'https://duckduckgo.com/favicon.ico',
       color: '#de5833',
-      description: 'Privacy-focused search'
+      description: 'Privacy-focused search with a cleaner result set.',
+      eyebrow: 'Search'
     },
     {
       name: 'Grok',
@@ -58,7 +63,8 @@ function Search() {
       searchUrl: 'https://x.com/i/grok?q=',
       icon: faXTwitter,
       color: '#000000',
-      description: 'X AI assistant'
+      description: 'Real-time social graph context from the X ecosystem.',
+      eyebrow: 'Social AI'
     },
     {
       name: 'Claude',
@@ -66,7 +72,8 @@ function Search() {
       searchUrl: 'https://claude.ai/new?q=',
       logo: 'https://claude.ai/favicon.ico',
       color: '#cc9b7a',
-      description: 'AI assistant by Anthropic'
+      description: 'Long-form analysis and document-oriented synthesis.',
+      eyebrow: 'AI Analysis'
     }
   ]
 
@@ -109,11 +116,15 @@ function Search() {
 
   return (
     <section id="search" className="section search-section">
-      <h2 className="section-title">Advanced Search</h2>
-      <p className="section-subtitle">
-        {hasActiveTopic 
-          ? `Search for "${topic}" across different platforms` 
-          : 'Explore topics with AI and traditional search engines'
+      <div className="section-hdr search-section-hdr">
+        <h2>Advanced Search</h2>
+        <span className="see-more">Research tools →</span>
+      </div>
+
+      <p className="section-subtitle search-section-subtitle">
+        {hasActiveTopic
+          ? `Search for "${topic}" across AI, reference, and web platforms.`
+          : 'Explore a topic across AI tools, reference sources, and the open web.'
         }
       </p>
       
@@ -135,15 +146,24 @@ function Search() {
               rel="noopener noreferrer"
               className="search-engine-card"
             >
-              <div className="search-engine-icon" style={{ borderColor: engine.color }}>
-                {engine.icon ? (
-                  <FontAwesomeIcon icon={engine.icon} style={{ fontSize: '2rem', color: engine.color }} />
-                ) : (
-                  <img src={engine.logo} alt={`${engine.name} logo`} onError={(e) => handleImageError(e, 'general')} loading="lazy" />
-                )}
+              <div className="search-engine-topline">
+                <span className="search-engine-eyebrow">{engine.eyebrow}</span>
+                <span className="search-engine-kicker">Open in new tab</span>
               </div>
-              <h3 className="search-engine-name">{engine.name}</h3>
+
+              <div className="search-engine-brand-row">
+                <div className="search-engine-icon" style={{ borderColor: engine.color, color: engine.color }}>
+                  {engine.icon ? (
+                    <FontAwesomeIcon icon={engine.icon} style={{ fontSize: '1.7rem', color: engine.color }} />
+                  ) : (
+                    <img src={engine.logo} alt={`${engine.name} logo`} onError={(e) => handleImageError(e, 'general')} loading="lazy" />
+                  )}
+                </div>
+                <h3 className="search-engine-name">{engine.name}</h3>
+              </div>
+
               <p className="search-engine-description">{engine.description}</p>
+
               <div className="search-engine-action">
                 <FontAwesomeIcon icon={faMagnifyingGlass} />
                 <span>{hasActiveTopic ? `Search ${topic}` : 'Search Now'}</span>

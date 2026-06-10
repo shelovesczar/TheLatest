@@ -37,7 +37,20 @@ let feedFailureCache = new Map();
 
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes — fewer cold fetches
 const MAX_ITEMS_PER_FEED = 15;          // only grab top 15 per feed for speed
-const MAX_FEEDS_PER_REQUEST = 6;        // cap parallel feeds to avoid slow stragglers
+const MAX_FEEDS_PER_REQUEST = 6;        // default cap parallel feeds to avoid slow stragglers
+const MAX_FEEDS_BY_KEY = {
+  news: 10,
+  politics: 8,
+  opinions: 8,
+  videos: 10,
+  podcasts: 8,
+  sports: 8,
+  tech: 8,
+  entertainment: 8,
+  business: 8,
+  lifestyle: 8,
+  culture: 8
+};
 const PRIORITY_FEED_MIN_ITEMS = 24;      // high-priority feeds pull more items
 const ARTICLE_IMAGE_CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
 const MAX_IMAGE_ENRICH_ITEMS = 0;       // disabled — images come from feed metadata
@@ -889,12 +902,12 @@ function shouldFilterOut(item) {
 const RSS_FEEDS = {
   news: [
     // Major News Networks
-    { url: 'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml', source: 'New York Times' },
-    { url: 'https://feeds.bbci.co.uk/news/rss.xml', source: 'BBC News' },
-    { url: 'https://www.theguardian.com/world/rss', source: 'The Guardian' },
+    { url: 'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml', source: 'New York Times', priority: 'high' },
+    { url: 'https://feeds.bbci.co.uk/news/rss.xml', source: 'BBC News', priority: 'high' },
+    { url: 'https://www.theguardian.com/world/rss', source: 'The Guardian', priority: 'high' },
     { url: 'http://rss.cnn.com/rss/cnn_topstories.rss', source: 'CNN' },
-    { url: 'https://feeds.reuters.com/reuters/topNews', source: 'Reuters' },
-    { url: 'https://feeds.npr.org/1001/rss.xml', source: 'NPR' },
+    { url: 'https://feeds.reuters.com/reuters/topNews', source: 'Reuters', priority: 'high' },
+    { url: 'https://feeds.npr.org/1001/rss.xml', source: 'NPR', priority: 'high' },
     { url: 'https://www.politico.com/rss/politicopicks.xml', source: 'Politico' },
     { url: 'https://feeds.washingtonpost.com/rss/national', source: 'Washington Post' },
     { url: 'https://www.latimes.com/world-nation/rss2.0.xml', source: 'LA Times' },
@@ -920,11 +933,23 @@ const RSS_FEEDS = {
     { url: 'https://www.cbsnews.com/latest/rss/main', source: 'CBS News' },
     { url: 'https://www.usatoday.com/rss/', source: 'USA Today' },
     { url: 'https://nypost.com/feed/', source: 'New York Post' },
-    { url: 'https://apnews.com/apf-topnews', source: 'Associated Press' },
+    { url: 'https://apnews.com/apf-topnews', source: 'Associated Press', priority: 'high' },
     
     // RSS APP feeds (for more niche topics)
     { url: 'https://rss.app/feeds/tTWnpqRL1kY8uxZD.xml', source: 'CNN' }
     // Bundle feed is prepended automatically by prependBundleFeed() at position 1
+  ],
+  politics: [
+    { url: 'https://www.politico.com/rss/politicopicks.xml', source: 'Politico', priority: 'high' },
+    { url: 'https://thehill.com/feed/', source: 'The Hill', priority: 'high' },
+    { url: 'https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml', source: 'New York Times Politics', priority: 'high' },
+    { url: 'https://www.theguardian.com/us-news/us-politics/rss', source: 'The Guardian Politics', priority: 'high' },
+    { url: 'https://feeds.washingtonpost.com/rss/politics', source: 'Washington Post Politics' },
+    { url: 'http://rss.cnn.com/rss/cnn_allpolitics.rss', source: 'CNN Politics' },
+    { url: 'http://feeds.foxnews.com/foxnews/politics', source: 'Fox News Politics' },
+    { url: 'https://www.npr.org/rss/rss.php?id=1014', source: 'NPR Politics' },
+    { url: 'https://feeds.bbci.co.uk/news/politics/rss.xml', source: 'BBC Politics' },
+    { url: 'https://rss.app/feeds/tTWnpqRL1kY8uxZD.xml', source: 'CNN' }
   ],
   opinions: [
     { url: 'https://rss.nytimes.com/services/xml/rss/nyt/Opinion.xml', source: 'New York Times Opinion' },
@@ -1131,7 +1156,7 @@ const BUNDLE_ELIGIBLE_FEED_KEYS = new Set([
   // Category groups with dedicated bundles (e.g. sports/entertainment/lifestyle)
   // should not get this extra prepend to avoid timeout-heavy duplication.
   'news', 'opinions', 'videos', 'podcasts',
-  'tech', 'business', 'culture'
+  'politics', 'tech', 'business', 'culture'
 ]);
 
 function prependBundleFeed(feedList = [], feedKey = 'news') {
@@ -1644,6 +1669,10 @@ function selectFeedsForRequest(feedList = [], options = {}) {
   return [...highPriorityFeeds, ...selectedStandardFeeds];
 }
 
+function getMaxFeedsForKey(feedKey = 'news') {
+  return MAX_FEEDS_BY_KEY[feedKey] || MAX_FEEDS_PER_REQUEST;
+}
+
 // Fetch multiple feeds in parallel, capped at MAX_FEEDS_PER_REQUEST to keep response fast
 async function fetchFeeds(feedList, options = {}) {
   const limited = selectFeedsForRequest(feedList, options);
@@ -1944,6 +1973,10 @@ exports.handler = async (event, context) => {
         activeFeedKey = 'sports';
         feedsToFetch = prependBundleFeed(RSS_FEEDS.sports, activeFeedKey);
         console.log(`Fetching SPORTS ${type}:`, feedsToFetch.length, 'sources');
+      } else if (cat === 'politics') {
+        activeFeedKey = 'politics';
+        feedsToFetch = prependBundleFeed(RSS_FEEDS.politics, activeFeedKey);
+        console.log(`Fetching POLITICS ${type}:`, feedsToFetch.length, 'sources');
       } else if (cat === 'tech' || cat === 'technology' || cat === 'business-tech') {
         activeFeedKey = 'tech';
         feedsToFetch = prependBundleFeed(RSS_FEEDS.tech, activeFeedKey);
@@ -1972,7 +2005,10 @@ exports.handler = async (event, context) => {
 
     // Fetch fresh data
     console.log(`Fetching fresh data for ${cacheKey}`);
-    data = await fetchFeeds(feedsToFetch, { feedKey: activeFeedKey });
+    data = await fetchFeeds(feedsToFetch, {
+      feedKey: activeFeedKey,
+      maxFeeds: getMaxFeedsForKey(activeFeedKey)
+    });
 
     // ── Bundle-feed classification ────────────────────────────────────────────
     // Items fetched from the bundle feed are mixed content (news + opinions).

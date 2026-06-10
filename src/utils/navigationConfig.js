@@ -29,11 +29,11 @@ const NEWS_TOPICS = [
 ]
 
 const POLITICS_TOPICS = [
-  createTopic('Trump', 'trump', 'trump', 'Coverage of Donald Trump, his legal fights, campaign moves, and political influence.', 'news', IMAGE_SET.politics),
-  createTopic('Congress', 'congress', 'congress', 'The House, Senate, budget fights, and the votes shaping federal policy.', 'news', IMAGE_SET.politics),
-  createTopic('Supreme Court', 'supreme-court', 'supreme court', 'Major rulings, legal arguments, and the constitutional fights before the court.', 'news', IMAGE_SET.politics),
-  createTopic('Elections', 'elections', 'elections', 'Campaign strategy, voter turnout, battlegrounds, and race-by-race shifts.', 'news', IMAGE_SET.politics),
-  createTopic('Polls', 'polls', 'polls', 'Approval ratings, race tracking, and the numbers driving the political narrative.', 'news', IMAGE_SET.politics)
+  createTopic('Trump', 'trump', 'trump', 'Coverage of Donald Trump, his legal fights, campaign moves, and political influence.', 'politics', IMAGE_SET.politics),
+  createTopic('Congress', 'congress', 'congress', 'The House, Senate, budget fights, and the votes shaping federal policy.', 'politics', IMAGE_SET.politics),
+  createTopic('Supreme Court', 'supreme-court', 'supreme court', 'Major rulings, legal arguments, and the constitutional fights before the court.', 'politics', IMAGE_SET.politics),
+  createTopic('Elections', 'elections', 'elections', 'Campaign strategy, voter turnout, battlegrounds, and race-by-race shifts.', 'politics', IMAGE_SET.politics),
+  createTopic('Polls', 'polls', 'polls', 'Approval ratings, race tracking, and the numbers driving the political narrative.', 'politics', IMAGE_SET.politics)
 ]
 
 const TECH_TOPICS = [
@@ -96,6 +96,11 @@ export const TOPIC_PAGE_CONFIG = Object.fromEntries(
 )
 
 export const getTopicPageConfig = (slug) => TOPIC_PAGE_CONFIG[slug] || null
+
+export const getTopicSectionLabel = (slug) => {
+  const owningSection = NAV_ITEMS.find((item) => item.items.some((topic) => topic.slug === slug))
+  return owningSection?.label || 'Topics'
+}
 
 export const NAV_ITEMS = [
   {

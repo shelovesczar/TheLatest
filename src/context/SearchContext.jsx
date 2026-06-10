@@ -50,12 +50,15 @@ export const SearchProvider = ({ children }) => {
     }
   }
 
-  // Clear topic and return to home
-  const clearTopic = () => {
+  // Clear topic state, optionally returning to the home page.
+  const clearTopic = ({ navigateHome = true } = {}) => {
     setTopicState('')
     setSearchQuery('')
     localStorage.removeItem('currentTopic')
-    navigate('/')
+
+    if (navigateHome) {
+      navigate('/')
+    }
   }
 
   // Sync with URL changes

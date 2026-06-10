@@ -2,10 +2,20 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { searchRSSContent } from '../rssService'
-import { fetchRSSNews } from '../newsService'
+import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
 import { recordHistory, searchArchive } from '../utils/savedArticles'
 import DateTicker from '../components/layout/DateTicker'
+import TopStories from '../components/sections/TopStories'
+import AISummary from '../components/sections/AISummary'
+import Opinions from '../components/sections/Opinions'
+import SocialMedia from '../components/sections/SocialMedia'
+import Videos from '../components/sections/Videos'
+import Podcasts from '../components/sections/Podcasts'
+import AdBreak from '../components/common/AdBreak'
 import { formatDateOnly } from '../utils/dateUtils'
+import { dedupeContentItems } from '../utils/contentDeduplication'
+import { filterItemsByTopic } from '../utils/topicFiltering'
+import { getRandomTrendingPosts } from '../socialMediaService'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSearch, faTimes } from '@fortawesome/free-solid-svg-icons'
 import OptimizedImage from '../components/common/OptimizedImage'
@@ -53,11 +63,18 @@ function SearchResults() {
 
   const [results, setResults]             = useState([])
   const [archiveResults, setArchiveResults] = useState([])
+  const [queryNews, setQueryNews] = useState([])
+  const [queryOpinions, setQueryOpinions] = useState([])
+  const [queryVideos, setQueryVideos] = useState([])
+  const [queryPodcasts, setQueryPodcasts] = useState([])
+  const [querySocialPosts, setQuerySocialPosts] = useState([])
   const [feedNews, setFeedNews]           = useState([])
   const [loading, setLoading]             = useState(false)
   const [feedLoading, setFeedLoading]     = useState(true)
+  const [querySectionsLoading, setQuerySectionsLoading] = useState(false)
   const [selectedSource, setSelectedSource] = useState('ALL')
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280))
+  const [activeStory, setActiveStory] = useState(0)
   const virtualResultsRef = useRef(null)
 
   // Keep input in sync when the URL query changes (e.g. back button)
@@ -82,11 +99,19 @@ function SearchResults() {
   useEffect(() => {
     if (!query.trim()) {
       setResults([])
+      setQueryNews([])
+      setQueryOpinions([])
+      setQueryVideos([])
+      setQueryPodcasts([])
+      setQuerySocialPosts([])
       return
     }
     setLoading(true)
     console.log('[SearchResults] Initiating search for:', query)
-    searchRSSContent(query)
+    searchRSSContent(query, {
+      preferFresh: true,
+      minStrictResults: 4
+    })
       .then(data => {
         const items = Array.isArray(data) ? data : []
         console.log('[SearchResults] Got results:', items.length, 'items')
@@ -113,6 +138,63 @@ function SearchResults() {
     console.log('[SearchResults] Archive results:', archiveResults.length, 'items')
     setArchiveResults(archiveResults)
   }, [query])
+
+  useEffect(() => {
+    if (!query.trim()) {
+      return
+    }
+
+    let ignore = false
+    const narrow = (items = [], limit = 6) => dedupeContentItems(filterItemsByTopic(items, query)).slice(0, limit)
+
+    const loadQuerySections = async () => {
+      setQuerySectionsLoading(true)
+
+      try {
+        const [newsItems, opinionItems, videoItems, podcastItems, socialItems] = await Promise.all([
+          results.length > 0
+            ? Promise.resolve(results)
+            : searchRSSContent(query, {
+                preferFresh: true,
+                strictSearch: false,
+                relaxSearchFallback: true,
+                minStrictResults: 4
+              }),
+          fetchOpinions('news', query),
+          fetchVideos('news', query),
+          fetchTrendingContent('news', query),
+          getRandomTrendingPosts(6, query)
+        ])
+
+        if (ignore) return
+
+        setQueryNews(narrow(newsItems, 15))
+        setQueryOpinions(narrow(opinionItems, 6))
+        setQueryVideos(narrow(videoItems, 6))
+        setQueryPodcasts(narrow(podcastItems, 6))
+        setQuerySocialPosts(Array.isArray(socialItems) ? socialItems.slice(0, 6) : [])
+      } catch (error) {
+        if (!ignore) {
+          console.error('Failed to load query sections:', error)
+          setQueryNews([])
+          setQueryOpinions([])
+          setQueryVideos([])
+          setQueryPodcasts([])
+          setQuerySocialPosts([])
+        }
+      } finally {
+        if (!ignore) {
+          setQuerySectionsLoading(false)
+        }
+      }
+    }
+
+    loadQuerySections()
+
+    return () => {
+      ignore = true
+    }
+  }, [query, results])
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -141,9 +223,13 @@ function SearchResults() {
   }
 
   const descriptionLimit = useMemo(() => getDescriptionLimit(), [viewportWidth])
+  const searchStoryPool = results.length > 0 ? results : queryNews
+  const featuredSearchStories = searchStoryPool.slice(0, 12)
+  const remainingResults = featuredSearchStories.length > 0 ? results.slice(12) : results
+  const sourceList = remainingResults.length > 0 ? remainingResults : results
 
   const resultVirtualizer = useVirtualizer({
-    count: results.length,
+    count: sourceList.length,
     getScrollElement: () => virtualResultsRef.current,
     estimateSize: () => 420,
     overscan: 8,
@@ -185,14 +271,28 @@ function SearchResults() {
   const isSearching = hasQuery && loading
   const hasLiveResults = results.length > 0
   const hasArchiveMatches = archiveResults.length > 0
-  const noResults   = hasQuery && !loading && !hasLiveResults && !hasArchiveMatches
+  const hasSectionContent = searchStoryPool.length > 0 || queryOpinions.length > 0 || queryVideos.length > 0 || queryPodcasts.length > 0 || querySocialPosts.length > 0 || hasArchiveMatches
+  const noResults   = hasQuery && !loading && !querySectionsLoading && !hasSectionContent
 
   return (
-    <div className="search-results-page">
+    <div className="search-results-page" id="search-top">
 
       {/* ── Hero / Search Bar ──────────────────────────────── */}
+      {hasQuery && (
+        <div className="sr-back-bar">
+          <div className="sr-shell sr-back-bar-inner">
+            <div className="sr-back-bar-copy">
+              <Link to="/">Home</Link>
+              <span>/</span>
+              <span>Search: "{query}"</span>
+            </div>
+            <span className="sr-back-bar-count">{results.length} result{results.length !== 1 ? 's' : ''} across all sources</span>
+          </div>
+        </div>
+      )}
+
       <div className="sr-hero">
-        <div className="sr-hero-inner">
+        <div className="sr-hero-inner sr-shell">
           <h1 className="sr-hero-title">
             {hasQuery ? `"${query}"` : 'Search'}
           </h1>
@@ -231,12 +331,20 @@ function SearchResults() {
               </button>
             </div>
           </form>
+
+          {hasQuery && (
+            <div className="sr-topic-tabs">
+              <a href="#news" className="sr-topic-pill">Side by Side</a>
+              <a href="#search-results-list" className="sr-topic-pill">Results</a>
+              {hasArchiveMatches && <a href="#archive-results" className="sr-topic-pill">Archive</a>}
+            </div>
+          )}
         </div>
       </div>
 
       {/* ── Search Results ─────────────────────────────────── */}
       {hasQuery && (
-        <div className="sr-results-section">
+        <div className="sr-results-section sr-shell">
           {isSearching ? (
             <div className="sr-loading">
               <div className="spinner" />
@@ -249,10 +357,65 @@ function SearchResults() {
             </div>
           ) : (
             <>
-              {hasLiveResults && (
+              <AISummary
+                category={query}
+                categoryTitle={query}
+                description={`AI-generated summary of the latest coverage around ${query}.`}
+                ignoreTopic={true}
+              />
+
+              {featuredSearchStories.length > 0 && (
+                <TopStories
+                  topStories={featuredSearchStories}
+                  loading={querySectionsLoading && !hasLiveResults}
+                  activeStory={activeStory}
+                  setActiveStory={setActiveStory}
+                  sectionTitle="Top Search Results"
+                  sideBySideTitle="Top Stories - Side by Side"
+                  showPerspectiveToggle={false}
+                  defaultPerspectiveView={true}
+                  seeMoreLabel="View all search results →"
+                  categoryPath={`/search?q=${encodeURIComponent(query)}`}
+                />
+              )}
+
+              <AdBreak slot="home-feed-inline" />
+
+              <Opinions
+                opinions={queryOpinions}
+                loadingOpinions={querySectionsLoading}
+                categoryPath={`/search?q=${encodeURIComponent(query)}`}
+              />
+
+              <AdBreak slot="section-break" />
+
+              <SocialMedia
+                socialPosts={querySocialPosts}
+                loadingSocial={querySectionsLoading}
+              />
+
+              <AdBreak slot="section-break" />
+
+              <Videos
+                videos={queryVideos}
+                loadingVideos={querySectionsLoading}
+                categoryPath={`/search?q=${encodeURIComponent(query)}`}
+              />
+
+              <AdBreak slot="section-break" />
+
+              <Podcasts
+                podcasts={queryPodcasts}
+                loadingPodcasts={querySectionsLoading}
+                categoryPath={`/search?q=${encodeURIComponent(query)}`}
+              />
+
+              <AdBreak slot="section-break" />
+
+              {hasLiveResults && sourceList.length > 0 && (
                 <>
-                  <div className="sr-results-header">
-                    <span className="sr-count">{results.length} articles found</span>
+                  <div className="sr-results-header" id="search-results-list">
+                    <span className="sr-count">{remainingResults.length > 0 ? remainingResults.length : results.length} articles found</span>
                   </div>
                   <div className="results-virtual-scroll" ref={virtualResultsRef}>
                     <div
@@ -260,7 +423,7 @@ function SearchResults() {
                       style={{ height: `${resultVirtualizer.getTotalSize()}px` }}
                     >
                       {resultVirtualizer.getVirtualItems().map((virtualRow) => {
-                        const article = results[virtualRow.index]
+                        const article = sourceList[virtualRow.index]
                         if (!article) return null
 
                         return (
@@ -311,7 +474,7 @@ function SearchResults() {
 
               {/* Archive results */}
               {hasArchiveMatches && (
-                <div className="sr-archive-section">
+                <div className="sr-archive-section" id="archive-results">
                   <div className="sr-archive-header">
                     <span className="panel-kicker">Your Archive</span>
                     <h3 className="panel-title">From Saved &amp; History</h3>

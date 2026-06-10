@@ -1,16 +1,14 @@
 /* Search Section */
-.search-section .section-subtitle {
-  display: block;
-  margin-left: auto;
-  margin-right: auto;
-  width: fit-content;
-  font-size: 1.7rem;
-  color: var(--text-secondary);
-  margin-bottom: var(--spacing-md);
+.search-section-hdr {
+  align-items: center;
 }
 
-.section-subtitle {
-  padding-top: 1rem;
+.search-section-subtitle {
+  max-width: 720px;
+  margin: 0 0 1.35rem;
+  font-size: 1rem;
+  color: var(--text-secondary);
+  line-height: 1.65;
 }
 
 .search-section {
@@ -29,29 +27,27 @@
 .search-slider-btn {
   flex-shrink: 0;
   min-width: 44px;
-  background: var(--gradient-brand-soft);
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: var(--accent-color);
   color: #ffffff;
   font-size: 18px;
   width: 44px;
   height: 44px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition:
+    transform var(--transition-base) 0.2s ease,
+    border-color var(--transition-base),
+    box-shadow var(--transition-base),
+    color var(--transition-base);
   z-index: 10;
-  box-shadow:
-    0 4px 12px rgba(18, 52, 98, 0.35),
-    0 1px 2px rgba(0, 0, 0, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
 }
 
 .search-slider-btn:hover {
-  background: var(--gradient-brand);
-  border-color: rgba(255, 255, 255, 0.52);
-  transform: translateY(-1px) scale(1.08);
-  box-shadow:
-    0 8px 18px rgba(18, 52, 98, 0.42),
-    0 2px 4px rgba(0, 0, 0, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  background: var #1d4f88 (--accent-hover);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.72);
+  transform: translateY(-1px) scale(1.04);
 }
 
 .search-engines-grid {
@@ -65,7 +61,7 @@
 
 .search-engine-card {
   background-color: var(--bg-secondary);
-  padding: 2.5rem 2rem;
+  padding: 1rem 1rem 1.1rem;
   border-radius: 12px;
   border: 1px solid var(--border-color);
   transition: all 0.3s;
@@ -74,62 +70,97 @@
   color: inherit;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 1rem;
+  align-items: stretch;
+  text-align: left;
+  gap: 0.85rem;
+  min-height: 280px;
 }
 
 .search-engine-card:hover {
-  border-color: #ff4757;
-  transform: translateY(-5px);
-  box-shadow: 0 10px 30px rgba(255, 71, 87, 0.2);
+  border-color: var(--accent-color);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(20, 34, 58, 0.12);
+}
+
+.search-engine-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.search-engine-eyebrow,
+.search-engine-kicker {
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.search-engine-eyebrow {
+  color: var(--accent-color);
+}
+
+.search-engine-kicker {
+  color: var(--text-secondary);
+}
+
+.search-engine-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
 }
 
 .search-engine-icon {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  border: 3px solid var(--border-color);
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: center;
   background-color: var(--bg-tertiary);
   transition: all 0.3s;
+  flex-shrink: 0;
 }
 
 .search-engine-icon img {
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
   object-fit: contain;
 }
 
 .search-engine-card:hover .search-engine-icon {
-  transform: scale(1.1);
-  border-color: #ff4757;
+  transform: scale(1.04);
+  border-color: var(--accent-color);
 }
 
 .search-engine-name {
-  font-size: clamp(1rem, 1.8vw, 1.4rem);
+  font-size: clamp(1.05rem, 1.8vw, 1.32rem);
   font-weight: 800;
   color: var(--text-primary);
   margin: 0;
 }
 
 .search-engine-description {
-  font-size: clamp(0.8rem, 1.3vw, 0.95rem);
+  font-size: clamp(0.86rem, 1.3vw, 0.96rem);
   color: var(--text-secondary);
   margin: 0;
   font-weight: 500;
+  line-height: 1.55;
+  flex: 1;
 }
 
 .search-engine-action {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #ff4757;
+  color: var(--accent-color);
   font-weight: 700;
-  font-size: clamp(0.8rem, 1.2vw, 0.95rem);
-  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  margin-top: auto;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border-color);
 }
 
 /* Responsive */
@@ -179,7 +210,7 @@
   .search-engine-card {
     border-width: 3px;
   }
-  
+
   .search-engine-icon {
     border-width: 4px;
   }

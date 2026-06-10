@@ -5,7 +5,7 @@ import { deriveMediaOutlet } from './utils/sourceUtils';
 // RSS Aggregator endpoint - works both locally (with netlify dev) and in production
 const RSS_API_URL = '/.netlify/functions/rss-aggregator';
 const RSS_CACHE_VERSION = 'v9-video-density';
-const REQUEST_TIMEOUT = 8000;  // 8s — backend now completes in ~5s
+const REQUEST_TIMEOUT = 12000; // 12s — avoids aborting cold-start live searches that legitimately run past 8s
 const RETRY_ATTEMPTS = 1;      // no retry; stale cache is shown on failure instead
 const RETRY_BASE_DELAY_MS = 500;
 const FUNCTIONS_RECHECK_COOLDOWN_MS = 15000;
@@ -587,6 +587,7 @@ export async function searchRSSContent(searchTerm, options = {}) {
 
   const strictSearch = options.strictSearch !== false;
   const relaxSearchFallback = options.relaxSearchFallback !== false;
+  const preferFresh = options.preferFresh === true;
   const parsedMinStrict = Number.parseInt(options.minStrictResults, 10);
   const minStrictResults = Number.isNaN(parsedMinStrict) ? 6 : Math.max(1, Math.min(parsedMinStrict, 20));
 
@@ -601,6 +602,29 @@ export async function searchRSSContent(searchTerm, options = {}) {
   };
 
   try {
+    if (preferFresh) {
+      const freshUrl = buildSearchUrl(searchTerm);
+      console.log(`[RSS Search] Prefer-fresh remote search for "${searchTerm}" at ${freshUrl}`);
+
+      try {
+        const response = await requestWithRetry(freshUrl);
+        markFunctionsAvailable();
+
+        const normalizedFreshResults = extractDataArray(response).map(normalizeOutletSource);
+        const freshResults = dedupeContentItems(normalizedFreshResults);
+
+        if (freshResults.length > 0) {
+          await cacheManager.set(searchCacheKey, freshResults);
+          return freshResults;
+        }
+      } catch (error) {
+        console.warn('[RSS Search] Prefer-fresh remote search failed:', error.message);
+        if (shouldDisableFunctions(error)) {
+          markFunctionsUnavailable();
+        }
+      }
+    }
+
     const cachedSearch = await cacheManager.get(searchCacheKey);
     if (cachedSearch && cachedSearch.length > 0) {
       console.log(`[RSS Search] Cache hit for "${normalizedSearchTerm}" with ${cachedSearch.length} results`);
