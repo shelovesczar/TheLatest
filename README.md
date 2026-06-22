@@ -252,6 +252,11 @@ npm test -- Header.test.jsx
 
 Copy `.env.example` to `.env` and set keys as needed.
 
+For a minimal RSS-first local setup with no paid AI provider, start from:
+- `.env.rss-first.example`
+
+That template keeps the app on the built-in RSS feed lists, uses the editorial summary path, and only requires `SESSION_TOKEN_PEPPER`.
+
 If you use social RSS route resolution, set:
 - `RSSHUB_BASE_URL` (for example: `https://rsshub.app`)
 
@@ -304,6 +309,14 @@ Use Netlify preview or production to verify:
 
 ## RSS feed configuration (videos + podcasts)
 
+For an RSS-first startup, the app already uses all currently configured feeds in `RSS_FEEDS` and then prepends the shared bundle feed for the eligible groups.
+
+That means:
+- you do not need to enumerate feeds in `.env`
+- leaving `RSS_APP_BUNDLE_FEED_URL` unset still uses the built-in bundle default
+- adding more feeds to the existing RSS.app bundle automatically flows into the app without code changes
+- adding brand-new direct feeds still happens in `netlify/functions/rss-aggregator.js`
+
 To change the single RSS feed used by both Videos and Podcasts:
 
 1. Open `netlify/functions/rss-aggregator.js`
@@ -314,6 +327,10 @@ Current setup points both to:
 - `https://rss.app/feeds/_D52QE16IQULFQQkk.xml`
 
 Tip: keep the two URLs identical if you want one shared feed for both sections.
+
+If you want the broadest RSS-first setup, keep the current configured `RSS_FEEDS` lists and continue adding sources into the shared bundle where it makes sense. That gives you both:
+- the direct curated feeds already in code
+- the aggregated bundle feed layered on top
 
 ---
 

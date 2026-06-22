@@ -71,21 +71,13 @@ async function main() {
   const targetPort = await findAvailablePort(preferredTargetPort)
   const netlifyPort = await findAvailablePort(preferredNetlifyPort)
 
-  console.log(`[dev:netlify] Starting Vite on http://127.0.0.1:${targetPort}`)
+  console.log(`[dev:netlify] Starting Netlify dev on http://127.0.0.1:${netlifyPort}`)
   if (netlifyPort !== preferredNetlifyPort || targetPort !== preferredTargetPort) {
     console.log(`[dev:netlify] Preferred ports were occupied. Using Netlify port ${netlifyPort} and target port ${targetPort}.`)
   }
 
-  const viteProcess = spawn(`npx vite --host 127.0.0.1 --port ${targetPort} --strictPort`, {
-    stdio: 'inherit',
-    env: process.env,
-    shell: true,
-  })
-
-  await waitForPort(targetPort)
-
-  console.log(`[dev:netlify] Starting Netlify dev on http://127.0.0.1:${netlifyPort}`)
-  const netlifyProcess = spawn(`netlify dev --port ${netlifyPort} --framework vite --target-port ${targetPort}`, {
+  const viteCommand = `npx vite --host 127.0.0.1 --port ${targetPort} --strictPort`
+  const netlifyProcess = spawn(`netlify dev --port ${netlifyPort} --framework vite --target-port ${targetPort} --command "${viteCommand}"`, {
     stdio: 'inherit',
     env: process.env,
     shell: true,
@@ -99,7 +91,6 @@ async function main() {
     }
 
     shuttingDown = true
-    terminateChild(viteProcess)
     terminateChild(netlifyProcess)
     process.exit(code)
   }
@@ -110,13 +101,6 @@ async function main() {
 
   netlifyProcess.once('exit', (code) => {
     shutdown(code ?? 0)
-  })
-
-  viteProcess.once('exit', (code) => {
-    if (!shuttingDown) {
-      console.error(`[dev:netlify] Vite exited unexpectedly with code ${code ?? 0}.`)
-      shutdown(code ?? 1)
-    }
   })
 }
 
