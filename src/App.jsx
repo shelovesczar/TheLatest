@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useLayoutEffect, lazy, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
 import { dedupeContentItems } from './utils/contentDeduplication'
 import './App.css'
@@ -150,6 +150,35 @@ function AnalyticsTracker() {
       // Ignore analytics failures.
     }
   }, [allowAnalytics, location.pathname, location.search])
+
+  return null
+}
+
+function ScrollToTop() {
+  const location = useLocation()
+
+  useEffect(() => {
+    if (!window.history || !('scrollRestoration' in window.history)) {
+      return undefined
+    }
+
+    const previous = window.history.scrollRestoration
+    window.history.scrollRestoration = 'manual'
+
+    return () => {
+      window.history.scrollRestoration = previous
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      window.scrollTo(0, 0)
+      document.documentElement.scrollTop = 0
+      document.body.scrollTop = 0
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [location.pathname, location.search])
 
   return null
 }
@@ -362,6 +391,7 @@ function App() {
       <ConsentProvider>
         <AuthProvider>
         <SearchProvider>
+          <ScrollToTop />
           <AnalyticsTracker />
           <SeoManager />
           <div className={`app ${darkMode ? 'dark-mode' : 'light-mode'}`}>

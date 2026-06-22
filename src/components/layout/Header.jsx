@@ -134,6 +134,22 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
     setMenuOpen(false)
   }
 
+  const handleMobileSearchClick = () => {
+    setOpenDropdown(null)
+    setProfileMenuOpen(false)
+    setMenuOpen(false)
+
+    if (location.pathname === '/search') {
+      window.requestAnimationFrame(() => {
+        const input = document.querySelector('.header-search-input')
+        input?.focus()
+      })
+      return
+    }
+
+    navigate(searchQuery.trim() ? `/search?q=${encodeURIComponent(searchQuery.trim())}` : '/search')
+  }
+
   const handleNavClick = (path) => {
     setMenuOpen(false)
     setOpenDropdown(null)
@@ -275,6 +291,15 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
                     <FontAwesomeIcon icon={faSearch} />
                   </button>
                 </form>
+
+                <button
+                  type="button"
+                  className="mobile-search-toggle"
+                  onClick={handleMobileSearchClick}
+                  aria-label="Open search"
+                >
+                  <FontAwesomeIcon icon={faSearch} />
+                </button>
 
                 <button
                   type="button"

@@ -144,6 +144,7 @@
 }
 
 /* Mobile-only theme toggle — sits in the header bar next to the logo */
+.mobile-search-toggle,
 .mobile-theme-toggle {
   display: none; /* hidden on desktop */
   align-items: center;
@@ -160,6 +161,7 @@
   transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
+.mobile-search-toggle:hover,
 .mobile-theme-toggle:hover {
   background-color: var(--accent-color);
   border-color: var(--accent-color);
@@ -677,6 +679,7 @@
     display: none;
   }
 
+  .mobile-search-toggle,
   .mobile-theme-toggle {
     display: inline-flex;
     align-items: center;
@@ -702,6 +705,7 @@
     padding-bottom: 0.1rem;
   }
 
+  .mobile-search-toggle,
   .mobile-theme-toggle {
     width: 20px;
     height: 20px;
@@ -729,6 +733,26 @@
 
   .header-search-form {
     width: 250px;
+  }
+}
+
+@media (max-width: 1500px) {
+  .nav {
+    gap: 0.7rem;
+  }
+
+  .header-utilities {
+    gap: 0.72rem;
+  }
+
+  .header-search-form--landing {
+    width: 204px;
+  }
+
+  .header-nav-button,
+  .header-nav-link {
+    padding-inline: 0.52rem;
+    font-size: 0.78rem;
   }
 }
 

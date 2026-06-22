@@ -82,4 +82,24 @@ describe('Header route traversal regression', () => {
 
     expect(await screen.findByRole('link', { name: 'All Politics' })).toBeTruthy()
   })
+
+  it('keeps mobile utility controls available across route changes', async () => {
+    const user = userEvent.setup()
+    renderHeader('/')
+
+    expect(screen.getByRole('button', { name: 'Open search' })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Toggle theme' }).length).toBeGreaterThan(0)
+
+    await user.click(screen.getByRole('button', { name: 'Go Search' }))
+    expect(screen.getByRole('button', { name: 'Open search' })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Toggle theme' }).length).toBeGreaterThan(0)
+
+    await user.click(screen.getByRole('button', { name: 'Go Politics' }))
+    expect(screen.getByRole('button', { name: 'Open search' })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Toggle theme' }).length).toBeGreaterThan(0)
+
+    await user.click(screen.getByRole('button', { name: 'Go Topic' }))
+    expect(screen.getByRole('button', { name: 'Open search' })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Toggle theme' }).length).toBeGreaterThan(0)
+  })
 })
