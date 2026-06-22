@@ -36,7 +36,7 @@ function extractTopicsFromHeadlines(articles, topN = 12) {
       if (phrase.length > 0) {
         const key = phrase.join(' ')
         // Minimum 1 word, but single words must be ≥4 chars to avoid noise
-        if (phrase.length > 1 || (phrase.length === 1 && phrase[0].length >= 4)) {
+        if ((phrase.length <= 2) && (phrase.length > 1 || (phrase.length === 1 && phrase[0].length >= 4))) {
           freq[key] = (freq[key] || 0) + 1
         }
         phrase = []
@@ -67,13 +67,16 @@ import { getRandomTrendingPosts } from './socialMediaService'
 
 // Import context
 import { AuthProvider } from './context/AuthContext'
+import { ConsentProvider, useConsent } from './context/ConsentContext'
 import { SearchProvider } from './context/SearchContext'
 
 // Always-visible layout — keep eager so there's no flash on any route
 import Header from './components/layout/Header'
 import Footer from './components/layout/Footer'
 import BottomDock from './components/layout/BottomDock'
+import CookieConsentBanner from './components/common/CookieConsentBanner'
 import ErrorBoundary from './components/common/ErrorBoundary'
+import SeoManager from './components/common/SeoManager'
 
 // Route-level code splitting — each page is its own JS chunk loaded on demand
 const HomePage      = lazy(() => import('./pages/HomePage'))
@@ -94,6 +97,8 @@ const SavedPage       = lazy(() => import('./pages/SavedPage'))
 const FollowingPage   = lazy(() => import('./pages/FollowingPage'))
 const DashboardPage   = lazy(() => import('./pages/DashboardPage'))
 const ArticleReader   = lazy(() => import('./pages/ArticleReader'))
+const PrivacyPage     = lazy(() => import('./pages/PrivacyPage'))
+const TermsPage       = lazy(() => import('./pages/TermsPage'))
 
 // Minimal spinner shown while a route chunk is downloading
 const RouteLoader = () => (
@@ -113,8 +118,13 @@ const RouteLoader = () => (
 
 function AnalyticsTracker() {
   const location = useLocation()
+  const { allowAnalytics } = useConsent()
 
   useEffect(() => {
+    if (!allowAnalytics) {
+      return
+    }
+
     const payload = JSON.stringify({
       eventType: 'page-view',
       path: `${location.pathname}${location.search}`,
@@ -139,7 +149,7 @@ function AnalyticsTracker() {
     } catch {
       // Ignore analytics failures.
     }
-  }, [location.pathname, location.search])
+  }, [allowAnalytics, location.pathname, location.search])
 
   return null
 }
@@ -349,14 +359,17 @@ function App() {
 
   return (
     <Router>
-      <AuthProvider>
-      <SearchProvider>
-        <AnalyticsTracker />
-        <div className={`app ${darkMode ? 'dark-mode' : 'light-mode'}`}>
+      <ConsentProvider>
+        <AuthProvider>
+        <SearchProvider>
+          <AnalyticsTracker />
+          <SeoManager />
+          <div className={`app ${darkMode ? 'dark-mode' : 'light-mode'}`}>
           <Header 
             darkMode={darkMode}
             toggleTheme={toggleTheme}
             setMenuOpen={setMenuOpen}
+            breakingNews={topStories.slice(0, 10).map((story) => story.title).filter(Boolean)}
           />
 
           <ErrorBoundary>
@@ -400,6 +413,8 @@ function App() {
             <Route path="/following" element={<FollowingPage />} />
             <Route path="/saved" element={<SavedPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
 
             {/* On-site article reader */}
             <Route path="/article" element={<ArticleReader />} />
@@ -529,10 +544,12 @@ function App() {
           </ErrorBoundary>
 
           <BottomDock />
+          <CookieConsentBanner />
           <Footer />
-        </div>
-      </SearchProvider>
-      </AuthProvider>
+          </div>
+        </SearchProvider>
+        </AuthProvider>
+      </ConsentProvider>
     </Router>
   )
 }

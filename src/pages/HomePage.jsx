@@ -1,6 +1,5 @@
 import { useState, useEffect, lazy, Suspense, useRef } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import { useSearch } from '../context/SearchContext'
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
 import { searchRSSContent, fetchRSSVideos } from '../rssService'
@@ -11,7 +10,6 @@ import { useInView } from '../hooks/useInView'
 import './HomePage.css'
 import Hero from '../components/sections/Hero'
 import TopStories from '../components/sections/TopStories'
-import DateTicker from '../components/layout/DateTicker'
 import TrendingStories from '../components/sections/TrendingStories'
 import AdBreak from '../components/common/AdBreak'
 import CardSkeleton from '../components/common/CardSkeleton'
@@ -30,6 +28,8 @@ const SectionLoader = () => (
     <CardSkeleton count={3} />
   </div>
 )
+
+const HOME_TOPIC_RAIL = ['Trump', 'Russia', 'Ebola', 'White House', 'West', 'Minutes', 'Now']
 
 function HomePage({
   email,
@@ -155,7 +155,7 @@ function HomePage({
 
   /*Filter by topic:
   Allows the for the  manpulations of how many topics to display to the user*/
-  const topicFilters = (hotTopics || []).slice(0, 9)
+  const topicFilters = HOME_TOPIC_RAIL
 
   const scrollTopicIntoView = (topicValue) => {
     if (!topicTickerRef.current) return
@@ -166,30 +166,6 @@ function HomePage({
     if (chip) {
       chip.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
     }
-  }
-
-  const scrollTopicTicker = (direction) => {
-    const topicOptions = ['__all__', ...topicFilters]
-    if (topicOptions.length === 0) return
-
-    const currentIndex = !hasActiveTopic
-      ? 0
-      : Math.max(0, topicOptions.indexOf(topic))
-
-    const nextIndex = direction === 'left'
-      ? (currentIndex - 1 + topicOptions.length) % topicOptions.length
-      : (currentIndex + 1) % topicOptions.length
-
-    const nextTopic = topicOptions[nextIndex]
-
-    if (nextTopic === '__all__') {
-      handleAllTopicsClick(false)
-      setTimeout(() => scrollTopicIntoView('__all__'), 120)
-      return
-    }
-
-    handleTopicClick(nextTopic, false)
-    setTimeout(() => scrollTopicIntoView(nextTopic), 120)
   }
 
   // Load initial content (top stories only)
@@ -435,10 +411,6 @@ function HomePage({
 
   return (
     <main className="main-content home-main-content">
-
-      {/* ── Breaking news ticker ── */}
-      <DateTicker breakingNews={topStories.slice(0, 10).map(s => s.title).filter(Boolean)} showDate={false} />
-
       {/* ── Fuzzy-match suggestion banner ── */}
       {suggestedTopic && (
         <div style={{
@@ -470,10 +442,7 @@ function HomePage({
       )}
 
       {/* ── 1. Hero — search + hot topics ── */}
-      <Hero
-        visibleTopics={hotTopics}
-        handleTopicClick={handleTopicClick}
-      />
+      <Hero />
 
       <div className="page-body">
 
@@ -488,41 +457,26 @@ function HomePage({
       {/* ── 2. Topic filter strip + Top Stories ── */}
       {hotTopics && hotTopics.length > 0 && (
         <div className="topic-filter-strip">
-          <span className="topic-filter-label">FILTER BY TOPIC</span>
-          <div className="topic-filter-row">
+          <span className="topic-filter-label">Topics:</span>
+          <div className="topic-filter-chips" ref={topicTickerRef}>
             <button
-              className="slider-btn topic-filter-btn"
-              onClick={() => scrollTopicTicker('left')}
-              aria-label="Scroll topics left"
+              data-topic-value="__all__"
+              className={`topic-chip ${!hasActiveTopic ? 'active' : ''}`}
+              onClick={handleAllTopicsClick}
             >
-              <FontAwesomeIcon icon={faChevronLeft} />
+              All
             </button>
-            <div className="topic-filter-chips" ref={topicTickerRef}>
+            {topicFilters.map((topicLabel, index) => (
               <button
-                data-topic-value="__all__"
-                className={`topic-chip ${!hasActiveTopic ? 'active' : ''}`}
-                onClick={handleAllTopicsClick}
+                key={topicLabel}
+                data-topic-value={topicLabel}
+                className={`topic-chip ${topic === topicLabel ? 'active' : ''}`}
+                onClick={() => handleTopicClick(topicLabel)}
               >
-                ALL
+                {topicLabel}
+                {index < topicFilters.length - 1 && <span className="topic-chip-divider" aria-hidden="true">|</span>}
               </button>
-              {topicFilters.map((t, i) => (
-                <button
-                  key={i}
-                  data-topic-value={t}
-                  className={`topic-chip ${topic === t ? 'active' : ''}`}
-                  onClick={() => handleTopicClick(t)}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-            <button
-              className="slider-btn topic-filter-btn"
-              onClick={() => scrollTopicTicker('right')}
-              aria-label="Scroll topics right"
-            >
-              <FontAwesomeIcon icon={faChevronRight} />
-            </button>
+            ))}
           </div>
         </div>
       )}

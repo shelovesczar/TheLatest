@@ -24,8 +24,24 @@ function buildUserKey(email = '') {
   return `users/${stableHash(normalizeEmail(email))}`;
 }
 
-function buildSessionKey(token = '') {
+function digestSessionToken(token = '') {
+  const normalizedToken = String(token || '').trim();
+  if (!normalizedToken) return '';
+
+  const pepper = String(process.env.SESSION_TOKEN_PEPPER || '').trim();
+  if (pepper) {
+    return crypto.createHmac('sha256', pepper).update(normalizedToken).digest('hex');
+  }
+
+  return crypto.createHash('sha256').update(normalizedToken).digest('hex');
+}
+
+function buildLegacySessionKey(token = '') {
   return `sessions/${String(token || '').trim()}`;
+}
+
+function buildSessionKey(token = '') {
+  return `sessions/${digestSessionToken(token)}`;
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
@@ -108,11 +124,12 @@ async function createSession(user = {}) {
   const createdAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
   const session = {
-    token,
     userId: user.id,
     email: user.email,
     createdAt,
-    expiresAt
+    expiresAt,
+    sessionVersion: 2,
+    tokenHash: digestSessionToken(token)
   };
 
   await setJson(STORE_NAMES.sessions, buildSessionKey(token), session, {
@@ -123,18 +140,82 @@ async function createSession(user = {}) {
     }
   });
 
-  return session;
+  return {
+    token,
+    userId: user.id,
+    email: user.email,
+    createdAt,
+    expiresAt
+  };
+}
+
+async function getSessionByToken(token = '') {
+  const normalizedToken = String(token || '').trim();
+  if (!normalizedToken) return null;
+
+  const hashedKey = buildSessionKey(normalizedToken);
+  const legacyKey = buildLegacySessionKey(normalizedToken);
+
+  const hashedSession = await getJson(STORE_NAMES.sessions, hashedKey);
+  if (hashedSession) {
+    return {
+      session: hashedSession,
+      sessionKey: hashedKey,
+      legacyKey: null
+    };
+  }
+
+  if (legacyKey === hashedKey) {
+    return null;
+  }
+
+  const legacySession = await getJson(STORE_NAMES.sessions, legacyKey);
+  if (!legacySession) {
+    return null;
+  }
+
+  const migratedSession = {
+    ...legacySession,
+    sessionVersion: legacySession.sessionVersion || 2,
+    tokenHash: legacySession.tokenHash || digestSessionToken(normalizedToken)
+  };
+
+  delete migratedSession.token;
+
+  try {
+    await setJson(STORE_NAMES.sessions, hashedKey, migratedSession, {
+      metadata: {
+        userId: migratedSession.userId,
+        email: migratedSession.email,
+        expiresAt: migratedSession.expiresAt
+      }
+    });
+    await deleteKey(STORE_NAMES.sessions, legacyKey);
+    return {
+      session: migratedSession,
+      sessionKey: hashedKey,
+      legacyKey
+    };
+  } catch {
+    return {
+      session: legacySession,
+      sessionKey: legacyKey,
+      legacyKey
+    };
+  }
 }
 
 async function getAuthenticatedUser(event = {}) {
   const token = getSessionToken(event);
   if (!token) return null;
 
-  const session = await getJson(STORE_NAMES.sessions, buildSessionKey(token));
-  if (!session) return null;
+  const sessionRecord = await getSessionByToken(token);
+  if (!sessionRecord) return null;
+
+  const { session, sessionKey } = sessionRecord;
 
   if (Date.parse(session.expiresAt || '') <= Date.now()) {
-    await deleteKey(STORE_NAMES.sessions, buildSessionKey(token));
+    await deleteKey(STORE_NAMES.sessions, sessionKey);
     return null;
   }
 
@@ -143,6 +224,7 @@ async function getAuthenticatedUser(event = {}) {
 
   return {
     token,
+    sessionKey,
     session,
     user
   };
@@ -152,7 +234,9 @@ module.exports = {
   SESSION_TTL_MS,
   normalizeEmail,
   normalizeName,
+  digestSessionToken,
   buildUserKey,
+  buildLegacySessionKey,
   buildSessionKey,
   hashPassword,
   verifyPassword,

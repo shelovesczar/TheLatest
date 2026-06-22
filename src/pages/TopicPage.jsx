@@ -10,6 +10,7 @@ import AdBreak from '../components/common/AdBreak'
 import { searchRSSContent } from '../rssService'
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
 import { cacheSocialPosts, fetchAllSocialPosts, getCachedSocialPosts } from '../services/socialMediaApiService'
+import { fetchStoryClusters } from '../services/clusterService'
 import { dedupeContentItems } from '../utils/contentDeduplication'
 import { filterItemsByTopic } from '../utils/topicFiltering'
 import { getTopicPageConfig, getTopicSectionLabel } from '../utils/navigationConfig'
@@ -28,6 +29,7 @@ function TopicPage() {
   const [loadingVideos, setLoadingVideos] = useState(true)
   const [loadingPodcasts, setLoadingPodcasts] = useState(true)
   const [socialPosts, setSocialPosts] = useState([])
+  const [storyClusters, setStoryClusters] = useState([])
   const [loadingSocial, setLoadingSocial] = useState(true)
   const [activeStory, setActiveStory] = useState(0)
 
@@ -37,6 +39,7 @@ function TopicPage() {
       setOpinions([])
       setVideos([])
       setPodcasts([])
+      setStoryClusters([])
       setLoading(false)
       setLoadingOpinions(false)
       setLoadingVideos(false)
@@ -65,7 +68,7 @@ function TopicPage() {
       }
 
       try {
-        const [newsItems, opinionItems, videoItems, podcastItems, socialItems] = await Promise.all([
+        const [newsItems, opinionItems, videoItems, podcastItems, socialItems, clusters] = await Promise.all([
           searchRSSContent(topicQuery, {
             preferFresh: true,
             strictSearch: false,
@@ -75,7 +78,8 @@ function TopicPage() {
           fetchOpinions(feedCategory, topicQuery),
           fetchVideos(feedCategory, topicQuery),
           fetchTrendingContent(feedCategory, topicQuery),
-          fetchAllSocialPosts(topicQuery, 6)
+          fetchAllSocialPosts(topicQuery, 6),
+          fetchStoryClusters({ type: 'news', category: feedCategory, search: topicQuery, limit: 8 }).catch(() => [])
         ])
 
         if (ignore) return
@@ -89,6 +93,7 @@ function TopicPage() {
         setVideos(narrow(videoItems, 6))
         setPodcasts(narrow(podcastItems, 6))
         setSocialPosts(Array.isArray(socialItems) ? socialItems.slice(0, 6) : [])
+        setStoryClusters(Array.isArray(clusters) ? clusters : [])
 
         if (Array.isArray(socialItems) && socialItems.length > 0) {
           cacheSocialPosts(topicQuery, socialItems)
@@ -101,6 +106,7 @@ function TopicPage() {
           setVideos([])
           setPodcasts([])
           setSocialPosts(cachedSocial || [])
+          setStoryClusters([])
         }
       } finally {
         if (!ignore) {
@@ -224,6 +230,7 @@ function TopicPage() {
           categoryPath={`${topicBasePath}/all-news`}
           defaultPerspectiveView={true}
           showPerspectiveToggle={false}
+          sideBySideClusters={storyClusters}
           sideBySideTitle="Top Stories - Side by Side"
           seeMoreLabel={`See all ${config.title} stories →`}
         />

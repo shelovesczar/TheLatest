@@ -1,13 +1,5 @@
 const { STORE_NAMES, getJson, listJson } = require('./blobStore');
-
-function jsonHeaders() {
-  return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Content-Type': 'application/json'
-  };
-}
+const { jsonHeaders, requireAdminAccess } = require('./adminAccess');
 
 exports.handler = async (event) => {
   const headers = jsonHeaders();
@@ -22,6 +14,11 @@ exports.handler = async (event) => {
       headers,
       body: JSON.stringify({ error: 'Method not allowed' })
     };
+  }
+
+  const access = await requireAdminAccess(event);
+  if (access.response) {
+    return access.response;
   }
 
   try {

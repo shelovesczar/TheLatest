@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faNewspaper, faPlus, faPlay, faBookmark, faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons';
+import { faNewspaper, faPlus, faPlay, faBookmark, faUser } from '@fortawesome/free-solid-svg-icons';
 import './BottomDock.css';
 
 /**
@@ -36,10 +36,11 @@ const BottomDock = () => {
       color: '#FF9500'
     },
     { 
-      path: '/search', 
-      icon: faMagnifyingGlass, 
-      label: 'Search',
-      color: '#32ADE6'
+      path: '/dashboard', 
+      icon: faUser, 
+      label: 'Profile',
+      color: '#32ADE6',
+      matchPaths: ['/dashboard']
     }
   ];
 
@@ -47,7 +48,7 @@ const BottomDock = () => {
     <nav className="bottom-dock">
       <div className="bottom-dock-container">
         {navItems.map((item) => {
-          const isActive = location.pathname === item.path;
+          const isActive = (item.matchPaths || [item.path]).some((path) => location.pathname.startsWith(path));
           return (
             <Link
               key={item.path}

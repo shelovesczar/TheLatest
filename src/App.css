@@ -191,7 +191,7 @@ img {
 
 @font-face {
   font-family: 'RCL Monoskrn';
-  src: url('../public/fonts/RCL-Monoskrn.otf') format('opentype');
+  src: url('../public/fonts/RclMonoskrn.otf') format('opentype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -505,6 +505,40 @@ body {
 
 .section-hdr .see-more:hover {
   color: var(--accent-color, #4a72a8);
+}
+
+@media (max-width: 768px) {
+  .page-body .section {
+    padding-top: 1.5rem;
+    padding-bottom: 0.3rem;
+  }
+
+  .section-hdr {
+    margin-bottom: 1rem;
+    padding-bottom: 0.65rem;
+    border-bottom-width: 3px;
+  }
+
+  .section-hdr h2 {
+    font-size: 0.98rem;
+    letter-spacing: 1.2px;
+  }
+
+  .section-hdr .see-more {
+    font-size: 0.7rem;
+    letter-spacing: 0.35px;
+  }
+}
+
+@media (max-width: 420px) {
+  .section-hdr h2 {
+    font-size: 0.92rem;
+    letter-spacing: 1px;
+  }
+
+  .section-hdr .see-more {
+    font-size: 0.66rem;
+  }
 }
 
 /* ============== Shared Content Card (Jeff Hall pattern) ============== */

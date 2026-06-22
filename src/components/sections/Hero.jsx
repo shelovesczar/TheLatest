@@ -1,26 +1,23 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faSearch } from '@fortawesome/free-solid-svg-icons'
 import { useSearch } from '../../context/SearchContext'
 import './Hero.css'
 
 const ROTATING_WORDS = ['news', 'opinions', 'podcasts', 'videos', 'social']
 
-function Hero({ visibleTopics, handleTopicClick }) {
-  const { searchQuery, setSearchQuery, setTopic } = useSearch()
+function Hero() {
+  const { topic } = useSearch()
+  const navigate = useNavigate()
+  const [searchQuery, setSearchQuery] = useState('')
+  const activeWord = topic && ROTATING_WORDS.includes(topic.toLowerCase()) ? topic.toLowerCase() : null
 
-  const handleSearch = (e) => {
-    e.preventDefault()
-    if (searchQuery.trim()) {
-      setTopic(searchQuery.trim())
-    }
-  }
-
-  const handleInputChange = (e) => {
-    const value = e.target.value
-    setSearchQuery(value)
-    
-    // If the user clears the search, clear the topic filter
-    if (value.trim() === '') {
-      setTopic('')
-    }
+  const handleSubmit = (event) => {
+    event.preventDefault()
+    const nextQuery = searchQuery.trim()
+    if (!nextQuery) return
+    navigate(`/search?q=${encodeURIComponent(nextQuery)}`)
   }
 
   return (
@@ -30,25 +27,27 @@ function Hero({ visibleTopics, handleTopicClick }) {
           <span className="hero-headline-static">Keep up with the latest</span>
           <span className="hero-flipper" aria-hidden="true">
             {ROTATING_WORDS.map((word) => (
-              <span key={word} className="flip-word">{word}</span>
+              <span key={word} className={`flip-word ${activeWord === word ? 'flip-word-active' : ''}`}>{word}</span>
             ))}
           </span>
         </h1>
         <p className="hero-tagline">All topics. All major platforms. All in one place.</p>
-
-        <form className="hero-search-wrap" onSubmit={handleSearch}>
-          <svg className="hero-search-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <line x1="16.5" y1="16.5" x2="22" y2="22" />
-          </svg>
+        <form className="hero-mobile-search" onSubmit={handleSubmit}>
+          <label className="hero-mobile-search__label" htmlFor="hero-mobile-search-input">Search news</label>
+          <span className="hero-mobile-search__icon" aria-hidden="true">
+            <FontAwesomeIcon icon={faSearch} />
+          </span>
           <input
-            type="text"
-            placeholder="What do you want to know?"
+            id="hero-mobile-search-input"
+            className="hero-mobile-search__input"
+            type="search"
+            placeholder="What do you want to know"
             value={searchQuery}
-            onChange={handleInputChange}
-            aria-label="Search topics"
+            onChange={(event) => setSearchQuery(event.target.value)}
           />
-          <button type="submit" className="hero-search-btn">Search</button>
+          <button className="hero-mobile-search__button" type="submit">
+            Search
+          </button>
         </form>
       </div>
     </section>

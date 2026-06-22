@@ -1,4 +1,4 @@
-const { STORE_NAMES, getJson, setJson } = require('./blobStore');
+const { STORE_NAMES, getJson, setJson, isBlobConfigurationError } = require('./blobStore');
 
 function jsonHeaders() {
   return {
@@ -115,6 +115,14 @@ exports.handler = async (event) => {
       body: JSON.stringify({ tracked: true, eventType, dayKey })
     };
   } catch (error) {
+    if (isBlobConfigurationError(error)) {
+      return {
+        statusCode: 202,
+        headers,
+        body: JSON.stringify({ tracked: false, unavailable: true })
+      };
+    }
+
     return {
       statusCode: 500,
       headers,

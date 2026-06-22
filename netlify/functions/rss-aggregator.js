@@ -1,5 +1,5 @@
 const Parser = require('rss-parser');
-const { STORE_NAMES, getJson, getJsonWithMetadata, setJson } = require('./blobStore');
+const { STORE_NAMES, getJson, getJsonWithMetadata, setJson, listJson } = require('./blobStore');
 const parser = new Parser({
   timeout: 5000, // 5 seconds — fail fast on slow feeds
   customFields: {
@@ -36,6 +36,7 @@ let articleImageCache = new Map();
 let feedFailureCache = new Map();
 
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes — fewer cold fetches
+const SEARCH_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes — search should refresh faster than section feeds
 const MAX_ITEMS_PER_FEED = 15;          // only grab top 15 per feed for speed
 const MAX_FEEDS_PER_REQUEST = 6;        // default cap parallel feeds to avoid slow stragglers
 const MAX_FEEDS_BY_KEY = {
@@ -84,8 +85,70 @@ function stableHash(value = '') {
   return String(Math.abs(hash));
 }
 
+function buildManagedSourceId(feedKey = 'news', feed = {}) {
+  return `${normalizeKeyPart(feedKey) || 'news'}:${stableHash(`${String(feed?.source || '').trim()}|${String(feed?.url || '').trim()}`)}`;
+}
+
+function buildManagedSourceKey(sourceId = '') {
+  return `sources/${String(sourceId || '').trim()}`;
+}
+
+async function getSourceOverrideMap() {
+  try {
+    const { blobs } = await listJson(STORE_NAMES.sources, { prefix: 'sources/' });
+    const entries = await Promise.all(
+      blobs.map(async (blob) => {
+        const item = await getJson(STORE_NAMES.sources, blob.key);
+        return item ? [item.id, item] : null;
+      })
+    );
+
+    return new Map(entries.filter(Boolean));
+  } catch (error) {
+    console.warn('[SOURCES] Failed to read source overrides:', error.message);
+    return new Map();
+  }
+}
+
+function buildManagedSourceRecord(feedKey = 'news', feed = {}, override = null) {
+  const id = buildManagedSourceId(feedKey, feed);
+  return {
+    id,
+    feedKey,
+    source: String(feed?.source || '').trim() || 'Unknown Source',
+    url: String(feed?.url || '').trim(),
+    priority: String(feed?.priority || '').trim() || 'normal',
+    maxItems: Number(feed?.maxItems || 0) || null,
+    active: override?.active !== false,
+    updatedAt: override?.updatedAt || null
+  };
+}
+
+async function getManagedSources(feedKeys = Object.keys(RSS_FEEDS)) {
+  const overrideMap = await getSourceOverrideMap();
+  return feedKeys.flatMap((feedKey) =>
+    (RSS_FEEDS[feedKey] || []).map((feed) => buildManagedSourceRecord(feedKey, feed, overrideMap.get(buildManagedSourceId(feedKey, feed)) || null))
+  );
+}
+
+async function getEffectiveFeedList(feedKey = 'news', feedList = []) {
+  const overrideMap = await getSourceOverrideMap();
+  return (Array.isArray(feedList) ? feedList : []).filter((feed) => {
+    const sourceId = buildManagedSourceId(feedKey, feed);
+    const override = overrideMap.get(sourceId);
+    return override?.active !== false;
+  });
+}
+
 function buildSnapshotKey(cacheKey) {
   return `snapshots/${normalizeKeyPart(cacheKey) || 'news'}`;
+}
+
+function buildSearchCacheKey(searchTerm = '', options = {}) {
+  const mode = options.strictSearch ? 'strict' : 'relaxed';
+  const fallback = options.allowRelaxedFallback ? 'fallback' : 'no-fallback';
+  const minResults = Number(options.strictMinimum || 6) || 6;
+  return `search:${normalizeKeyPart(searchTerm) || 'all'}:${mode}:${fallback}:${minResults}`;
 }
 
 function buildFeedHealthKey(feedConfig = {}) {
@@ -1769,7 +1832,58 @@ exports.handler = async (event, context) => {
     // Automatically includes any new categories/feeds added to RSS_FEEDS
     if (search && search.trim().length > 0) {
       const searchTerm = toLowerSearchText(search).trim();
+      const searchCacheKey = buildSearchCacheKey(searchTerm, {
+        strictSearch: useStrictSearch,
+        allowRelaxedFallback,
+        strictMinimum
+      });
       console.log(`[SEARCH] Searching for: "${searchTerm}"`);
+
+      const inMemorySearchCache = cache[searchCacheKey];
+      if (inMemorySearchCache && isCacheValid(searchCacheKey)) {
+        const statsPayload = includeSourceStats ? { sourceStats: buildSourceBreakdown(inMemorySearchCache.data) } : {};
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            data: inMemorySearchCache.data,
+            cached: true,
+            timestamp: inMemorySearchCache.timestamp,
+            count: inMemorySearchCache.data.length,
+            searchTerm,
+            searchMode: inMemorySearchCache.searchMode || (useStrictSearch ? 'strict' : 'relaxed'),
+            strictSearchEnabled: useStrictSearch,
+            minStrictResults: strictMinimum,
+            ...statsPayload
+          })
+        };
+      }
+
+      const persistedSearchSnapshot = await getPersistedSnapshot(searchCacheKey, SEARCH_CACHE_DURATION);
+      if (persistedSearchSnapshot?.items?.length > 0) {
+        cache[searchCacheKey] = {
+          data: persistedSearchSnapshot.items,
+          timestamp: Date.parse(persistedSearchSnapshot.timestamp) || Date.now(),
+          searchMode: persistedSearchSnapshot.context?.searchMode || (useStrictSearch ? 'strict' : 'relaxed')
+        };
+
+        const statsPayload = includeSourceStats ? { sourceStats: buildSourceBreakdown(persistedSearchSnapshot.items) } : {};
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            data: persistedSearchSnapshot.items,
+            cached: true,
+            timestamp: Date.parse(persistedSearchSnapshot.timestamp) || Date.now(),
+            count: persistedSearchSnapshot.items.length,
+            searchTerm,
+            searchMode: persistedSearchSnapshot.context?.searchMode || (useStrictSearch ? 'strict' : 'relaxed'),
+            strictSearchEnabled: useStrictSearch,
+            minStrictResults: strictMinimum,
+            ...statsPayload
+          })
+        };
+      }
 
       // ── Step 1: Collect all cached data (instant, no network) ──────────────
       const allData = [];
@@ -1804,7 +1918,8 @@ exports.handler = async (event, context) => {
 
         const fetchCategoryWithTimeout = async (catKey) => {
           try {
-            const feedList = prependBundleFeed(RSS_FEEDS[catKey] || [], catKey);
+            const configuredFeeds = prependBundleFeed(RSS_FEEDS[catKey] || [], catKey);
+            const feedList = await getEffectiveFeedList(catKey, configuredFeeds);
             const sourceLimit = catKey === 'videos' ? SEARCH_VIDEO_SOURCES_LIMIT : SEARCH_SOURCES_LIMIT;
             const sourcesToFetch = feedList.slice(0, sourceLimit);
             if (sourcesToFetch.length === 0) return [];
@@ -1904,6 +2019,20 @@ exports.handler = async (event, context) => {
         logSourceBreakdown(`search:${searchTerm}`, scoredResults);
       }
 
+      cache[searchCacheKey] = {
+        data: scoredResults,
+        timestamp: Date.now(),
+        searchMode: searchModeUsed
+      };
+
+      await persistSnapshot(searchCacheKey, scoredResults, {
+        type: 'search',
+        category: searchTerm,
+        searchMode: searchModeUsed,
+        strictSearchEnabled: useStrictSearch,
+        minStrictResults: strictMinimum
+      });
+
       const statsPayload = includeSourceStats ? { sourceStats: buildSourceBreakdown(scoredResults) } : {};
       
       return {
@@ -1963,7 +2092,7 @@ exports.handler = async (event, context) => {
 
     // Determine which feeds to fetch
     let activeFeedKey = RSS_FEEDS[type] ? type : 'news';
-    let feedsToFetch = prependBundleFeed(RSS_FEEDS[activeFeedKey] || RSS_FEEDS.news, activeFeedKey);
+    let feedsToFetch = await getEffectiveFeedList(activeFeedKey, prependBundleFeed(RSS_FEEDS[activeFeedKey] || RSS_FEEDS.news, activeFeedKey));
     
     // If category specified, fetch relevant feeds for ANY type (news, opinions, videos, podcasts)
     if (category) {
@@ -1971,31 +2100,31 @@ exports.handler = async (event, context) => {
       
       if (cat === 'sports') {
         activeFeedKey = 'sports';
-        feedsToFetch = prependBundleFeed(RSS_FEEDS.sports, activeFeedKey);
+        feedsToFetch = await getEffectiveFeedList(activeFeedKey, prependBundleFeed(RSS_FEEDS.sports, activeFeedKey));
         console.log(`Fetching SPORTS ${type}:`, feedsToFetch.length, 'sources');
       } else if (cat === 'politics') {
         activeFeedKey = 'politics';
-        feedsToFetch = prependBundleFeed(RSS_FEEDS.politics, activeFeedKey);
+        feedsToFetch = await getEffectiveFeedList(activeFeedKey, prependBundleFeed(RSS_FEEDS.politics, activeFeedKey));
         console.log(`Fetching POLITICS ${type}:`, feedsToFetch.length, 'sources');
       } else if (cat === 'tech' || cat === 'technology' || cat === 'business-tech') {
         activeFeedKey = 'tech';
-        feedsToFetch = prependBundleFeed(RSS_FEEDS.tech, activeFeedKey);
+        feedsToFetch = await getEffectiveFeedList(activeFeedKey, prependBundleFeed(RSS_FEEDS.tech, activeFeedKey));
         console.log(`Fetching TECH ${type}:`, feedsToFetch.length, 'sources');
       } else if (cat === 'business' || cat === 'finance') {
         activeFeedKey = 'business';
-        feedsToFetch = prependBundleFeed(RSS_FEEDS.business, activeFeedKey);
+        feedsToFetch = await getEffectiveFeedList(activeFeedKey, prependBundleFeed(RSS_FEEDS.business, activeFeedKey));
         console.log(`Fetching BUSINESS ${type}:`, feedsToFetch.length, 'sources');
       } else if (cat === 'entertainment') {
         activeFeedKey = 'entertainment';
-        feedsToFetch = prependBundleFeed(RSS_FEEDS.entertainment, activeFeedKey);
+        feedsToFetch = await getEffectiveFeedList(activeFeedKey, prependBundleFeed(RSS_FEEDS.entertainment, activeFeedKey));
         console.log(`Fetching ENTERTAINMENT ${type}:`, feedsToFetch.length, 'sources');
       } else if (cat === 'lifestyle') {
         activeFeedKey = 'lifestyle';
-        feedsToFetch = prependBundleFeed(RSS_FEEDS.lifestyle, activeFeedKey);
+        feedsToFetch = await getEffectiveFeedList(activeFeedKey, prependBundleFeed(RSS_FEEDS.lifestyle, activeFeedKey));
         console.log(`Fetching LIFESTYLE ${type}:`, feedsToFetch.length, 'sources');
       } else if (cat === 'culture') {
         activeFeedKey = 'culture';
-        feedsToFetch = prependBundleFeed(RSS_FEEDS.culture, activeFeedKey);
+        feedsToFetch = await getEffectiveFeedList(activeFeedKey, prependBundleFeed(RSS_FEEDS.culture, activeFeedKey));
         console.log(`Fetching CULTURE ${type}:`, feedsToFetch.length, 'sources');
       } else {
         // For unknown categories, keep the default feeds for the type
@@ -2099,3 +2228,9 @@ exports.handler = async (event, context) => {
     };
   }
 };
+
+exports.RSS_FEEDS = RSS_FEEDS;
+exports.buildManagedSourceId = buildManagedSourceId;
+exports.buildManagedSourceKey = buildManagedSourceKey;
+exports.getManagedSources = getManagedSources;
+exports.getEffectiveFeedList = getEffectiveFeedList;

@@ -14,9 +14,9 @@
 
 .bottom-dock-container {
   display: flex;
-  justify-content: space-around;
+  justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-xs) var(--spacing-sm);
+  padding: 0.45rem 0.55rem 0.4rem;
   max-width: 100%;
 }
 
@@ -25,42 +25,44 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 6px var(--spacing-sm);
+  padding: 0.42rem 0.3rem 0.34rem;
   text-decoration: none;
   transition: all 0.2s ease;
-  border-radius: 12px;
-  min-width: 60px;
+  border-radius: 14px;
+  min-width: 0;
+  flex: 1 1 20%;
   position: relative;
 }
 
 .bottom-dock-icon {
-  font-size: 22px;
+  font-size: 20px;
   color: var(--text-tertiary);
   transition: all 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 
 .bottom-dock-label {
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-tertiary);
   transition: all 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);
   letter-spacing: 0.2px;
+  white-space: nowrap;
 }
 
 /* Active state */
 .bottom-dock-item.active .bottom-dock-icon {
-  color: var(--accent-color);
-  transform: scale(1.1);
+  color: var(--item-color, var(--accent-color));
+  transform: scale(1.04);
 }
 
 .bottom-dock-item.active .bottom-dock-label {
-  color: var(--accent-color);
+  color: var(--item-color, var(--accent-color));
   font-weight: 600;
 }
 
 .bottom-dock-item.active {
-  background: var(--accent-light);
+  background: color-mix(in srgb, var(--item-color, var(--accent-color)) 10%, transparent);
 }
 
 /* Hover effect for desktop */
@@ -89,7 +91,7 @@
   
   /* Add bottom padding to main content to account for dock */
   body {
-    padding-bottom: calc(65px + env(safe-area-inset-bottom, 0));
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0));
   }
 }
 
@@ -101,8 +103,9 @@
 
 /* Light theme adjustments */
 [data-theme="light"] .bottom-dock {
-  background: rgba(255, 255, 255, 0.94);
-  border-top-color: var(--border-color);
+  background: rgba(255, 255, 255, 0.96);
+  border-top-color: rgba(212, 220, 233, 0.9);
+  box-shadow: 0 -10px 24px rgba(18, 35, 60, 0.08);
 }
 
 [data-theme="light"] .bottom-dock-icon {
@@ -115,7 +118,26 @@
 
 [data-theme="light"] .bottom-dock-item.active .bottom-dock-icon,
 [data-theme="light"] .bottom-dock-item.active .bottom-dock-label {
-  color: var(--accent-color);
+  color: var(--item-color, var(--accent-color));
+}
+
+@media (max-width: 420px) {
+  .bottom-dock-container {
+    padding: 0.38rem 0.35rem 0.32rem;
+  }
+
+  .bottom-dock-item {
+    padding: 0.38rem 0.15rem 0.28rem;
+    border-radius: 12px;
+  }
+
+  .bottom-dock-icon {
+    font-size: 18px;
+  }
+
+  .bottom-dock-label {
+    font-size: 9px;
+  }
 }
 
 @media (hover: hover) {

@@ -1,4 +1,5 @@
 const { setJson } = require('./blobStore');
+const { jsonHeaders, requireAdminAccess } = require('./adminAccess');
 const rssAggregator = require('./rss-aggregator');
 
 const SUMMARY_TARGETS = [
@@ -82,7 +83,7 @@ async function warmSummaries() {
   }
 }
 
-exports.handler = async () => {
+async function runWarmContent() {
   const categoriesToWarm = [null, 'tech', 'business', 'sports', 'entertainment', 'lifestyle', 'culture'];
 
   for (const category of categoriesToWarm) {
@@ -92,7 +93,25 @@ exports.handler = async () => {
   await warmSummaries();
 
   return {
+    warmed: true,
+    timestamp: new Date().toISOString()
+  };
+}
+
+exports.runWarmContent = runWarmContent;
+exports.runWarmSummaries = warmSummaries;
+
+exports.handler = async (event) => {
+  const access = await requireAdminAccess(event || {});
+  if (access.response) {
+    return access.response;
+  }
+
+  const payload = await runWarmContent();
+
+  return {
     statusCode: 200,
-    body: JSON.stringify({ warmed: true, timestamp: new Date().toISOString() })
+    headers: jsonHeaders(),
+    body: JSON.stringify(payload)
   };
 };

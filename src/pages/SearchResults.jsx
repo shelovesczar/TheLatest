@@ -15,13 +15,54 @@ import AdBreak from '../components/common/AdBreak'
 import { formatDateOnly } from '../utils/dateUtils'
 import { dedupeContentItems } from '../utils/contentDeduplication'
 import { filterItemsByTopic } from '../utils/topicFiltering'
+import { getImageProps } from '../utils/imageUtils'
 import { getRandomTrendingPosts } from '../socialMediaService'
+import { fetchStoryClusters } from '../services/clusterService'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSearch, faTimes } from '@fortawesome/free-solid-svg-icons'
+import { faGoogle, faWikipediaW, faOpenai, faXTwitter } from '@fortawesome/free-brands-svg-icons'
 import OptimizedImage from '../components/common/OptimizedImage'
 import CardSkeleton from '../components/common/CardSkeleton'
 import './AllNewsPage.css'
 import './SearchResults.css'
+
+const RESEARCH_TOOLS = [
+  {
+    name: 'ChatGPT',
+    searchUrl: 'https://chat.openai.com/?q=',
+    icon: faOpenai,
+    color: '#10a37f',
+    description: 'AI-powered synthesis for quick briefings and follow-up questions.'
+  },
+  {
+    name: 'Perplexity',
+    searchUrl: 'https://www.perplexity.ai/search?q=',
+    icon: faSearch,
+    color: '#20808d',
+    description: 'Citation-first research for source comparison and fast fact checks.'
+  },
+  {
+    name: 'Google',
+    searchUrl: 'https://www.google.com/search?q=',
+    icon: faGoogle,
+    color: '#4285f4',
+    description: 'Broad web coverage for primary sources, fresh reporting, and context.'
+  },
+  {
+    name: 'Wikipedia',
+    searchUrl: 'https://en.wikipedia.org/wiki/Special:Search?search=',
+    icon: faWikipediaW,
+    color: '#111827',
+    description: 'Fast background on institutions, people, and timelines around the story.'
+  },
+  {
+    name: 'Grok',
+    searchUrl: 'https://x.com/i/grok?q=',
+    icon: faXTwitter,
+    color: '#111827',
+    description: 'Live social graph context and fast-moving reactions from the X ecosystem.'
+  }
+]
 
 const truncate = (text, max) => {
   if (!text) return ''
@@ -52,6 +93,27 @@ const formatPublishedDate = (dateString) => {
   }
 }
 
+const matchesSearchFallback = (item, rawQuery) => {
+  const normalizedQuery = String(rawQuery || '').trim().toLowerCase()
+  if (!normalizedQuery) return false
+
+  const searchableText = [
+    item?.title,
+    item?.description,
+    item?.content,
+    item?.source,
+    item?.category
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  return normalizedQuery
+    .split(/\s+/)
+    .filter((token) => token.length > 1)
+    .every((token) => searchableText.includes(token))
+}
+
 function SearchResults() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -68,11 +130,14 @@ function SearchResults() {
   const [queryVideos, setQueryVideos] = useState([])
   const [queryPodcasts, setQueryPodcasts] = useState([])
   const [querySocialPosts, setQuerySocialPosts] = useState([])
+  const [storyClusters, setStoryClusters] = useState([])
   const [feedNews, setFeedNews]           = useState([])
   const [loading, setLoading]             = useState(false)
   const [feedLoading, setFeedLoading]     = useState(true)
   const [querySectionsLoading, setQuerySectionsLoading] = useState(false)
   const [selectedSource, setSelectedSource] = useState('ALL')
+  const [selectedQuerySource, setSelectedQuerySource] = useState('ALL')
+  const [activeQueryView, setActiveQueryView] = useState('all')
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280))
   const [activeStory, setActiveStory] = useState(0)
   const virtualResultsRef = useRef(null)
@@ -104,39 +169,82 @@ function SearchResults() {
       setQueryVideos([])
       setQueryPodcasts([])
       setQuerySocialPosts([])
+      setStoryClusters([])
       return
     }
+
+    let ignore = false
     setLoading(true)
     console.log('[SearchResults] Initiating search for:', query)
+
+    const sortResults = (items = []) => [...items].sort((a, b) => {
+      let dateA = new Date(a.publishedAt || 0)
+      let dateB = new Date(b.publishedAt || 0)
+      if (isNaN(dateA.getTime())) dateA = new Date(0)
+      if (isNaN(dateB.getTime())) dateB = new Date(0)
+      return dateB - dateA
+    })
+
+    const resolveFallbackSearchResults = async () => {
+      const fallbackPool = await fetchRSSNews(null)
+      return sortResults(dedupeContentItems((Array.isArray(fallbackPool) ? fallbackPool : []).filter((item) => matchesSearchFallback(item, query))))
+    }
+
+    searchRSSContent(query, {
+      fastLocalOnly: true,
+      minStrictResults: 4
+    }).then(async (data) => {
+      if (ignore) return
+      const items = Array.isArray(data) ? data : []
+      if (items.length > 0) {
+        setResults(sortResults(items))
+        setLoading(false)
+        return
+      }
+
+      const fallbackResults = await resolveFallbackSearchResults()
+      if (ignore || fallbackResults.length === 0) return
+      setResults(fallbackResults)
+      setLoading(false)
+    }).catch(() => {})
+
     searchRSSContent(query, {
       preferFresh: true,
       minStrictResults: 4
     })
-      .then(data => {
+      .then(async (data) => {
+        if (ignore) return
         const items = Array.isArray(data) ? data : []
         console.log('[SearchResults] Got results:', items.length, 'items')
-        // Sort by most recent first - parse dates with fallback to epoch for invalid dates
-        const sorted = items.sort((a, b) => {
-          let dateA = new Date(a.publishedAt || 0)
-          let dateB = new Date(b.publishedAt || 0)
-          // Handle invalid dates - treat as epoch (oldest)
-          if (isNaN(dateA.getTime())) dateA = new Date(0)
-          if (isNaN(dateB.getTime())) dateB = new Date(0)
-          return dateB - dateA
-        })
+        const sorted = items.length > 0 ? sortResults(items) : await resolveFallbackSearchResults()
+        if (ignore) return
         setResults(sorted)
         console.log('[SearchResults] Results state updated with', sorted.length, 'items')
       })
       .catch(err => {
+        if (ignore) return
         console.error('[SearchResults] Search error:', err)
         setResults([])
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (!ignore) {
+          setLoading(false)
+        }
+      })
 
     // Also search saved + history archive
     const archiveResults = searchArchive(query)
     console.log('[SearchResults] Archive results:', archiveResults.length, 'items')
     setArchiveResults(archiveResults)
+
+    return () => {
+      ignore = true
+    }
+  }, [query])
+
+  useEffect(() => {
+    setActiveQueryView('all')
+    setSelectedQuerySource('ALL')
   }, [query])
 
   useEffect(() => {
@@ -151,7 +259,7 @@ function SearchResults() {
       setQuerySectionsLoading(true)
 
       try {
-        const [newsItems, opinionItems, videoItems, podcastItems, socialItems] = await Promise.all([
+        const [newsItems, opinionItems, videoItems, podcastItems, socialItems, clusters] = await Promise.all([
           results.length > 0
             ? Promise.resolve(results)
             : searchRSSContent(query, {
@@ -163,7 +271,8 @@ function SearchResults() {
           fetchOpinions('news', query),
           fetchVideos('news', query),
           fetchTrendingContent('news', query),
-          getRandomTrendingPosts(6, query)
+          getRandomTrendingPosts(6, query),
+          fetchStoryClusters({ type: 'news', search: query, limit: 8 }).catch(() => [])
         ])
 
         if (ignore) return
@@ -173,6 +282,7 @@ function SearchResults() {
         setQueryVideos(narrow(videoItems, 6))
         setQueryPodcasts(narrow(podcastItems, 6))
         setQuerySocialPosts(Array.isArray(socialItems) ? socialItems.slice(0, 6) : [])
+        setStoryClusters(Array.isArray(clusters) ? clusters : [])
       } catch (error) {
         if (!ignore) {
           console.error('Failed to load query sections:', error)
@@ -181,6 +291,7 @@ function SearchResults() {
           setQueryVideos([])
           setQueryPodcasts([])
           setQuerySocialPosts([])
+          setStoryClusters([])
         }
       } finally {
         if (!ignore) {
@@ -214,19 +325,31 @@ function SearchResults() {
     inputRef.current?.focus()
   }
 
-  const getDescriptionLimit = () => {
+  const descriptionLimit = useMemo(() => {
     if (viewportWidth >= 1500) return 320
     if (viewportWidth >= 1280) return 260
     if (viewportWidth >= 1024) return 220
     if (viewportWidth >= 768) return 180
     return 130
-  }
-
-  const descriptionLimit = useMemo(() => getDescriptionLimit(), [viewportWidth])
+  }, [viewportWidth])
   const searchStoryPool = results.length > 0 ? results : queryNews
   const featuredSearchStories = searchStoryPool.slice(0, 12)
   const remainingResults = featuredSearchStories.length > 0 ? results.slice(12) : results
-  const sourceList = remainingResults.length > 0 ? remainingResults : results
+  const liveSourceOptions = useMemo(() => (['ALL', ...new Set(results.map((item) => item.source).filter(Boolean))]), [results])
+  const liveSourceList = remainingResults.length > 0 ? remainingResults : results
+  const sourceList = selectedQuerySource === 'ALL'
+    ? liveSourceList
+    : liveSourceList.filter((item) => item.source === selectedQuerySource)
+  const hasFeaturedStories = featuredSearchStories.length > 0
+  const showAllSections = activeQueryView === 'all'
+  const showCompareSection = showAllSections || activeQueryView === 'compare'
+  const showNewsSection = showAllSections || activeQueryView === 'news'
+  const showOpinionSection = showAllSections || activeQueryView === 'opinions'
+  const showSocialSection = showAllSections || activeQueryView === 'social'
+  const showVideoSection = showAllSections || activeQueryView === 'videos'
+  const showPodcastSection = showAllSections || activeQueryView === 'podcasts'
+  const showArchiveSection = showAllSections || activeQueryView === 'archive'
+  const showToolsSection = showAllSections || activeQueryView === 'tools'
 
   const resultVirtualizer = useVirtualizer({
     count: sourceList.length,
@@ -265,14 +388,18 @@ function SearchResults() {
   const latestStories    = displayFeed.slice(4)
   const quickUpdates     = displayFeed.slice(0, 8)
   const tickers          = displayFeed.slice(0, 10).map(i => i.title).filter(Boolean)
-  const monthDay         = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
-
   const hasQuery   = !!query.trim()
   const isSearching = hasQuery && loading
   const hasLiveResults = results.length > 0
   const hasArchiveMatches = archiveResults.length > 0
   const hasSectionContent = searchStoryPool.length > 0 || queryOpinions.length > 0 || queryVideos.length > 0 || queryPodcasts.length > 0 || querySocialPosts.length > 0 || hasArchiveMatches
   const noResults   = hasQuery && !loading && !querySectionsLoading && !hasSectionContent
+
+  useEffect(() => {
+    if (selectedQuerySource !== 'ALL' && !liveSourceOptions.includes(selectedQuerySource)) {
+      setSelectedQuerySource('ALL')
+    }
+  }, [liveSourceOptions, selectedQuerySource])
 
   return (
     <div className="search-results-page" id="search-top">
@@ -334,9 +461,26 @@ function SearchResults() {
 
           {hasQuery && (
             <div className="sr-topic-tabs">
-              <a href="#news" className="sr-topic-pill">Side by Side</a>
-              <a href="#search-results-list" className="sr-topic-pill">Results</a>
-              {hasArchiveMatches && <a href="#archive-results" className="sr-topic-pill">Archive</a>}
+              {[
+                ['all', 'All Coverage'],
+                ['compare', 'Side by Side'],
+                ['news', 'News'],
+                ['opinions', 'Opinions'],
+                ['social', 'Social'],
+                ['videos', 'Videos'],
+                ['podcasts', 'Podcasts'],
+                ['tools', 'Research Tools'],
+                ...(hasArchiveMatches ? [['archive', 'Archive']] : [])
+              ].map(([view, label]) => (
+                <button
+                  key={view}
+                  type="button"
+                  className={`sr-topic-pill ${activeQueryView === view ? 'active' : ''}`}
+                  onClick={() => setActiveQueryView(view)}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           )}
         </div>
@@ -364,7 +508,7 @@ function SearchResults() {
                 ignoreTopic={true}
               />
 
-              {featuredSearchStories.length > 0 && (
+              {showCompareSection && hasFeaturedStories && (
                 <TopStories
                   topStories={featuredSearchStories}
                   loading={querySectionsLoading && !hasLiveResults}
@@ -374,48 +518,102 @@ function SearchResults() {
                   sideBySideTitle="Top Stories - Side by Side"
                   showPerspectiveToggle={false}
                   defaultPerspectiveView={true}
+                  sideBySideClusters={storyClusters}
                   seeMoreLabel="View all search results →"
                   categoryPath={`/search?q=${encodeURIComponent(query)}`}
                 />
               )}
 
-              <AdBreak slot="home-feed-inline" />
+              {showToolsSection && (
+                <section className="sr-tools-section">
+                  <div className="section-hdr">
+                    <h2>Advanced Search</h2>
+                    <span className="see-more">Research tools</span>
+                  </div>
+                  <div className="sr-tools-grid">
+                    {RESEARCH_TOOLS.map((tool) => (
+                      <a
+                        key={tool.name}
+                        className="sr-tool-card"
+                        href={`${tool.searchUrl}${encodeURIComponent(query)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <div className="sr-tool-icon" style={{ color: tool.color, borderColor: `${tool.color}33` }}>
+                          <FontAwesomeIcon icon={tool.icon} />
+                        </div>
+                        <div className="sr-tool-copy">
+                          <h3>{tool.name}</h3>
+                          <p>{tool.description}</p>
+                        </div>
+                        <span className="sr-tool-action">Search {query}</span>
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              )}
 
-              <Opinions
-                opinions={queryOpinions}
-                loadingOpinions={querySectionsLoading}
-                categoryPath={`/search?q=${encodeURIComponent(query)}`}
-              />
+              {(showAllSections || showCompareSection || showToolsSection) && <AdBreak slot="home-feed-inline" />}
 
-              <AdBreak slot="section-break" />
+              {showOpinionSection && (
+                <Opinions
+                  opinions={queryOpinions}
+                  loadingOpinions={querySectionsLoading}
+                  categoryPath={`/search?q=${encodeURIComponent(query)}`}
+                />
+              )}
 
-              <SocialMedia
-                socialPosts={querySocialPosts}
-                loadingSocial={querySectionsLoading}
-              />
+              {showOpinionSection && <AdBreak slot="section-break" />}
 
-              <AdBreak slot="section-break" />
+              {showSocialSection && (
+                <SocialMedia
+                  socialPosts={querySocialPosts}
+                  loadingSocial={querySectionsLoading}
+                />
+              )}
 
-              <Videos
-                videos={queryVideos}
-                loadingVideos={querySectionsLoading}
-                categoryPath={`/search?q=${encodeURIComponent(query)}`}
-              />
+              {showSocialSection && <AdBreak slot="section-break" />}
 
-              <AdBreak slot="section-break" />
+              {showVideoSection && (
+                <Videos
+                  videos={queryVideos}
+                  loadingVideos={querySectionsLoading}
+                  categoryPath={`/search?q=${encodeURIComponent(query)}`}
+                />
+              )}
 
-              <Podcasts
-                podcasts={queryPodcasts}
-                loadingPodcasts={querySectionsLoading}
-                categoryPath={`/search?q=${encodeURIComponent(query)}`}
-              />
+              {showVideoSection && <AdBreak slot="section-break" />}
 
-              <AdBreak slot="section-break" />
+              {showPodcastSection && (
+                <Podcasts
+                  podcasts={queryPodcasts}
+                  loadingPodcasts={querySectionsLoading}
+                  categoryPath={`/search?q=${encodeURIComponent(query)}`}
+                />
+              )}
 
-              {hasLiveResults && sourceList.length > 0 && (
+              {showPodcastSection && <AdBreak slot="section-break" />}
+
+              {showNewsSection && hasLiveResults && sourceList.length > 0 && (
                 <>
                   <div className="sr-results-header" id="search-results-list">
-                    <span className="sr-count">{remainingResults.length > 0 ? remainingResults.length : results.length} articles found</span>
+                    <div className="sr-results-header-row">
+                      <span className="sr-count">{sourceList.length} article{sourceList.length !== 1 ? 's' : ''} found</span>
+                      {liveSourceOptions.length > 1 && (
+                        <div className="sr-source-pills" role="tablist" aria-label="Filter search results by source">
+                          {liveSourceOptions.map((source) => (
+                            <button
+                              key={source}
+                              type="button"
+                              className={`sr-source-pill ${selectedQuerySource === source ? 'active' : ''}`}
+                              onClick={() => setSelectedQuerySource(source)}
+                            >
+                              {source}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="results-virtual-scroll" ref={virtualResultsRef}>
                     <div
@@ -473,7 +671,7 @@ function SearchResults() {
               )}
 
               {/* Archive results */}
-              {hasArchiveMatches && (
+              {showArchiveSection && hasArchiveMatches && (
                 <div className="sr-archive-section" id="archive-results">
                   <div className="sr-archive-header">
                     <span className="panel-kicker">Your Archive</span>

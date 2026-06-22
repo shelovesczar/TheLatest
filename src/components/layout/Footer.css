@@ -22,6 +22,11 @@
   margin-bottom: var(--spacing-lg);
 }
 
+.footer-links--legal {
+  gap: 1.25rem;
+  margin-top: -0.4rem;
+}
+
 .footer-links a {
   color: var(--text-secondary);
   text-decoration: none;
@@ -94,5 +99,11 @@
     width: 40px;
     height: 40px;
     font-size: 1.1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .footer {
+    display: none;
   }
 }

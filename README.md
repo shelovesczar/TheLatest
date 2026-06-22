@@ -7,10 +7,18 @@ A modern news app that pulls stories from many trusted publishers into one place
 Recent work in this repo now includes:
 - A redesigned editorial homepage and section layout with stronger Apple News style structure.
 - A rebuilt desktop header with scrollable navigation, working dropdown flyouts, a profile menu, integrated date treatment, and tighter utility spacing.
+- A desktop header utility refinement that keeps the theme toggle adjacent to the profile/login icon.
+- A tighter 390px mobile shell with simplified top chrome, smaller section typography, and a native-app-style mobile footer removal in favor of the bottom dock.
 - Dedicated topic destinations from navigation dropdowns, plus topic-specific all-news, all-opinions, all-videos, and all-podcasts pages.
 - Shared Jeff-style ad treatments through the reusable ad component, including rotating creative variations so placements do not feel static.
 - Netlify-backed auth, session persistence, following, dashboard flows, shared summaries, feed health endpoints, trending analytics, and engagement tracking.
-- Broader caching and resilience improvements across RSS aggregation, topic/search loading, stale-cache fallback, and repeat-query performance.
+- Graceful Netlify Blob fallbacks outside managed Netlify runtimes, plus optional manual Blob credentials for Docker, CI, and other non-Netlify environments.
+- Route-aware SEO metadata, structured data, sitemap generation, robots generation, and canonical handling.
+- Privacy and terms pages, cookie consent controls, and analytics gating tied to consent state.
+- Broader caching and resilience improvements across RSS aggregation, topic/search loading, stale-cache fallback, repeat-query performance, and cached backend search snapshots.
+- Advanced search improvements including faster repeat queries, source filters, query view pills, and research shortcuts.
+- Backend story clustering and perspective labeling for side-by-side editorial comparisons.
+- Deployment hardening through Docker, environment verification, and smoke-test automation for Netlify preview or production checks.
 
 ## What this app does
 
@@ -142,6 +150,44 @@ This includes:
 - Feed health and warm-content endpoints.
 - Engagement tracking and trending data collection.
 
+### 11) Search, SEO, and legal/compliance work were added
+The app now has a more production-ready search/discovery layer and stronger launch-readiness basics.
+
+This includes:
+- Route-level SEO metadata with Open Graph, Twitter tags, canonicals, and JSON-LD.
+- Build-time `sitemap.xml` and `robots.txt` generation.
+- Privacy and terms routes linked from the shared footer.
+- Cookie consent state with analytics opt-in gating.
+- Advanced search view filters, source filters, and research links.
+- Cached backend search snapshots so repeated searches avoid redoing the full feed fan-out.
+
+### 12) Local Netlify development on Windows was hardened
+The local Netlify launcher was reworked to be more reliable on Windows.
+
+This includes:
+- Safer process spawning through `cmd.exe`.
+- Port readiness checks before starting the Netlify layer.
+- Better handling of occupied default ports.
+- Cleaner coordination between Vite and Netlify local dev.
+
+### 13) Mobile shell and deployment guardrails were tightened
+The mobile experience and deployment story were both hardened further.
+
+This includes:
+- Smaller mobile section headings for Top Stories, AI Summary, Opinions, Podcasts, and Advanced Search.
+- Mobile footer removal so the bottom dock remains the single persistent navigation surface on app-like mobile layouts.
+- Docker support for reproducible production builds.
+- Deployment environment verification through `npm run verify:deploy-env`.
+- A Netlify smoke-test script for checking deployed function endpoints.
+
+### 14) Desktop header hover access was repaired
+Desktop navigation dropdowns now remain reachable on hover, and the shared header regression suite covers that interaction.
+
+This includes:
+- fixing the dropdown state reset logic so opening a menu does not immediately close it
+- tightening the hover path between the top-level tab and flyout
+- adding a focused desktop hover regression test
+
 ---
 
 ## Tech stack
@@ -170,9 +216,34 @@ If you need Netlify Functions locally, use:
 npm run dev:netlify
 ```
 
+On Windows, the Netlify launcher now starts Vite first and then attaches Netlify dev using a safer spawn path.
+
 ### 3) Build for production
 ```bash
 npm run build
+```
+
+### 3.1) Verify deployment environment
+```bash
+npm run verify:deploy-env
+```
+
+Run this before deploying to Netlify or wiring up CI.
+It checks the current environment for the values the backend and auth flows expect.
+
+For a stricter manual release check:
+```bash
+npm run verify:deploy-env:strict
+```
+
+### 4) Run tests
+```bash
+npm test
+```
+
+For the shared header regression check specifically:
+```bash
+npm test -- Header.test.jsx
 ```
 
 ---
@@ -183,6 +254,51 @@ Copy `.env.example` to `.env` and set keys as needed.
 
 If you use social RSS route resolution, set:
 - `RSSHUB_BASE_URL` (for example: `https://rsshub.app`)
+
+If you need Blob-backed storage outside Netlify itself, set both:
+- `NETLIFY_BLOBS_SITE_ID`
+- `NETLIFY_BLOBS_TOKEN`
+
+Without those manual Blob credentials, non-Netlify runtimes now degrade gracefully instead of crashing.
+
+---
+
+## Docker parity
+
+Docker is useful here for reproducible install/build behavior and consistent Node runtime parity.
+It does not replace Netlify-specific behavior such as Functions routing or managed Blob access.
+
+Build the image:
+```bash
+docker build -t thelatest .
+```
+
+Run the built app:
+```bash
+docker run --rm -p 8080:80 thelatest
+```
+
+Use Docker to verify:
+- dependency install consistency
+- Node version consistency
+- production build output consistency
+
+Smoke test a deployed Netlify preview or production URL:
+```bash
+npm run smoke:netlify-preview -- https://your-site.netlify.app
+```
+
+For the full production rollout sequence, see:
+- `RELEASE_CHECKLIST.md`
+
+For secret and environment setup, see:
+- `SECRETS_SETUP.md`
+
+Use Netlify preview or production to verify:
+- function routing
+- Blob-backed persistence
+- environment variable injection
+- deploy-time permissions and site linkage
 
 ---
 
@@ -220,10 +336,22 @@ Each feed can be route-based or URL-based, with topic tags.
 
 ---
 
+## Current todo
+
+- [ ] Implement full side-by-side UI parity on top of the clustering and perspective backend.
+- [ ] Continue backend caching work for slower secondary query surfaces and feed fan-out paths.
+- [ ] Harden production auth flows with email verification, password reset, and rate limiting.
+- [ ] Add monitoring and error reporting for frontend and Netlify functions.
+- [ ] Review and clean dependency audit issues.
+
+---
+
 ## Contribution links
 
 - Contributor quick guide: `contributors.md`
 - Developer workflow guide: `CONTRIBUTING.md`
+- Release checklist: `RELEASE_CHECKLIST.md`
+- Secrets setup: `SECRETS_SETUP.md`
 
 ---
 

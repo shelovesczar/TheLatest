@@ -1,4 +1,5 @@
-const { STORE_NAMES, getJsonWithMetadata, setJson } = require('./blobStore');
+const { STORE_NAMES, getJsonWithMetadata, setJson, isBlobConfigurationError } = require('./blobStore');
+const { requireAdminAccess } = require('./adminAccess');
 
 const SUMMARY_TTL_MS = 60 * 60 * 1000;
 const STALE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -6,7 +7,7 @@ const STALE_TTL_MS = 24 * 60 * 60 * 1000;
 function jsonHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Session-Token',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Content-Type': 'application/json'
   };
@@ -77,6 +78,11 @@ exports.handler = async (event) => {
     }
 
     if (event.httpMethod === 'POST') {
+      const access = await requireAdminAccess(event);
+      if (access.response) {
+        return access.response;
+      }
+
       const body = JSON.parse(event.body || '{}');
       const topic = body.topic || '';
       const category = body.category || '';
@@ -120,6 +126,18 @@ exports.handler = async (event) => {
       body: JSON.stringify({ error: 'Method not allowed' })
     };
   } catch (error) {
+    if (isBlobConfigurationError(error)) {
+      return {
+        statusCode: event.httpMethod === 'GET' ? 404 : 503,
+        headers,
+        body: JSON.stringify({
+          found: false,
+          unavailable: true,
+          error: 'Netlify Blobs are not configured in this environment'
+        })
+      };
+    }
+
     return {
       statusCode: 500,
       headers,

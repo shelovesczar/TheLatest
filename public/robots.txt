@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /saved
+Disallow: /following
+Disallow: /search
+Disallow: /article
+
+Sitemap: https://thelatest.news/sitemap.xml

@@ -3,13 +3,15 @@ import { useAuth } from '../context/AuthContext'
 import './DashboardPage.css'
 
 function DashboardPage() {
-  const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated, loading, token } = useAuth()
   const [feedStatus, setFeedStatus] = useState([])
   const [trendingArticles, setTrendingArticles] = useState([])
   const [trendingSources, setTrendingSources] = useState([])
   const [pageViews, setPageViews] = useState([])
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [adminActionPending, setAdminActionPending] = useState(false)
+  const [adminActionMessage, setAdminActionMessage] = useState('')
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -24,11 +26,15 @@ function DashboardPage() {
       setError('')
 
       try {
+        const requestHeaders = token
+          ? { Authorization: `Bearer ${token}` }
+          : undefined
+
         const [feedResponse, articleResponse, sourceResponse, pageResponse] = await Promise.all([
-          fetch('/.netlify/functions/feedStatus'),
-          fetch('/.netlify/functions/trending?type=articles&days=7&limit=8'),
-          fetch('/.netlify/functions/trending?type=sources&days=7&limit=8'),
-          fetch('/.netlify/functions/trending?type=pages&days=7&limit=8')
+          fetch('/.netlify/functions/feedStatus', { headers: requestHeaders }),
+          fetch('/.netlify/functions/trending?type=articles&days=7&limit=8', { headers: requestHeaders }),
+          fetch('/.netlify/functions/trending?type=sources&days=7&limit=8', { headers: requestHeaders }),
+          fetch('/.netlify/functions/trending?type=pages&days=7&limit=8', { headers: requestHeaders })
         ])
 
         const [feedPayload, articlePayload, sourcePayload, pagePayload] = await Promise.all([
@@ -39,6 +45,16 @@ function DashboardPage() {
         ])
 
         if (ignore) return
+
+        if (!feedResponse.ok || !articleResponse.ok || !sourceResponse.ok || !pageResponse.ok) {
+          throw new Error(
+            feedPayload?.error ||
+            articlePayload?.error ||
+            sourcePayload?.error ||
+            pagePayload?.error ||
+            'Unable to load dashboard data.'
+          )
+        }
 
         setFeedStatus(feedPayload.items || [])
         setTrendingArticles(articlePayload.items || [])
@@ -55,7 +71,36 @@ function DashboardPage() {
 
     loadDashboard()
     return () => { ignore = true }
-  }, [isAuthenticated])
+  }, [isAuthenticated, token])
+
+  const handleWarmContent = async () => {
+    if (!token) return
+
+    setAdminActionPending(true)
+    setAdminActionMessage('')
+
+    try {
+      const response = await fetch('/.netlify/functions/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ action: 'warm-content' })
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Unable to warm content right now.')
+      }
+
+      setAdminActionMessage('Content refresh completed. Feed snapshots and summaries were rewarmed.')
+    } catch (actionError) {
+      setAdminActionMessage(actionError.message || 'Unable to warm content right now.')
+    } finally {
+      setAdminActionPending(false)
+    }
+  }
 
   if (loading) {
     return <main className="dashboard-page"><div className="dashboard-empty">Checking session…</div></main>
@@ -82,6 +127,17 @@ function DashboardPage() {
           <span className="dashboard-kicker">Internal Dashboard</span>
           <h1>Feed health, trending content, and page activity.</h1>
           <p>Use this as the first pass for editorial operations and quality control.</p>
+          <div className="dashboard-hero-actions">
+            <button
+              type="button"
+              className="dashboard-action-btn"
+              onClick={handleWarmContent}
+              disabled={adminActionPending || !token}
+            >
+              {adminActionPending ? 'Refreshing Feeds…' : 'Refresh Feed Cache'}
+            </button>
+            {adminActionMessage && <span className="dashboard-action-message">{adminActionMessage}</span>}
+          </div>
         </div>
       </section>
 

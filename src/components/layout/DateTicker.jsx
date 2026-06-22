@@ -46,7 +46,7 @@ const DateTicker = ({ breakingNews = [], sticky = true, label = 'BREAKING', show
     const updateDuration = () => {
       const totalWidth = wrapper.scrollWidth;
       const loopDistance = totalWidth / 4;
-      const pixelsPerSecond = 55;
+      const pixelsPerSecond = 38;
       const nextDuration = loopDistance > 0 ? loopDistance / pixelsPerSecond : 70;
       setTickerDuration(Math.max(35, Math.min(nextDuration, 140)));
     };

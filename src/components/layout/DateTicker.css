@@ -1,16 +1,15 @@
 .date-ticker-container {
-  background: var(--gradient-brand);
-
   position: sticky;
   top: 0;
   z-index: 100;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: 0 4px 20px rgba(10, 19, 34, 0.34);
+  background: #172a46;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 2px 10px rgba(10, 19, 34, 0.28);
   width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(72, 119, 181, 0.45);
 }
 
 .date-ticker-container.is-static {
@@ -39,8 +38,8 @@
 .news-ticker {
   display: flex;
   align-items: center;
-  background: var(--gradient-brand-reverse);
-  padding: 9px 0;
+  background: #172a46;
+  padding: 8px 0;
   overflow: hidden;
   position: relative;
 }
@@ -49,20 +48,19 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: #ffffff;
   letter-spacing: 1px;
   white-space: nowrap;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(84, 91, 108, 0.92);
   border-radius: 20px;
-  padding: 6px 12px;
-  margin-left: clamp(8px, 2vw, 16px);
-  margin-right: clamp(10px, 2vw, 18px);
+  padding: 7px 14px;
+  margin-left: 29px;
+  margin-right: 18px;
   position: relative;
   z-index: 2;
+  text-transform: uppercase;
 }
 
 .ticker-dot {
@@ -106,25 +104,26 @@
 
 .ticker-wrapper {
   display: flex;
-  gap: 40px;
+  gap: 34px;
   animation: scroll linear infinite;
   white-space: nowrap;
   will-change: transform;
 }
 
 .ticker-item {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
   color: #ffffff;
-  padding: 0 20px;
+  padding: 0 17px;
   position: relative;
+  opacity: 0.92;
 }
 
 .ticker-item::before {
   content: '•';
   position: absolute;
   left: 0;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 @keyframes scroll {
@@ -143,6 +142,10 @@
 
 /* Mobile Optimizations */
 @media (max-width: 768px) {
+  .date-ticker-container {
+    display: none;
+  }
+
   .date-display {
     padding: 0.7rem 1rem;
   }
@@ -170,8 +173,8 @@
 
 /* Light theme adjustments */
 [data-theme="light"] .date-ticker-container {
-  background: var(--gradient-brand);
-  border-bottom-color: rgba(255, 255, 255, 0.3);
+  background: #172a46;
+  border-bottom-color: rgba(72, 119, 181, 0.45);
 }
 
 [data-theme="light"] .date-display {

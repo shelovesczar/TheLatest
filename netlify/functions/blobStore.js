@@ -4,16 +4,34 @@ const STORE_NAMES = {
   summaries: 'shared-ai-summaries',
   articles: 'article-snapshots',
   feeds: 'feed-health',
+  sources: 'feed-sources',
   analytics: 'site-analytics',
   follows: 'user-follows',
   users: 'app-users',
   sessions: 'app-sessions'
 };
 
+function getBlobAuthOptions() {
+  const siteID = String(process.env.NETLIFY_BLOBS_SITE_ID || '').trim();
+  const token = String(process.env.NETLIFY_BLOBS_TOKEN || '').trim();
+
+  if (!siteID || !token) {
+    return {};
+  }
+
+  return { siteID, token };
+}
+
+function isBlobConfigurationError(error) {
+  const message = String(error?.message || error || '');
+  return message.includes('has not been configured to use Netlify Blobs');
+}
+
 function getJsonStore(name, options = {}) {
   return getStore({
     name,
-    consistency: options.consistency || 'strong'
+    consistency: options.consistency || 'strong',
+    ...getBlobAuthOptions()
   });
 }
 
@@ -53,5 +71,6 @@ module.exports = {
   getJsonWithMetadata,
   setJson,
   listJson,
-  deleteKey
+  deleteKey,
+  isBlobConfigurationError
 };

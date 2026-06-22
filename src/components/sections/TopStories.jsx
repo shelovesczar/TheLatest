@@ -24,11 +24,14 @@ const PERSPECTIVE_MAP = [
   }
 ]
 
+const PERSPECTIVE_LOOKUP = Object.fromEntries(PERSPECTIVE_MAP.map((item) => [item.key, item]))
+
 function TopStories({
   loading,
   topStories,
   activeStory,
   setActiveStory,
+  sideBySideClusters = [],
   categoryTitle,
   categoryPath,
   defaultPerspectiveView = false,
@@ -37,10 +40,28 @@ function TopStories({
   seeMoreLabel,
   sideBySideTitle
 }) {
+    const resolvePerspective = useCallback((story, fallbackIndex = 0) => {
+      const explicitKey = String(story?.perspectiveKey || '').trim().toLowerCase()
+      if (explicitKey && PERSPECTIVE_LOOKUP[explicitKey]) {
+        return {
+          ...PERSPECTIVE_LOOKUP[explicitKey],
+          label: story?.perspectiveLabel || PERSPECTIVE_LOOKUP[explicitKey].label,
+          sourceStyle: story?.perspectiveStyle || PERSPECTIVE_LOOKUP[explicitKey].sourceStyle
+        }
+      }
+
+      return PERSPECTIVE_MAP[fallbackIndex] || PERSPECTIVE_MAP[PERSPECTIVE_MAP.length - 1]
+    }, [])
+
   const navigate = useNavigate()
   const [showPerspectives, setShowPerspectives] = useState(defaultPerspectiveView)
   const [perspectiveFilter, setPerspectiveFilter] = useState('all')
   const [activePerspectiveSourceIndex, setActivePerspectiveSourceIndex] = useState(0)
+  const clusterItems = useMemo(
+    () => (Array.isArray(sideBySideClusters) ? sideBySideClusters.filter((item) => Array.isArray(item?.sources) && item.sources.length > 0) : []),
+    [sideBySideClusters]
+  )
+  const useClusteredSideBySide = clusterItems.length > 0
 
   useEffect(() => {
     setShowPerspectives(defaultPerspectiveView)
@@ -141,20 +162,23 @@ function TopStories({
   }, [navigate])
 
   useEffect(() => {
-    if (topStories.length > 0 && activeStory >= topStories.length) {
+    const activeLimit = useClusteredSideBySide ? clusterItems.length : topStories.length
+    if (activeLimit > 0 && activeStory >= activeLimit) {
       setActiveStory(0)
     }
-  }, [topStories, activeStory, setActiveStory])
+  }, [topStories, clusterItems, useClusteredSideBySide, activeStory, setActiveStory])
 
   const storyGroupCount = useMemo(() => {
+    if (useClusteredSideBySide) return clusterItems.length
     if (!Array.isArray(topStories) || topStories.length === 0) return 0
     return Math.ceil(topStories.length / 3)
-  }, [topStories])
+  }, [clusterItems, topStories, useClusteredSideBySide])
 
   const perspectiveGroupIndex = useMemo(() => {
     if (storyGroupCount === 0) return 0
+    if (useClusteredSideBySide) return Math.min(activeStory, storyGroupCount - 1)
     return Math.floor(activeStory / 3) % storyGroupCount
-  }, [activeStory, storyGroupCount])
+  }, [activeStory, storyGroupCount, useClusteredSideBySide])
 
   useEffect(() => {
     setActivePerspectiveSourceIndex(0)
@@ -172,6 +196,16 @@ function TopStories({
   }, [activeStory, topStories])
 
   const perspectiveStories = useMemo(() => {
+    if (useClusteredSideBySide) {
+      const activeCluster = clusterItems[perspectiveGroupIndex]
+      const items = Array.isArray(activeCluster?.sources) ? activeCluster.sources : []
+
+      return items.map((story, index) => ({
+        story,
+        perspective: resolvePerspective(story, index)
+      }))
+    }
+
     if (!Array.isArray(topStories) || topStories.length === 0) return []
 
     const startIndex = perspectiveGroupIndex * 3
@@ -179,9 +213,9 @@ function TopStories({
 
     return items.map((story, index) => ({
       story,
-      perspective: PERSPECTIVE_MAP[index] || PERSPECTIVE_MAP[PERSPECTIVE_MAP.length - 1]
+      perspective: resolvePerspective(story, index)
     }))
-  }, [perspectiveGroupIndex, topStories])
+  }, [clusterItems, perspectiveGroupIndex, resolvePerspective, topStories, useClusteredSideBySide])
 
   const filteredPerspectiveStories = useMemo(() => {
     if (perspectiveFilter === 'all') return perspectiveStories
@@ -212,11 +246,19 @@ function TopStories({
 
   const nextPerspectiveGroup = () => {
     if (storyGroupCount === 0) return
+    if (useClusteredSideBySide) {
+      setActiveStory((prev) => (prev + 1) % storyGroupCount)
+      return
+    }
     setActiveStory(((perspectiveGroupIndex + 1) % storyGroupCount) * 3)
   }
 
   const prevPerspectiveGroup = () => {
     if (storyGroupCount === 0) return
+    if (useClusteredSideBySide) {
+      setActiveStory((prev) => (prev - 1 + storyGroupCount) % storyGroupCount)
+      return
+    }
     setActiveStory(((perspectiveGroupIndex - 1 + storyGroupCount) % storyGroupCount) * 3)
   }
 
@@ -228,7 +270,7 @@ function TopStories({
   const resolvedSideBySideTitle = sideBySideTitle || 'Top Stories - Side by Side'
 
   const perspectiveTopic = perspectiveStories[0]?.story?.title
-    ? truncateText(perspectiveStories[0].story.title, 70)
+    ? truncateText(useClusteredSideBySide ? (clusterItems[perspectiveGroupIndex]?.topic || perspectiveStories[0].story.title) : perspectiveStories[0].story.title, 70)
     : 'Latest coverage'
 
   const coverageLabel = categoryTitle

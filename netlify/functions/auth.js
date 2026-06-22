@@ -105,7 +105,7 @@ exports.handler = async (event) => {
     if (action === 'logout') {
       const auth = await getAuthenticatedUser(event);
       if (auth) {
-        await deleteKey('app-sessions', buildSessionKey(auth.token));
+        await deleteKey('app-sessions', auth.sessionKey || buildSessionKey(auth.token));
       }
 
       return {

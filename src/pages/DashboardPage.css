@@ -37,6 +37,40 @@
   max-width: 60ch;
 }
 
+.dashboard-hero-actions {
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-action-btn {
+  border: 1px solid rgba(63, 120, 182, 0.42);
+  background: #1f3760;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 0.78rem 1.15rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.16s ease, opacity 0.16s ease;
+}
+
+.dashboard-action-btn:hover:not(:disabled) {
+  background: #2d4b83;
+}
+
+.dashboard-action-btn:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.dashboard-action-message {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
 .dashboard-grid {
   max-width: var(--container-max-width);
   margin: 0 auto;

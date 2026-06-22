@@ -10,6 +10,7 @@ import {
   faExclamationTriangle,
 } from '@fortawesome/free-solid-svg-icons'
 import { isArticleSaved, saveArticle, unsaveArticle, recordHistory } from '../utils/savedArticles'
+import { useConsent } from '../context/ConsentContext'
 import { processImageUrl } from '../utils/imageUtils'
 import './ArticleReader.css'
 
@@ -35,6 +36,7 @@ function ArticleBody({ text }) {
 export default function ArticleReader() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { allowAnalytics } = useConsent()
 
   // Article data passed via navigate('/article', { state: { article } })
   const passedArticle = location.state?.article || null
@@ -48,6 +50,10 @@ export default function ArticleReader() {
   const [fontSize, setFontSize]   = useState(18)     // px
 
   const trackEngagement = useCallback((payload) => {
+    if (!allowAnalytics) {
+      return
+    }
+
     try {
       const body = JSON.stringify(payload)
 
@@ -68,7 +74,7 @@ export default function ArticleReader() {
     } catch {
       // Ignore analytics failures.
     }
-  }, [])
+  }, [allowAnalytics])
 
   // ── Record history + set initial saved state ────────────────────────────────
   useEffect(() => {

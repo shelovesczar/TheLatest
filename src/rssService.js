@@ -22,10 +22,21 @@ const getSearchCacheKey = (term) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const isHtmlLikeResponse = (response) => {
+  const contentType = String(response?.headers?.['content-type'] || '').toLowerCase();
+  const payload = response?.data;
+
+  if (contentType.includes('text/html')) {
+    return true;
+  }
+
+  return typeof payload === 'string' && /<!doctype html|<html[\s>]/i.test(payload);
+};
+
 const shouldDisableFunctions = (error) => {
   const code = error?.code;
   const status = error?.response?.status;
-  return code === 'ERR_NETWORK' || status === 404 || status === 502 || status === 503 || status === 504;
+  return code === 'ERR_NETWORK' || code === 'ERR_INVALID_RSS_PAYLOAD' || status === 404 || status === 502 || status === 503 || status === 504;
 };
 
 async function requestWithRetry(url, config = {}, attempts = RETRY_ATTEMPTS) {
@@ -33,10 +44,19 @@ async function requestWithRetry(url, config = {}, attempts = RETRY_ATTEMPTS) {
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      return await axios.get(url, {
+      const response = await axios.get(url, {
         timeout: REQUEST_TIMEOUT,
         ...config
       });
+
+      if (isHtmlLikeResponse(response)) {
+        const invalidPayloadError = new Error(`Invalid RSS payload received for ${url}`);
+        invalidPayloadError.code = 'ERR_INVALID_RSS_PAYLOAD';
+        invalidPayloadError.response = response;
+        throw invalidPayloadError;
+      }
+
+      return response;
     } catch (error) {
       lastError = error;
       const isRetryable = !error?.response || error?.response?.status >= 500 || error?.code === 'ECONNABORTED' || error?.code === 'ERR_NETWORK';
@@ -308,19 +328,6 @@ const markFunctionsAvailable = () => {
   functionsAvailable = true;
 };
 
-// Test if Netlify Functions are available
-async function checkFunctionsAvailability() {
-  try {
-    const response = await axios.get(RSS_API_URL + '?type=news', { timeout: 5000 });
-    functionsAvailable = response.status === 200;
-    return functionsAvailable;
-  } catch (error) {
-    console.log('[RSS] Netlify Functions not available (run "netlify dev" to enable)');
-    markFunctionsUnavailable();
-    return false;
-  }
-}
-
 /**
  * Fetch news from RSS aggregator
  * @param {string} category - Optional category filter (sports, tech, entertainment, etc.)
@@ -588,6 +595,7 @@ export async function searchRSSContent(searchTerm, options = {}) {
   const strictSearch = options.strictSearch !== false;
   const relaxSearchFallback = options.relaxSearchFallback !== false;
   const preferFresh = options.preferFresh === true;
+  const fastLocalOnly = options.fastLocalOnly === true;
   const parsedMinStrict = Number.parseInt(options.minStrictResults, 10);
   const minStrictResults = Number.isNaN(parsedMinStrict) ? 6 : Math.max(1, Math.min(parsedMinStrict, 20));
 
@@ -602,6 +610,23 @@ export async function searchRSSContent(searchTerm, options = {}) {
   };
 
   try {
+    const cachedSearch = await cacheManager.get(searchCacheKey);
+    if (cachedSearch && cachedSearch.length > 0) {
+      console.log(`[RSS Search] Cache hit for "${normalizedSearchTerm}" with ${cachedSearch.length} results`);
+      if (fastLocalOnly) {
+        return cachedSearch;
+      }
+    }
+
+    const normalizedTerm = normalizeSearchText(searchTerm);
+    const localResults = cachedSearch && cachedSearch.length > 0
+      ? cachedSearch
+      : await searchCachedContent(normalizedTerm);
+
+    if (fastLocalOnly) {
+      return localResults;
+    }
+
     if (preferFresh) {
       const freshUrl = buildSearchUrl(searchTerm);
       console.log(`[RSS Search] Prefer-fresh remote search for "${searchTerm}" at ${freshUrl}`);
@@ -624,15 +649,6 @@ export async function searchRSSContent(searchTerm, options = {}) {
         }
       }
     }
-
-    const cachedSearch = await cacheManager.get(searchCacheKey);
-    if (cachedSearch && cachedSearch.length > 0) {
-      console.log(`[RSS Search] Cache hit for "${normalizedSearchTerm}" with ${cachedSearch.length} results`);
-      return cachedSearch;
-    }
-
-    const normalizedTerm = normalizeSearchText(searchTerm);
-    const localResults = await searchCachedContent(normalizedTerm);
 
     if (localResults.length > 0) {
       console.log(`[RSS Search] Local cache hit for "${searchTerm}" with ${localResults.length} results`);
