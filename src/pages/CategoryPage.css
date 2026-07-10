@@ -307,27 +307,28 @@
   }
 
   .category-page-body {
-    width: min(100%, calc(100% - 1.5rem));
+    width: min(100%, calc(100% - 1.25rem));
     margin: 0 auto;
-    padding-top: 0.85rem;
+    padding-top: 1rem;
     padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
   }
 
   .category-hero {
-    padding: 3.6rem 1.2rem 2.35rem;
+    padding: 2.6rem 1rem 2rem;
     margin-bottom: 0;
     border-radius: 0;
   }
 
   .category-title {
-    font-size: 2.15rem;
-    letter-spacing: 0.08rem;
-    margin-bottom: 0.8rem;
+    font-size: 2rem;
+    letter-spacing: 0.06rem;
+    margin-bottom: 0.7rem;
   }
 
   .category-description {
-    font-size: 0.98rem;
-    line-height: 1.58;
+    font-size: 0.95rem;
+    line-height: 1.55;
+    max-width: 32rem;
   }
 
   .category-page .section-title {
@@ -380,16 +381,16 @@
 @media (max-width: 480px) {
   .category-page-body {
     width: min(100%, calc(100% - 1rem));
-    padding-top: 0.7rem;
+    padding-top: 0.85rem;
   }
 
   .category-hero {
-    padding: 3rem 0.9rem 2rem;
+    padding: 2.2rem 0.85rem 1.7rem;
   }
 
   .category-title {
-    font-size: 1.8rem;
-    letter-spacing: 0.06rem;
+    font-size: 1.72rem;
+    letter-spacing: 0.04rem;
   }
   
   .category-page .section-title {
@@ -397,7 +398,7 @@
   }
 
   .category-description {
-    font-size: 0.92rem;
+    font-size: 0.9rem;
   }
 
   .category-page .ad-placeholder {

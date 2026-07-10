@@ -5,6 +5,7 @@ import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '
 import { searchRSSContent, fetchRSSVideos } from '../rssService'
 import { getRandomTrendingPosts } from '../socialMediaService'
 import { fetchStoryClusters } from '../services/clusterService'
+import { getSharedSummary } from '../services/aiService'
 import { dedupeContentItems } from '../utils/contentDeduplication'
 import { matchesTopicQuery } from '../utils/topicFiltering'
 import { useInView } from '../hooks/useInView'
@@ -32,11 +33,82 @@ const SectionLoader = () => (
 
 const HOME_TOPIC_RAIL = ['Trump', 'Russia', 'Ebola', 'White House', 'West', 'Minutes', 'Now']
 
+function extractTopicsFromHeadlines(articles, topN = 12) {
+  const stopWords = new Set([
+    'The', 'A', 'An', 'In', 'On', 'At', 'By', 'For', 'Of', 'To', 'And', 'Or', 'But',
+    'Is', 'Are', 'Was', 'Were', 'Has', 'Have', 'Had', 'Will', 'Would', 'Could',
+    'Should', 'Be', 'Been', 'Being', 'With', 'This', 'That', 'These', 'Those',
+    'From', 'Up', 'After', 'Before', 'As', 'Its', 'It', 'He', 'She', 'They', 'We',
+    'His', 'Her', 'Their', 'Our', 'My', 'Your', 'It\'s', 'How', 'Why', 'What',
+    'When', 'Where', 'Who', 'Says', 'Say', 'Said', 'New', 'Over', 'About', 'Into',
+    'More', 'Than', 'Now', 'Just', 'Also', 'Still', 'Even', 'Not', 'No', 'So',
+    'Report', 'Reports', 'Source', 'Sources', 'Amid', 'Despite', 'Calls'
+  ])
+
+  const frequencies = {}
+
+  articles.forEach((article) => {
+    const tokens = String(article?.title || '')
+      .split(/[\s\-–—/|:,;!?"()\[\]]+/)
+      .filter(Boolean)
+
+    let phrase = []
+    const flush = () => {
+      if (phrase.length === 0) return
+
+      const key = phrase.join(' ')
+      if (phrase.length > 1 || (phrase.length === 1 && phrase[0].length >= 4)) {
+        frequencies[key] = (frequencies[key] || 0) + 1
+      }
+      phrase = []
+    }
+
+    tokens.forEach((token) => {
+      const isProper = /^[A-Z]/.test(token) && !/^\d+$/.test(token) && !stopWords.has(token)
+      if (isProper) {
+        phrase.push(token.replace(/['.]/g, ''))
+      } else {
+        flush()
+      }
+    })
+
+    flush()
+  })
+
+  return Object.entries(frequencies)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(([topicLabel]) => topicLabel)
+}
+
+const normalizeRailTopic = (value = '') => String(value || '')
+  .replace(/\s+/g, ' ')
+  .trim()
+
+const sanitizeRailTopics = (values = []) => {
+  const topics = []
+  const seen = new Set()
+
+  values.forEach((value) => {
+    const topic = normalizeRailTopic(value)
+    if (!topic || topic.length < 3 || topic.length > 32) return
+    if (topic.split(' ').length > 3) return
+
+    const lowered = topic.toLowerCase()
+    if (seen.has(lowered)) return
+
+    seen.add(lowered)
+    topics.push(topic)
+  })
+
+  return topics.slice(0, 7)
+}
+
 function HomePage({
   email,
   setEmail,
-  hotTopics,
-  handleSubscribe
+  handleSubscribe,
+  onBreakingNewsChange
 }) {
   const normalizeCrossDedupeUrl = (value) => {
     const raw = String(value || '').trim()
@@ -111,6 +183,8 @@ function HomePage({
   const { topic, setTopic, clearTopic, hasActiveTopic } = useSearch()
   const [activeStory, setActiveStory] = useState(0)
   const [suggestedTopic, setSuggestedTopic] = useState(null)
+  const [summaryTopics, setSummaryTopics] = useState([])
+  const [visibleTopics, setVisibleTopics] = useState(HOME_TOPIC_RAIL)
 
   // Content state - filters based on current topic
   const [topStories, setTopStories] = useState([])
@@ -129,13 +203,11 @@ function HomePage({
   const { ref: videosRef, isInView: videosInView } = useInView({ rootMargin: '220px' })
   const { ref: podcastsRef, isInView: podcastsInView } = useInView({ rootMargin: '220px' })
   const { ref: socialRef, isInView: socialInView } = useInView({ rootMargin: '220px' })
+  const { ref: topStoriesRef, isInView: topStoriesInView } = useInView({ rootMargin: '220px' })
+  const { ref: summaryLeadRef, isInView: summaryLeadInView } = useInView({ rootMargin: '180px' })
   const topicTickerRef = useRef(null)
   const lastSocialQueryRef = useRef(null)
-  const sectionPrefetchRef = useRef({
-    opinions: false,
-    videos: false,
-    podcasts: false
-  })
+  const summaryTopicsRequestedRef = useRef(false)
 
   const handleTopicClick = (newTopic, shouldScrollToNews = true) => {
     setTopic(newTopic)
@@ -157,7 +229,30 @@ function HomePage({
 
   /*Filter by topic:
   Allows the for the  manpulations of how many topics to display to the user*/
-  const topicFilters = HOME_TOPIC_RAIL
+  const topicFilters = summaryTopics.length > 0
+    ? summaryTopics
+    : sanitizeRailTopics(visibleTopics)
+
+  useEffect(() => {
+    if (!onBreakingNewsChange) return
+
+    onBreakingNewsChange(
+      topStories
+        .slice(0, 10)
+        .map((story) => story?.title)
+        .filter(Boolean)
+    )
+  }, [onBreakingNewsChange, topStories])
+
+  useEffect(() => {
+    const extractedTopics = sanitizeRailTopics(extractTopicsFromHeadlines(topStories, 12))
+    if (extractedTopics.length >= 4) {
+      setVisibleTopics(extractedTopics)
+      return
+    }
+
+    setVisibleTopics(HOME_TOPIC_RAIL)
+  }, [topStories])
 
   const scrollTopicIntoView = (topicValue) => {
     if (!topicTickerRef.current) return
@@ -257,51 +352,12 @@ function HomePage({
           setSuggestedTopic(null)
 
         } else {
-          // Load top stories first, then prefetch other sections in parallel.
+          // Load only top stories up front; below-the-fold sections load on demand.
           const newsData = await fetchRSSNews()
           if (isCancelled) return
 
           setTopStories(dedupeContentItems(newsData || []))
           setSuggestedTopic(null)
-
-          sectionPrefetchRef.current.opinions = true
-          sectionPrefetchRef.current.videos = true
-          sectionPrefetchRef.current.podcasts = true
-
-          Promise.allSettled([
-            fetchOpinions(),
-            fetchVideos(),
-            fetchTrendingContent()
-          ]).then(([opinionsResult, videosResult, podcastsResult]) => {
-            sectionPrefetchRef.current.opinions = false
-            sectionPrefetchRef.current.videos = false
-            sectionPrefetchRef.current.podcasts = false
-
-            if (isCancelled || hasActiveTopic) return
-
-            if (opinionsResult.status === 'fulfilled') {
-              setOpinions(dedupeContentItems(opinionsResult.value || []))
-            }
-            const mergedVideos = videosResult.status === 'fulfilled' ? (videosResult.value || []) : []
-            const mergedPodcasts = podcastsResult.status === 'fulfilled' ? (podcastsResult.value || []) : []
-            const { uniqueVideos, uniquePodcasts } = splitMediaWithoutOverlap(mergedVideos, mergedPodcasts)
-
-            setVideos(uniqueVideos)
-            setPodcasts(uniquePodcasts)
-
-            setLoadingOpinions(false)
-            setLoadingVideos(false)
-            setLoadingPodcasts(false)
-          }).catch(() => {
-            sectionPrefetchRef.current.opinions = false
-            sectionPrefetchRef.current.videos = false
-            sectionPrefetchRef.current.podcasts = false
-
-            if (isCancelled) return
-            setLoadingOpinions(false)
-            setLoadingVideos(false)
-            setLoadingPodcasts(false)
-          })
         }
       } catch (error) {
         console.error('Error loading initial content:', error)
@@ -322,9 +378,6 @@ function HomePage({
 
     return () => {
       isCancelled = true
-      sectionPrefetchRef.current.opinions = false
-      sectionPrefetchRef.current.videos = false
-      sectionPrefetchRef.current.podcasts = false
     }
   }, [topic, hasActiveTopic])
 
@@ -332,6 +385,8 @@ function HomePage({
     let isCancelled = false
 
     const loadStoryClusters = async () => {
+      if (!topStoriesInView) return
+
       try {
         const clusters = await fetchStoryClusters({
           type: 'news',
@@ -355,12 +410,43 @@ function HomePage({
     return () => {
       isCancelled = true
     }
-  }, [hasActiveTopic, topic])
+  }, [hasActiveTopic, topStoriesInView, topic])
+
+  useEffect(() => {
+    let isCancelled = false
+
+    if (!summaryLeadInView || summaryTopicsRequestedRef.current) {
+      return () => {
+        isCancelled = true
+      }
+    }
+
+    summaryTopicsRequestedRef.current = true
+
+    const loadSuggestedTopics = async () => {
+      try {
+        const summaryData = await getSharedSummary('', { refresh: false })
+        const nextTopics = sanitizeRailTopics(summaryData?.suggestedTopics || [])
+
+        if (!isCancelled && nextTopics.length > 0) {
+          setSummaryTopics(nextTopics)
+        }
+      } catch (error) {
+        console.warn('Failed to load suggested topics:', error)
+      }
+    }
+
+    loadSuggestedTopics()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [summaryLeadInView])
 
   // Load additional sections when they become visible
   useEffect(() => {
     const loadOpinions = async () => {
-      if (!opinionsInView || opinions.length > 0 || sectionPrefetchRef.current.opinions) return
+      if (!opinionsInView || opinions.length > 0) return
       setLoadingOpinions(true)
       try {
         if (!hasActiveTopic) {
@@ -378,7 +464,7 @@ function HomePage({
 
   useEffect(() => {
     const loadVideos = async () => {
-      if (!videosInView || videos.length > 0 || sectionPrefetchRef.current.videos) return
+      if (!videosInView || videos.length > 0) return
       setLoadingVideos(true)
       try {
         if (!hasActiveTopic) {
@@ -401,7 +487,7 @@ function HomePage({
 
   useEffect(() => {
     const loadPodcasts = async () => {
-      if (!podcastsInView || podcasts.length > 0 || sectionPrefetchRef.current.podcasts) return
+      if (!podcastsInView || podcasts.length > 0) return
       setLoadingPodcasts(true)
       try {
         if (!hasActiveTopic) {
@@ -478,15 +564,17 @@ function HomePage({
       <div className="page-body">
 
       {/* ── 2. AI Summary — editorial lead-in ── */}
-      <Suspense fallback={<SectionLoader />}>
-        <AISummary
-          category="general"
-          description="Get a quick AI-generated summary of today's most important news across all categories."
-        />
-      </Suspense>
+      <div ref={summaryLeadRef}>
+        <Suspense fallback={<SectionLoader />}>
+          <AISummary
+            category="general"
+            description="Get a quick AI-generated summary of today's most important news across all categories."
+          />
+        </Suspense>
+      </div>
 
       {/* ── 2. Topic filter strip + Top Stories ── */}
-      {hotTopics && hotTopics.length > 0 && (
+      {topicFilters.length > 0 && (
         <div className="topic-filter-strip">
           <span className="topic-filter-label">Topics:</span>
           <div className="topic-filter-chips" ref={topicTickerRef}>
@@ -495,30 +583,33 @@ function HomePage({
               className={`topic-chip ${!hasActiveTopic ? 'active' : ''}`}
               onClick={handleAllTopicsClick}
             >
-              All
+              <span className="topic-chip-text">All</span>
             </button>
             {topicFilters.map((topicLabel, index) => (
-              <button
-                key={topicLabel}
-                data-topic-value={topicLabel}
-                className={`topic-chip ${topic === topicLabel ? 'active' : ''}`}
-                onClick={() => handleTopicClick(topicLabel)}
-              >
-                {topicLabel}
+              <div key={topicLabel} className="topic-chip-entry">
+                <button
+                  data-topic-value={topicLabel}
+                  className={`topic-chip ${topic === topicLabel ? 'active' : ''}`}
+                  onClick={() => handleTopicClick(topicLabel)}
+                >
+                  <span className="topic-chip-text">{topicLabel}</span>
+                </button>
                 {index < topicFilters.length - 1 && <span className="topic-chip-divider" aria-hidden="true">|</span>}
-              </button>
+              </div>
             ))}
           </div>
         </div>
       )}
 
-      <TopStories
-        topStories={topStories}
-        loading={loading}
-        activeStory={activeStory}
-        setActiveStory={setActiveStory}
-        sideBySideClusters={storyClusters}
-      />
+      <div ref={topStoriesRef}>
+        <TopStories
+          topStories={topStories}
+          loading={loading}
+          activeStory={activeStory}
+          setActiveStory={setActiveStory}
+          showPerspectiveToggle={false}
+        />
+      </div>
 
       {/* ── 3. Trending Stories — visual follow-on ── */}
       {/* <TrendingStories stories={topStories} loading={loading} limit={6} /> */}

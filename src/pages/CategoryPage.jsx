@@ -7,6 +7,7 @@ import Podcasts from '../components/sections/Podcasts'
 import AdBreak from '../components/common/AdBreak'
 
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
+import { fetchStoryClusters } from '../services/clusterService'
 import { filterContentByCategory } from '../utils/categoryFiltering'
 import { dedupeContentItems } from '../utils/contentDeduplication'
 import './CategoryPage.css'
@@ -23,9 +24,11 @@ function CategoryPage({
   const [opinions, setOpinions] = useState([])
   const [videos, setVideos] = useState([])
   const [podcasts, setPodcasts] = useState([])
+  const [storyClusters, setStoryClusters] = useState([])
   const [loadingOpinions, setLoadingOpinions] = useState(true)
   const [loadingVideos, setLoadingVideos] = useState(true)
   const [loadingPodcasts, setLoadingPodcasts] = useState(true)
+  const isPoliticalCategory = category === 'politics'
 
   const categoryConfig = {
     'politics': {
@@ -210,6 +213,7 @@ function CategoryPage({
       setLoadingOpinions(true)
       setLoadingVideos(true)
       setLoadingPodcasts(true)
+      setStoryClusters([])
 
       try {
         // Map category to RSS category name - ALWAYS pass a category to get relevant feeds
@@ -253,6 +257,11 @@ function CategoryPage({
         setCategoryNews(finalNews)
         setLoading(false)
 
+        if (isPoliticalCategory) {
+          const clusters = await fetchStoryClusters({ type: 'news', category: 'news', search: config.title, limit: 8 }).catch(() => [])
+          setStoryClusters(Array.isArray(clusters) ? clusters : [])
+        }
+
         // Load opinions - fetch general opinions and filter by category
         const opinionData = await fetchOpinions(rssCategory)
         if (category && category !== 'top-stories') {
@@ -292,6 +301,7 @@ function CategoryPage({
         setOpinions([])
         setVideos([])
         setPodcasts([])
+        setStoryClusters([])
         setLoading(false)
         setLoadingOpinions(false)
         setLoadingVideos(false)
@@ -300,7 +310,7 @@ function CategoryPage({
     }
 
     loadCategoryContent()
-  }, [category])
+  }, [category, config.title, isPoliticalCategory])
 
   return (
     <main className="main-content category-page">
@@ -326,6 +336,9 @@ function CategoryPage({
           categoryTitle={config.title}
           categorySources={config.sources}
           categoryPath={`/category/${category}/all-news`}
+          defaultPerspectiveView={isPoliticalCategory}
+          showPerspectiveToggle={isPoliticalCategory}
+          sideBySideClusters={isPoliticalCategory ? storyClusters : []}
         />
 
         <AdBreak slot="home-feed-inline" />

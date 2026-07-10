@@ -87,19 +87,19 @@ describe('Header route traversal regression', () => {
     const user = userEvent.setup()
     renderHeader('/')
 
-    expect(screen.getByRole('button', { name: 'Open search' })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Search news' })).toBeTruthy()
     expect(screen.getAllByRole('button', { name: 'Toggle theme' }).length).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: 'Go Search' }))
-    expect(screen.getByRole('button', { name: 'Open search' })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Search news' })).toBeTruthy()
     expect(screen.getAllByRole('button', { name: 'Toggle theme' }).length).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: 'Go Politics' }))
-    expect(screen.getByRole('button', { name: 'Open search' })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Search news' })).toBeTruthy()
     expect(screen.getAllByRole('button', { name: 'Toggle theme' }).length).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: 'Go Topic' }))
-    expect(screen.getByRole('button', { name: 'Open search' })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Search news' })).toBeTruthy()
     expect(screen.getAllByRole('button', { name: 'Toggle theme' }).length).toBeGreaterThan(0)
   })
 })

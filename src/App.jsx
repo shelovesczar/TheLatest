@@ -1,69 +1,6 @@
 import { useState, useEffect, useCallback, useLayoutEffect, lazy, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
-import { dedupeContentItems } from './utils/contentDeduplication'
 import './App.css'
-
-/**
- * Extract trending topics from a set of news article headlines.
- * Algorithm:
- *   1. Split every headline into tokens.
- *   2. Collect runs of Title-Cased or ALL-CAPS words (proper noun phrases).
- *   3. Score by frequency across all headlines.
- *   4. Return the top N, filtered against a stop-list of words that are
- *      grammatically capitalized but carry no topical meaning.
- */
-function extractTopicsFromHeadlines(articles, topN = 12) {
-  const STOP = new Set([
-    'The','A','An','In','On','At','By','For','Of','To','And','Or','But',
-    'Is','Are','Was','Were','Has','Have','Had','Will','Would','Could',
-    'Should','Be','Been','Being','With','This','That','These','Those',
-    'From','Up','After','Before','As','Its','It','He','She','They','We',
-    'His','Her','Their','Our','My','Your','It\'s','How','Why','What',
-    'When','Where','Who','Says','Say','Said','New','Over','About','Into',
-    'More','Than','Now','Just','Also','Still','Even','Not','No','So',
-    'Report','Reports','Source','Sources','Amid','Despite','Calls',
-  ])
-
-  const freq = {}
-
-  for (const article of articles) {
-    const text = article.title || ''
-    // Split on spaces and punctuation, keep only letter-sequences
-    const tokens = text.split(/[\s\-–—/|:,;!?"()\[\]]+/).filter(Boolean)
-
-    let phrase = []
-    const flush = () => {
-      if (phrase.length > 0) {
-        const key = phrase.join(' ')
-        // Minimum 1 word, but single words must be ≥4 chars to avoid noise
-        if ((phrase.length <= 2) && (phrase.length > 1 || (phrase.length === 1 && phrase[0].length >= 4))) {
-          freq[key] = (freq[key] || 0) + 1
-        }
-        phrase = []
-      }
-    }
-
-    for (const token of tokens) {
-      // A proper-noun token: starts with uppercase, rest can be anything,
-      // not in stop list, not a pure number
-      const isProper = /^[A-Z]/.test(token) && !/^\d+$/.test(token) && !STOP.has(token)
-      if (isProper) {
-        phrase.push(token.replace(/['.]/g, '')) // strip trailing punctuation
-      } else {
-        flush()
-      }
-    }
-    flush()
-  }
-
-  return Object.entries(freq)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, topN)
-    .map(([topic]) => topic)
-}
-import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from './newsService'
-import { fallbackSocialPosts, getRandomCategoryPosts } from './socialMediaPosts'
-import { getRandomTrendingPosts } from './socialMediaService'
 
 // Import context
 import { AuthProvider } from './context/AuthContext'
@@ -185,10 +122,9 @@ function ScrollToTop() {
 
 function App() {
   // State management
-  const [searchQuery, setSearchQuery] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
-  const [activeStory, setActiveStory] = useState(0)
   const [email, setEmail] = useState('')
+  const [breakingNews, setBreakingNews] = useState([])
   const [darkMode, setDarkMode] = useState(() => {
     // Check localStorage first
     const saved = localStorage.getItem('darkMode')
@@ -198,31 +134,7 @@ function App() {
     // Default to dark mode if no preference saved (matches CSS default)
     return true
   })
-  
-  // Content state
-  const [topStories, setTopStories] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [opinions, setOpinions] = useState([])
-  const [videos, setVideos] = useState([])
-  const [loadingOpinions, setLoadingOpinions] = useState(true)
-  const [loadingVideos, setLoadingVideos] = useState(true)
-  const [podcasts, setPodcasts] = useState([])
-  const [loadingPodcasts, setLoadingPodcasts] = useState(true)
-  const [socialPosts, setSocialPosts] = useState(fallbackSocialPosts)
-  const [loadingSocial, setLoadingSocial] = useState(false)
-  
-  // Hot topics — derived from live headlines, not a hardcoded list.
-  // Seeded with a sensible default so the strip is never empty on first paint.
-  const FALLBACK_TOPICS = ['Donald Trump', 'AI', 'Ukraine', 'Tech', 'Economy',
-    'Climate Change', 'Elon Musk', 'Bitcoin', 'NASA', 'Elections']
-  const [visibleTopics, setVisibleTopics] = useState(FALLBACK_TOPICS)
-
   // Event handlers
-  const handleSearch = (e) => {
-    e.preventDefault()
-    console.log('Searching for:', searchQuery)
-  }
-
   const handleSubscribe = useCallback((e) => {
     e.preventDefault()
     console.log('Subscribing email:', email)
@@ -238,25 +150,18 @@ function App() {
     setDarkMode(prev => !prev)
   }, [])
 
-  // Rotate social media posts - fetch real content
-  const rotateSocialPosts = useCallback(async () => {
-    setLoadingSocial(true)
-    try {
-      const realPosts = await getRandomTrendingPosts(6)
-      
-      if (realPosts && realPosts.length > 0) {
-        setSocialPosts(realPosts)
-      } else {
-        // Use random category posts for variety
-        setSocialPosts(getRandomCategoryPosts(6))
+  const handleBreakingNewsChange = useCallback((nextBreakingNews = []) => {
+    setBreakingNews((currentBreakingNews) => {
+      const normalizedNext = Array.isArray(nextBreakingNews)
+        ? nextBreakingNews.filter((headline) => typeof headline === 'string' && headline.trim().length > 0)
+        : []
+
+      if (currentBreakingNews.length === normalizedNext.length && currentBreakingNews.every((headline, index) => headline === normalizedNext[index])) {
+        return currentBreakingNews
       }
-    } catch (error) {
-      console.error('Failed to rotate social posts:', error)
-      // Use random category posts
-      setSocialPosts(getRandomCategoryPosts(6))
-    } finally {
-      setLoadingSocial(false)
-    }
+
+      return normalizedNext
+    })
   }, [])
 
   // Effects
@@ -279,113 +184,6 @@ function App() {
     document.body.classList.toggle('light-mode', !darkMode)
   }, [darkMode])
 
-  useEffect(() => {
-    const loadNews = async () => {
-      setLoading(true)
-      try {
-        const news = await fetchRSSNews()
-        if (news && news.length > 0) {
-          const uniqueNews = dedupeContentItems(news)
-          setTopStories(uniqueNews)
-          // Derive hot topics directly from what's in today's headlines
-          const extracted = extractTopicsFromHeadlines(uniqueNews, 12)
-          if (extracted.length >= 4) {
-            setVisibleTopics(extracted)
-          }
-        } else {
-          setTopStories([])
-        }
-      } catch (error) {
-        console.error('Failed to load news:', error)
-        setTopStories([])
-      } finally {
-        setLoading(false)
-      }
-    }
-    
-    const loadOpinions = async () => {
-      setLoadingOpinions(true)
-      try {
-        const opinionData = await fetchOpinions()
-        setOpinions(dedupeContentItems(opinionData))
-      } catch (error) {
-        console.error('Failed to load opinions:', error)
-        setOpinions([])
-      } finally {
-        setLoadingOpinions(false)
-      }
-    }
-
-    // Load videos and podcasts together so we can cross-deduplicate
-    const loadMedia = async () => {
-      setLoadingVideos(true)
-      setLoadingPodcasts(true)
-      try {
-        const [rawVideos, rawPodcasts] = await Promise.all([
-          fetchVideos().catch(() => []),
-          fetchTrendingContent().catch(() => [])
-        ])
-        const dedupedVideos   = dedupeContentItems(rawVideos   || [])
-        const dedupedPodcasts = dedupeContentItems(rawPodcasts || [])
-
-        // Remove any podcast item whose URL/title already appears in videos
-        const videoKeys = new Set(
-          dedupedVideos.map(v => (v.url || v.link || v.title || '').toLowerCase()).filter(Boolean)
-        )
-        const uniquePodcasts = dedupedPodcasts.filter(p => {
-          const key = (p.url || p.link || p.title || '').toLowerCase()
-          return key && !videoKeys.has(key)
-        })
-
-        setVideos(dedupedVideos)
-        setPodcasts(uniquePodcasts)
-      } catch (error) {
-        console.error('Failed to load media:', error)
-        setVideos([])
-        setPodcasts([])
-      } finally {
-        setLoadingVideos(false)
-        setLoadingPodcasts(false)
-      }
-    }
-
-    // ── Priority-ordered loading ──────────────────────────────────────────────
-    // 1. News first — above-the-fold, user sees it immediately
-    loadNews()
-
-    // 2. Opinions + media slightly deferred — they're below the fold on first
-    //    paint; yielding a tick lets the browser finish painting news cards
-    //    before kicking off 2 more network requests.
-    const belowFoldTimer = setTimeout(() => {
-      loadOpinions()
-      loadMedia()
-    }, 150)
-
-    // 3. Social posts last — furthest below the fold; 800 ms is enough time
-    //    for above-fold content to paint before we start fetching social feeds.
-    const socialTimer = setTimeout(() => {
-      rotateSocialPosts()
-    }, 800)
-
-    // Auto-refresh every 10 minutes
-    const newsInterval = setInterval(() => {
-      loadNews()
-      loadOpinions()
-      loadMedia()
-    }, 10 * 60 * 1000)
-
-    const socialInterval = setInterval(() => {
-      rotateSocialPosts()
-    }, 10 * 60 * 1000)
-
-    return () => {
-      clearTimeout(belowFoldTimer)
-      clearTimeout(socialTimer)
-      clearInterval(newsInterval)
-      clearInterval(socialInterval)
-    }
-  }, [])
-
   return (
     <Router>
       <ConsentProvider>
@@ -399,7 +197,7 @@ function App() {
             darkMode={darkMode}
             toggleTheme={toggleTheme}
             setMenuOpen={setMenuOpen}
-            breakingNews={topStories.slice(0, 10).map((story) => story.title).filter(Boolean)}
+            breakingNews={breakingNews}
           />
 
           <ErrorBoundary>
@@ -409,24 +207,10 @@ function App() {
               path="/" 
               element={
                 <HomePage
-                  searchQuery={searchQuery}
-                  setSearchQuery={setSearchQuery}
-                  activeStory={activeStory}
-                  setActiveStory={setActiveStory}
                   email={email}
                   setEmail={setEmail}
-                  topStories={topStories}
-                  loading={loading}
-                  opinions={opinions}
-                  videos={videos}
-                  loadingOpinions={loadingOpinions}
-                  loadingVideos={loadingVideos}
-                  podcasts={podcasts}
-                  loadingPodcasts={loadingPodcasts}
-                  socialPosts={socialPosts}
-                  loadingSocial={loadingSocial}
-                  hotTopics={visibleTopics}
                   handleSubscribe={handleSubscribe}
+                  onBreakingNewsChange={handleBreakingNewsChange}
                 />
               } 
             />

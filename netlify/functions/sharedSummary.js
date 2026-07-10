@@ -6,6 +6,7 @@ const path = require('path');
 
 const SUMMARY_TTL_MS = 60 * 60 * 1000;
 const STALE_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_SUMMARY_CHARACTERS = 500;
 
 function jsonHeaders() {
   return {
@@ -116,6 +117,23 @@ function truncateText(value = '', max = 220) {
   return `${text.slice(0, max).trim().replace(/[,:;\-]+$/, '')}...`;
 }
 
+function capSummaryText(value = '', max = MAX_SUMMARY_CHARACTERS) {
+  const text = cleanText(value);
+  if (text.length <= max) return text;
+
+  const sliceLength = Math.max(0, max - 3);
+  return `${text.slice(0, sliceLength).trim().replace(/[,:;\-]+$/, '')}...`;
+}
+
+function normalizeSummaryPayload(payload = {}) {
+  if (!payload || typeof payload !== 'object') return payload;
+
+  return {
+    ...payload,
+    summary: capSummaryText(payload.summary || '')
+  };
+}
+
 async function getLiveSummaryItems({ topic = '', category = '' } = {}) {
   const response = await rssAggregator.handler({
     httpMethod: 'GET',
@@ -151,6 +169,24 @@ function buildCoverageContext(items = []) {
     .join('\n\n');
 }
 
+function collectSummarySources(items = [], max = 4) {
+  const uniqueSources = [];
+  const seen = new Set();
+
+  items.forEach((item) => {
+    const source = cleanText(item?.source || item?.category || '');
+    if (!source) return;
+
+    const normalized = source.toLowerCase();
+    if (seen.has(normalized)) return;
+
+    seen.add(normalized);
+    uniqueSources.push(source);
+  });
+
+  return uniqueSources.slice(0, max);
+}
+
 function buildSummaryPrompt(topic = '', category = '', items = []) {
   const cleanTopic = cleanText(topic);
   const cleanCategory = cleanText(category);
@@ -165,10 +201,11 @@ function buildSummaryPrompt(topic = '', category = '', items = []) {
   return [
     'You are writing a concise homepage briefing for a news aggregation app.',
     `Summarize the latest major developments for ${scope} using only the coverage notes below.`,
-    'Return JSON only in the form {"headline":"...","summary":"..."}.',
+    'Return JSON only in the form {"headline":"...","summary":"...","suggestedTopics":["...","..."]}.',
     'Constraints:',
     '- headline: under 90 characters',
-    '- summary: 110-170 words',
+    '- summary: 2 to 4 sentences, maximum 500 characters total',
+    '- suggestedTopics: 5 to 7 short topic labels, each 1 to 3 words, ideal for a homepage topic rail',
     '- neutral, factual tone',
     '- no markdown, no bullets, no preamble',
     '- do not say that you lack browsing, real-time access, or external context',
@@ -176,6 +213,58 @@ function buildSummaryPrompt(topic = '', category = '', items = []) {
     'Coverage notes:',
     buildCoverageContext(items)
   ].join('\n');
+}
+
+function sanitizeSuggestedTopics(values = [], fallbackItems = []) {
+  const cleaned = [];
+  const seen = new Set();
+
+  const addTopic = (value = '') => {
+    const topic = cleanText(value)
+      .replace(/[|/]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!topic) return;
+    if (topic.length < 3 || topic.length > 32) return;
+    if (topic.split(' ').length > 3) return;
+
+    const lowered = topic.toLowerCase();
+    if (seen.has(lowered)) return;
+
+    seen.add(lowered);
+    cleaned.push(topic);
+  };
+
+  if (Array.isArray(values)) {
+    values.forEach((value) => addTopic(value));
+  }
+
+  if (cleaned.length >= 5) {
+    return cleaned.slice(0, 7);
+  }
+
+  fallbackItems.forEach((item) => {
+    const title = cleanText(item?.title || '');
+    if (!title) return;
+
+    title
+      .split(/[:\-;,]|\band\b/i)
+      .map((part) => cleanText(part))
+      .filter(Boolean)
+      .forEach((part) => {
+        const compact = part
+          .replace(/[^a-zA-Z0-9\s]/g, ' ')
+          .split(/\s+/)
+          .filter((token) => token.length > 2)
+          .slice(0, 3)
+          .join(' ');
+
+        addTopic(compact);
+      });
+  });
+
+  return cleaned.slice(0, 7);
 }
 
 async function generateAnthropicSummary({ topic = '', category = '' } = {}) {
@@ -234,15 +323,21 @@ async function generateAnthropicSummary({ topic = '', category = '' } = {}) {
       return null;
     }
 
-    const summary = cleanText(parsed?.summary || '');
+    const summary = capSummaryText(parsed?.summary || '');
     if (!summary) {
       logSummaryIssue('Anthropic JSON response did not include summary text');
       return null;
     }
 
+    const suggestedTopics = sanitizeSuggestedTopics(parsed?.suggestedTopics, items);
+    const sources = collectSummarySources(items);
+
     return {
       headline: cleanText(parsed?.headline || leadItem?.title || ''),
       summary,
+      suggestedTopics,
+      sources,
+      sourceCount: sources.length,
       provider: `Claude (${model})`,
       timestamp: new Date().toISOString(),
       topic: cleanText(topic),
@@ -299,6 +394,13 @@ exports.handler = async (event) => {
 
       const maxAge = String(allowStale) === '1' ? STALE_TTL_MS : SUMMARY_TTL_MS;
       if (!shouldRefresh && cached?.data && isFresh(cached.data.timestamp, maxAge)) {
+        const cachedData = normalizeSummaryPayload({
+          ...cached.data,
+          sources: Array.isArray(cached.data.sources) && cached.data.sources.length > 0
+            ? cached.data.sources
+            : (cleanText(cached.data.source) ? [cleanText(cached.data.source)] : [])
+        });
+
         return {
           statusCode: 200,
           headers,
@@ -306,7 +408,7 @@ exports.handler = async (event) => {
             found: true,
             cached: true,
             key,
-            data: cached.data,
+            data: cachedData,
             metadata: cached.metadata || null
           })
         };
@@ -314,8 +416,10 @@ exports.handler = async (event) => {
 
       const generated = await generateAnthropicSummary({ topic, category });
       if (generated) {
+        const normalizedGenerated = normalizeSummaryPayload(generated);
+
         await tryPersistGeneratedSummary(key, {
-          ...generated,
+          ...normalizedGenerated,
           persistedAt: new Date().toISOString()
         });
 
@@ -326,7 +430,7 @@ exports.handler = async (event) => {
             found: true,
             cached: false,
             key,
-            data: generated,
+            data: normalizedGenerated,
             metadata: null
           })
         };
@@ -347,7 +451,12 @@ exports.handler = async (event) => {
           found: false,
           stale: true,
           key,
-          data: cached.data,
+          data: normalizeSummaryPayload({
+            ...cached.data,
+            sources: Array.isArray(cached.data.sources) && cached.data.sources.length > 0
+              ? cached.data.sources
+              : (cleanText(cached.data.source) ? [cleanText(cached.data.source)] : [])
+          }),
           metadata: cached.metadata || null
         })
       };
@@ -377,6 +486,7 @@ exports.handler = async (event) => {
         ...summary,
         topic,
         category,
+        summary: capSummaryText(summary.summary || ''),
         timestamp: summary.timestamp || new Date().toISOString(),
         persistedAt: new Date().toISOString()
       };

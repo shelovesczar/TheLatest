@@ -244,7 +244,7 @@
     --ad-width-current: var(--ad-width-tablet, 728px);
     --ad-height-current: var(--ad-height-tablet, 90px);
     --ad-ratio-current: var(--ad-ratio-tablet, 728 / 90);
-    padding: 1rem 0 0;
+    padding: 1rem 0;
     margin: 0;
   }
 
@@ -277,6 +277,7 @@
     --ad-width-current: var(--ad-width-mobile, 320px);
     --ad-height-current: var(--ad-height-mobile, 50px);
     --ad-ratio-current: var(--ad-ratio-mobile, 320 / 50);
+    padding: 1rem 0;
   }
 
   .ad-creative {

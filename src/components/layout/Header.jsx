@@ -35,7 +35,6 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [flyoutPosition, setFlyoutPosition] = useState({ left: 0 })
   const useUnifiedHeader = true
-  const isHomeRoute = location.pathname === '/'
 
   useEffect(() => {
     const handlePointerDown = (event) => {
@@ -134,22 +133,6 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
     setMenuOpen(false)
   }
 
-  const handleMobileSearchClick = () => {
-    setOpenDropdown(null)
-    setProfileMenuOpen(false)
-    setMenuOpen(false)
-
-    if (location.pathname === '/search') {
-      window.requestAnimationFrame(() => {
-        const input = document.querySelector('.header-search-input')
-        input?.focus()
-      })
-      return
-    }
-
-    navigate(searchQuery.trim() ? `/search?q=${encodeURIComponent(searchQuery.trim())}` : '/search')
-  }
-
   const handleNavClick = (path) => {
     setMenuOpen(false)
     setOpenDropdown(null)
@@ -193,7 +176,7 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
     <>
       <div className="header-shell">
         <DateTicker breakingNews={breakingNews} sticky={false} showDate={false} />
-        <header className={`header ${useUnifiedHeader ? 'header--landing' : ''} ${isHomeRoute ? 'header--home-route' : ''}`}>
+        <header className={`header ${useUnifiedHeader ? 'header--landing' : ''}`}>
           <div className={`header-top-row ${useUnifiedHeader ? 'header-top-row--landing' : ''}`}>
             <Link to="/" className={`logo ${useUnifiedHeader ? 'logo--landing' : ''}`} onClick={handleLogoClick}>
               <span className={`logo-main ${useUnifiedHeader ? 'logo-main--landing' : ''}`}>THE</span>
@@ -277,8 +260,8 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
                 )}
               </div>
 
-              <div className={`header-utilities ${isHomeRoute ? 'header-utilities--home-route' : ''}`}>
-                <form className={`header-search-form ${useUnifiedHeader ? 'header-search-form--landing' : ''} ${isHomeRoute ? 'header-search-form--mobile-home-hidden' : ''}`} onSubmit={handleSearch}>
+              <div className="header-utilities">
+                <form className={`header-search-form ${useUnifiedHeader ? 'header-search-form--landing' : ''}`} onSubmit={handleSearch}>
                   <input
                     type="text"
                     className={`header-search-input ${useUnifiedHeader ? 'header-search-input--landing' : ''}`}
@@ -291,15 +274,6 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
                     <FontAwesomeIcon icon={faSearch} />
                   </button>
                 </form>
-
-                <button
-                  type="button"
-                  className="mobile-search-toggle"
-                  onClick={handleMobileSearchClick}
-                  aria-label="Open search"
-                >
-                  <FontAwesomeIcon icon={faSearch} />
-                </button>
 
                 <button
                   type="button"

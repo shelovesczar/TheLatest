@@ -147,6 +147,7 @@ function validateBlobPair(messages) {
 
 function main() {
   const strict = process.argv.includes('--strict')
+  const requireBlobs = process.argv.includes('--require-blobs')
   const messages = { errors: [], warnings: [], info: [] }
 
   REQUIRED.forEach(({ key, reason }) => {
@@ -169,6 +170,12 @@ function main() {
 
   validateAnthropicConfig(messages)
   validateBlobPair(messages)
+
+  if (requireBlobs) {
+    if (!hasValue('NETLIFY_BLOBS_SITE_ID') || !hasValue('NETLIFY_BLOBS_TOKEN')) {
+      messages.errors.push('Blob credentials are required in this mode. Set NETLIFY_BLOBS_SITE_ID and NETLIFY_BLOBS_TOKEN to avoid local/CI Blob warnings and disabled persistence.')
+    }
+  }
 
   logSection('Errors', messages.errors)
   logSection('Warnings', messages.warnings)

@@ -87,11 +87,21 @@ async function getJsonWithMetadata(name, key, options = {}) {
 
 async function setJson(name, key, value, options = {}) {
   const store = getJsonStore(name, options);
-  return store.setJSON(key, value, {
-    metadata: options.metadata,
-    onlyIfMatch: options.onlyIfMatch,
-    onlyIfNew: options.onlyIfNew
-  });
+  const writeOptions = {};
+
+  if (options.metadata !== undefined) {
+    writeOptions.metadata = options.metadata;
+  }
+
+  if (options.onlyIfMatch !== undefined) {
+    writeOptions.onlyIfMatch = options.onlyIfMatch;
+  }
+
+  if (options.onlyIfNew !== undefined) {
+    writeOptions.onlyIfNew = options.onlyIfNew;
+  }
+
+  return store.setJSON(key, value, writeOptions);
 }
 
 async function listJson(name, options = {}) {

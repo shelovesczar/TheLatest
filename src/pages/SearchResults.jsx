@@ -17,7 +17,8 @@ import { dedupeContentItems } from '../utils/contentDeduplication'
 import { filterItemsByTopic } from '../utils/topicFiltering'
 import { getImageProps } from '../utils/imageUtils'
 import { getRandomTrendingPosts } from '../socialMediaService'
-import { fetchStoryClusters } from '../services/clusterService'
+import { getSearchAssist } from '../services/aiService'
+import { useInView } from '../hooks/useInView'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSearch, faTimes } from '@fortawesome/free-solid-svg-icons'
 import { faGoogle, faWikipediaW, faOpenai, faXTwitter } from '@fortawesome/free-brands-svg-icons'
@@ -114,6 +115,81 @@ const matchesSearchFallback = (item, rawQuery) => {
     .every((token) => searchableText.includes(token))
 }
 
+const normalizeSearchValue = (value) => String(value || '').trim().toLowerCase()
+
+const tokenizeSearchValue = (value) => normalizeSearchValue(value)
+  .replace(/[^a-z0-9\s]/g, ' ')
+  .split(/\s+/)
+  .filter((token) => token.length > 2)
+
+const buildArticleSearchText = (item) => [
+  item?.title,
+  item?.description,
+  item?.content,
+  item?.source,
+  item?.category
+]
+  .filter(Boolean)
+  .join(' ')
+  .toLowerCase()
+
+const scoreArticleForClaudeMatch = (item, query, assist) => {
+  const text = buildArticleSearchText(item)
+  const title = normalizeSearchValue(item?.title)
+  const normalizedQuery = normalizeSearchValue(assist?.normalizedQuery || query)
+  const searchPhrases = Array.isArray(assist?.searchPhrases) ? assist.searchPhrases : []
+  const suggestedTopics = Array.isArray(assist?.suggestedTopics) ? assist.suggestedTopics : []
+  const keywordTokens = new Set([
+    ...tokenizeSearchValue(query),
+    ...tokenizeSearchValue(assist?.normalizedQuery),
+    ...searchPhrases.flatMap((phrase) => tokenizeSearchValue(phrase)),
+    ...suggestedTopics.flatMap((topic) => tokenizeSearchValue(topic))
+  ])
+
+  let score = 0
+
+  if (normalizedQuery && title.includes(normalizedQuery)) {
+    score += 12
+  }
+  if (normalizedQuery && text.includes(normalizedQuery)) {
+    score += 8
+  }
+
+  searchPhrases.forEach((phrase) => {
+    const normalizedPhrase = normalizeSearchValue(phrase)
+    if (!normalizedPhrase) return
+    if (title.includes(normalizedPhrase)) {
+      score += 7
+    } else if (text.includes(normalizedPhrase)) {
+      score += 4
+    }
+  })
+
+  suggestedTopics.forEach((topic) => {
+    const normalizedTopic = normalizeSearchValue(topic)
+    if (!normalizedTopic) return
+    if (title.includes(normalizedTopic)) {
+      score += 5
+    } else if (text.includes(normalizedTopic)) {
+      score += 3
+    }
+  })
+
+  keywordTokens.forEach((token) => {
+    if (title.includes(token)) {
+      score += 1.4
+    } else if (text.includes(token)) {
+      score += 0.8
+    }
+  })
+
+  return score
+}
+
+const getSearchResultKey = (item) => String(
+  item?.url || item?.link || `${item?.source || ''}|${item?.title || ''}`
+).trim().toLowerCase()
+
 function SearchResults() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -130,17 +206,24 @@ function SearchResults() {
   const [queryVideos, setQueryVideos] = useState([])
   const [queryPodcasts, setQueryPodcasts] = useState([])
   const [querySocialPosts, setQuerySocialPosts] = useState([])
-  const [storyClusters, setStoryClusters] = useState([])
+  const [searchAssist, setSearchAssist] = useState(null)
+  const [searchAssistLoading, setSearchAssistLoading] = useState(false)
+  const [suggestedTopicArticles, setSuggestedTopicArticles] = useState([])
   const [feedNews, setFeedNews]           = useState([])
   const [loading, setLoading]             = useState(false)
   const [feedLoading, setFeedLoading]     = useState(true)
-  const [querySectionsLoading, setQuerySectionsLoading] = useState(false)
+  const [sectionLoading, setSectionLoading] = useState({ opinions: false, social: false, videos: false, podcasts: false })
+  const [sectionLoaded, setSectionLoaded] = useState({ opinions: false, social: false, videos: false, podcasts: false })
   const [selectedSource, setSelectedSource] = useState('ALL')
   const [selectedQuerySource, setSelectedQuerySource] = useState('ALL')
   const [activeQueryView, setActiveQueryView] = useState('all')
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280))
   const [activeStory, setActiveStory] = useState(0)
   const virtualResultsRef = useRef(null)
+  const { ref: opinionsRef, isInView: opinionsInView } = useInView({ rootMargin: '260px' })
+  const { ref: socialRef, isInView: socialInView } = useInView({ rootMargin: '260px' })
+  const { ref: videosRef, isInView: videosInView } = useInView({ rootMargin: '260px' })
+  const { ref: podcastsRef, isInView: podcastsInView } = useInView({ rootMargin: '260px' })
 
   // Keep input in sync when the URL query changes (e.g. back button)
   useEffect(() => { setInputValue(query) }, [query])
@@ -153,12 +236,18 @@ function SearchResults() {
 
   // Fetch default news feed (shown when no query)
   useEffect(() => {
+    if (query.trim()) {
+      setFeedNews([])
+      setFeedLoading(false)
+      return
+    }
+
     setFeedLoading(true)
     fetchRSSNews()
       .then(data => setFeedNews(Array.isArray(data) ? data : []))
       .catch(() => setFeedNews([]))
       .finally(() => setFeedLoading(false))
-  }, [])
+  }, [query])
 
   // Run search whenever URL query changes
   useEffect(() => {
@@ -169,7 +258,10 @@ function SearchResults() {
       setQueryVideos([])
       setQueryPodcasts([])
       setQuerySocialPosts([])
-      setStoryClusters([])
+      setSectionLoading({ opinions: false, social: false, videos: false, podcasts: false })
+      setSectionLoaded({ opinions: false, social: false, videos: false, podcasts: false })
+      setSearchAssist(null)
+      setSuggestedTopicArticles([])
       return
     }
 
@@ -191,25 +283,8 @@ function SearchResults() {
     }
 
     searchRSSContent(query, {
-      fastLocalOnly: true,
-      minStrictResults: 4
-    }).then(async (data) => {
-      if (ignore) return
-      const items = Array.isArray(data) ? data : []
-      if (items.length > 0) {
-        setResults(sortResults(items))
-        setLoading(false)
-        return
-      }
-
-      const fallbackResults = await resolveFallbackSearchResults()
-      if (ignore || fallbackResults.length === 0) return
-      setResults(fallbackResults)
-      setLoading(false)
-    }).catch(() => {})
-
-    searchRSSContent(query, {
-      preferFresh: true,
+      strictSearch: false,
+      relaxSearchFallback: true,
       minStrictResults: 4
     })
       .then(async (data) => {
@@ -249,63 +324,250 @@ function SearchResults() {
 
   useEffect(() => {
     if (!query.trim()) {
+      setQueryNews([])
+      return
+    }
+
+    const narrow = (items = [], limit = 15) => dedupeContentItems(filterItemsByTopic(items, query)).slice(0, limit)
+    setQueryNews(narrow(results, 15))
+  }, [query, results])
+
+  useEffect(() => {
+    if (!query.trim()) {
+      setSearchAssist(null)
+      setSuggestedTopicArticles([])
+      setSearchAssistLoading(false)
       return
     }
 
     let ignore = false
-    const narrow = (items = [], limit = 6) => dedupeContentItems(filterItemsByTopic(items, query)).slice(0, limit)
 
-    const loadQuerySections = async () => {
-      setQuerySectionsLoading(true)
+    const loadSearchAssist = async () => {
+      setSearchAssistLoading(true)
 
       try {
-        const [newsItems, opinionItems, videoItems, podcastItems, socialItems, clusters] = await Promise.all([
-          results.length > 0
-            ? Promise.resolve(results)
-            : searchRSSContent(query, {
-                preferFresh: true,
-                strictSearch: false,
-                relaxSearchFallback: true,
-                minStrictResults: 4
-              }),
-          fetchOpinions('news', query),
-          fetchVideos('news', query),
-          fetchTrendingContent('news', query),
-          getRandomTrendingPosts(6, query),
-          fetchStoryClusters({ type: 'news', search: query, limit: 8 }).catch(() => [])
-        ])
-
+        const assist = await getSearchAssist(query)
         if (ignore) return
 
-        setQueryNews(narrow(newsItems, 15))
-        setQueryOpinions(narrow(opinionItems, 6))
-        setQueryVideos(narrow(videoItems, 6))
-        setQueryPodcasts(narrow(podcastItems, 6))
-        setQuerySocialPosts(Array.isArray(socialItems) ? socialItems.slice(0, 6) : [])
-        setStoryClusters(Array.isArray(clusters) ? clusters : [])
+        setSearchAssist(assist)
       } catch (error) {
         if (!ignore) {
-          console.error('Failed to load query sections:', error)
-          setQueryNews([])
-          setQueryOpinions([])
-          setQueryVideos([])
-          setQueryPodcasts([])
-          setQuerySocialPosts([])
-          setStoryClusters([])
+          console.error('Failed to load AI search assist:', error)
+          setSearchAssist(null)
+          setSuggestedTopicArticles([])
         }
       } finally {
         if (!ignore) {
-          setQuerySectionsLoading(false)
+          setSearchAssistLoading(false)
         }
       }
     }
 
-    loadQuerySections()
+    loadSearchAssist()
 
     return () => {
       ignore = true
     }
-  }, [query, results])
+  }, [query])
+
+  useEffect(() => {
+    const topics = Array.isArray(searchAssist?.suggestedTopics)
+      ? searchAssist.suggestedTopics.slice(0, 4)
+      : []
+
+    if (topics.length === 0) {
+      setSuggestedTopicArticles([])
+      return
+    }
+
+    const storyPool = dedupeContentItems([
+      ...results,
+      ...queryNews
+    ])
+
+    const buildTopicMatches = (topic) => {
+      const strictMatches = storyPool.filter((item) => matchesSearchFallback(item, topic))
+      if (strictMatches.length > 0) {
+        return strictMatches.slice(0, 2)
+      }
+
+      const topicTokens = String(topic || '')
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((token) => token.length > 2)
+
+      const looseMatches = storyPool.filter((item) => {
+        const searchableText = [
+          item?.title,
+          item?.description,
+          item?.content,
+          item?.source,
+          item?.category
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+
+        return topicTokens.some((token) => searchableText.includes(token))
+      })
+
+      if (looseMatches.length > 0) {
+        return looseMatches.slice(0, 2)
+      }
+
+      return storyPool.slice(0, 2)
+    }
+
+    setSuggestedTopicArticles(
+      topics
+        .map((topic) => ({ topic, items: buildTopicMatches(topic) }))
+        .filter((entry) => entry.items.length > 0)
+    )
+  }, [queryNews, results, searchAssist])
+
+  const updateSectionLoading = useCallback((section, value) => {
+    setSectionLoading((current) => ({ ...current, [section]: value }))
+  }, [])
+
+  const updateSectionLoaded = useCallback((section, value) => {
+    setSectionLoaded((current) => ({ ...current, [section]: value }))
+  }, [])
+
+  useEffect(() => {
+    if (!query.trim() || loading || sectionLoaded.opinions || sectionLoading.opinions) {
+      return
+    }
+
+    const shouldLoad = activeQueryView === 'opinions' || (activeQueryView === 'all' && opinionsInView)
+    if (!shouldLoad) return
+
+    let ignore = false
+    updateSectionLoading('opinions', true)
+
+    fetchOpinions('news', query)
+      .then((items) => {
+        if (ignore) return
+        setQueryOpinions(dedupeContentItems(filterItemsByTopic(items, query)).slice(0, 6))
+      })
+      .catch((error) => {
+        if (!ignore) {
+          console.error('Failed to load search opinions:', error)
+          setQueryOpinions([])
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          updateSectionLoading('opinions', false)
+          updateSectionLoaded('opinions', true)
+        }
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [activeQueryView, loading, opinionsInView, query, sectionLoaded.opinions, sectionLoading.opinions, updateSectionLoaded, updateSectionLoading])
+
+  useEffect(() => {
+    if (!query.trim() || loading || sectionLoaded.social || sectionLoading.social) {
+      return
+    }
+
+    const shouldLoad = activeQueryView === 'social' || (activeQueryView === 'all' && socialInView)
+    if (!shouldLoad) return
+
+    let ignore = false
+    updateSectionLoading('social', true)
+
+    getRandomTrendingPosts(6, query)
+      .then((items) => {
+        if (ignore) return
+        setQuerySocialPosts(Array.isArray(items) ? items.slice(0, 6) : [])
+      })
+      .catch((error) => {
+        if (!ignore) {
+          console.error('Failed to load search social posts:', error)
+          setQuerySocialPosts([])
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          updateSectionLoading('social', false)
+          updateSectionLoaded('social', true)
+        }
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [activeQueryView, loading, query, sectionLoaded.social, sectionLoading.social, socialInView, updateSectionLoaded, updateSectionLoading])
+
+  useEffect(() => {
+    if (!query.trim() || loading || sectionLoaded.videos || sectionLoading.videos) {
+      return
+    }
+
+    const shouldLoad = activeQueryView === 'videos' || (activeQueryView === 'all' && videosInView)
+    if (!shouldLoad) return
+
+    let ignore = false
+    updateSectionLoading('videos', true)
+
+    fetchVideos('news', query)
+      .then((items) => {
+        if (ignore) return
+        setQueryVideos(dedupeContentItems(filterItemsByTopic(items, query)).slice(0, 6))
+      })
+      .catch((error) => {
+        if (!ignore) {
+          console.error('Failed to load search videos:', error)
+          setQueryVideos([])
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          updateSectionLoading('videos', false)
+          updateSectionLoaded('videos', true)
+        }
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [activeQueryView, loading, query, sectionLoaded.videos, sectionLoading.videos, updateSectionLoaded, updateSectionLoading, videosInView])
+
+  useEffect(() => {
+    if (!query.trim() || loading || sectionLoaded.podcasts || sectionLoading.podcasts) {
+      return
+    }
+
+    const shouldLoad = activeQueryView === 'podcasts' || (activeQueryView === 'all' && podcastsInView)
+    if (!shouldLoad) return
+
+    let ignore = false
+    updateSectionLoading('podcasts', true)
+
+    fetchTrendingContent('news', query)
+      .then((items) => {
+        if (ignore) return
+        setQueryPodcasts(dedupeContentItems(filterItemsByTopic(items, query)).slice(0, 6))
+      })
+      .catch((error) => {
+        if (!ignore) {
+          console.error('Failed to load search podcasts:', error)
+          setQueryPodcasts([])
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          updateSectionLoading('podcasts', false)
+          updateSectionLoaded('podcasts', true)
+        }
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [activeQueryView, loading, podcastsInView, query, sectionLoaded.podcasts, sectionLoading.podcasts, updateSectionLoaded, updateSectionLoading])
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -334,15 +596,45 @@ function SearchResults() {
   }, [viewportWidth])
   const searchStoryPool = results.length > 0 ? results : queryNews
   const featuredSearchStories = searchStoryPool.slice(0, 12)
-  const remainingResults = featuredSearchStories.length > 0 ? results.slice(12) : results
   const liveSourceOptions = useMemo(() => (['ALL', ...new Set(results.map((item) => item.source).filter(Boolean))]), [results])
+  const claudeExactMatches = useMemo(() => {
+    const pool = dedupeContentItems([
+      ...results,
+      ...queryNews
+    ])
+
+    if (pool.length === 0) return []
+
+    const scored = pool
+      .map((item) => ({
+        item,
+        score: scoreArticleForClaudeMatch(item, query, searchAssist)
+      }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(({ item }) => item)
+
+    return (scored.length > 0 ? scored : pool).slice(0, 3)
+  }, [query, queryNews, results, searchAssist])
+  const mergedFeaturedStories = useMemo(() => (
+    dedupeContentItems([
+      ...claudeExactMatches,
+      ...featuredSearchStories
+    ]).slice(0, 12)
+  ), [claudeExactMatches, featuredSearchStories])
+  const featuredStoryKeys = useMemo(() => (
+    new Set(mergedFeaturedStories.map((item) => getSearchResultKey(item)).filter(Boolean))
+  ), [mergedFeaturedStories])
+  const remainingResults = useMemo(() => (
+    results.filter((item) => !featuredStoryKeys.has(getSearchResultKey(item)))
+  ), [featuredStoryKeys, results])
   const liveSourceList = remainingResults.length > 0 ? remainingResults : results
   const sourceList = selectedQuerySource === 'ALL'
     ? liveSourceList
     : liveSourceList.filter((item) => item.source === selectedQuerySource)
-  const hasFeaturedStories = featuredSearchStories.length > 0
+  const hasFeaturedStories = mergedFeaturedStories.length > 0
   const showAllSections = activeQueryView === 'all'
-  const showCompareSection = showAllSections || activeQueryView === 'compare'
+  const showTopStoriesSection = showAllSections || activeQueryView === 'news'
   const showNewsSection = showAllSections || activeQueryView === 'news'
   const showOpinionSection = showAllSections || activeQueryView === 'opinions'
   const showSocialSection = showAllSections || activeQueryView === 'social'
@@ -350,6 +642,12 @@ function SearchResults() {
   const showPodcastSection = showAllSections || activeQueryView === 'podcasts'
   const showArchiveSection = showAllSections || activeQueryView === 'archive'
   const showToolsSection = showAllSections || activeQueryView === 'tools'
+  const showRawArticleList = viewportWidth >= 768
+  const anySectionLoading = Object.values(sectionLoading).some(Boolean)
+  const showOpinionPlaceholder = showAllSections && !sectionLoaded.opinions && !sectionLoading.opinions
+  const showSocialPlaceholder = showAllSections && !sectionLoaded.social && !sectionLoading.social
+  const showVideoPlaceholder = showAllSections && !sectionLoaded.videos && !sectionLoading.videos
+  const showPodcastPlaceholder = showAllSections && !sectionLoaded.podcasts && !sectionLoading.podcasts
 
   const resultVirtualizer = useVirtualizer({
     count: sourceList.length,
@@ -393,7 +691,7 @@ function SearchResults() {
   const hasLiveResults = results.length > 0
   const hasArchiveMatches = archiveResults.length > 0
   const hasSectionContent = searchStoryPool.length > 0 || queryOpinions.length > 0 || queryVideos.length > 0 || queryPodcasts.length > 0 || querySocialPosts.length > 0 || hasArchiveMatches
-  const noResults   = hasQuery && !loading && !querySectionsLoading && !hasSectionContent
+  const noResults   = hasQuery && !loading && !anySectionLoading && !hasSectionContent
 
   useEffect(() => {
     if (selectedQuerySource !== 'ALL' && !liveSourceOptions.includes(selectedQuerySource)) {
@@ -459,11 +757,68 @@ function SearchResults() {
             </div>
           </form>
 
+          {hasQuery && (searchAssistLoading || searchAssist || suggestedTopicArticles.length > 0) && (
+            <div className="sr-ai-assist" aria-live="polite">
+              <div className="sr-ai-assist-header">
+                <div>
+                  <span className="sr-ai-assist-kicker">Claude Search Assist</span>
+                  <p className="sr-ai-assist-copy">
+                    {searchAssist?.topicBrief || `Pulling related topics and article angles for ${query}.`}
+                  </p>
+                </div>
+                {searchAssist?.provider && (
+                  <span className="sr-ai-assist-provider">{searchAssist.provider}</span>
+                )}
+              </div>
+
+              {Array.isArray(searchAssist?.searchPhrases) && searchAssist.searchPhrases.length > 0 && (
+                <div className="sr-ai-chip-row">
+                  {searchAssist.searchPhrases.map((phrase) => (
+                    <button
+                      key={phrase}
+                      type="button"
+                      className="sr-ai-chip"
+                      onClick={() => navigate(`/search?q=${encodeURIComponent(phrase)}`)}
+                    >
+                      {phrase}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {suggestedTopicArticles.length > 0 && (
+                <div className="sr-ai-topic-grid">
+                  {suggestedTopicArticles.map(({ topic, items }) => {
+                    const leadItem = items[0]
+                    if (!leadItem) return null
+
+                    return (
+                      <article key={topic} className="sr-ai-topic-card">
+                        <button
+                          type="button"
+                          className="sr-ai-topic-link"
+                          onClick={() => navigate(`/search?q=${encodeURIComponent(topic)}`)}
+                        >
+                          {topic}
+                        </button>
+                        <h3>{leadItem.title || topic}</h3>
+                        <p>{truncate(leadItem.description || leadItem.content || '', 130)}</p>
+                        <div className="sr-ai-topic-meta">
+                          <span>{leadItem.source || 'Latest coverage'}</span>
+                          <span>{formatPublishedDate(leadItem.publishedAt || leadItem.date)}</span>
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {hasQuery && (
             <div className="sr-topic-tabs">
               {[
                 ['all', 'All Coverage'],
-                ['compare', 'Side by Side'],
                 ['news', 'News'],
                 ['opinions', 'Opinions'],
                 ['social', 'Social'],
@@ -508,17 +863,15 @@ function SearchResults() {
                 ignoreTopic={true}
               />
 
-              {showCompareSection && hasFeaturedStories && (
+              {showTopStoriesSection && hasFeaturedStories && (
                 <TopStories
-                  topStories={featuredSearchStories}
-                  loading={querySectionsLoading && !hasLiveResults}
+                  topStories={mergedFeaturedStories}
+                  loading={loading && !hasLiveResults}
                   activeStory={activeStory}
                   setActiveStory={setActiveStory}
                   sectionTitle="Top Search Results"
-                  sideBySideTitle="Top Stories - Side by Side"
                   showPerspectiveToggle={false}
-                  defaultPerspectiveView={true}
-                  sideBySideClusters={storyClusters}
+                  defaultPerspectiveView={false}
                   seeMoreLabel="View all search results →"
                   categoryPath={`/search?q=${encodeURIComponent(query)}`}
                 />
@@ -553,48 +906,80 @@ function SearchResults() {
                 </section>
               )}
 
-              {(showAllSections || showCompareSection || showToolsSection) && <AdBreak slot="home-feed-inline" />}
+              {(showAllSections || showTopStoriesSection || showToolsSection) && <AdBreak slot="home-feed-inline" />}
 
               {showOpinionSection && (
-                <Opinions
-                  opinions={queryOpinions}
-                  loadingOpinions={querySectionsLoading}
-                  categoryPath={`/search?q=${encodeURIComponent(query)}`}
-                />
+                <div ref={opinionsRef}>
+                  {showOpinionPlaceholder ? (
+                    <div className="sr-deferred-section">
+                      <p>Opinions load as you scroll.</p>
+                    </div>
+                  ) : (
+                    <Opinions
+                      opinions={queryOpinions}
+                      loadingOpinions={sectionLoading.opinions}
+                      categoryPath={`/search?q=${encodeURIComponent(query)}`}
+                    />
+                  )}
+                </div>
               )}
 
               {showOpinionSection && <AdBreak slot="section-break" />}
 
               {showSocialSection && (
-                <SocialMedia
-                  socialPosts={querySocialPosts}
-                  loadingSocial={querySectionsLoading}
-                />
+                <div ref={socialRef}>
+                  {showSocialPlaceholder ? (
+                    <div className="sr-deferred-section">
+                      <p>Social posts load as you scroll.</p>
+                    </div>
+                  ) : (
+                    <SocialMedia
+                      socialPosts={querySocialPosts}
+                      loadingSocial={sectionLoading.social}
+                    />
+                  )}
+                </div>
               )}
 
               {showSocialSection && <AdBreak slot="section-break" />}
 
               {showVideoSection && (
-                <Videos
-                  videos={queryVideos}
-                  loadingVideos={querySectionsLoading}
-                  categoryPath={`/search?q=${encodeURIComponent(query)}`}
-                />
+                <div ref={videosRef}>
+                  {showVideoPlaceholder ? (
+                    <div className="sr-deferred-section">
+                      <p>Videos load as you scroll.</p>
+                    </div>
+                  ) : (
+                    <Videos
+                      videos={queryVideos}
+                      loadingVideos={sectionLoading.videos}
+                      categoryPath={`/search?q=${encodeURIComponent(query)}`}
+                    />
+                  )}
+                </div>
               )}
 
               {showVideoSection && <AdBreak slot="section-break" />}
 
               {showPodcastSection && (
-                <Podcasts
-                  podcasts={queryPodcasts}
-                  loadingPodcasts={querySectionsLoading}
-                  categoryPath={`/search?q=${encodeURIComponent(query)}`}
-                />
+                <div ref={podcastsRef}>
+                  {showPodcastPlaceholder ? (
+                    <div className="sr-deferred-section">
+                      <p>Podcasts load as you scroll.</p>
+                    </div>
+                  ) : (
+                    <Podcasts
+                      podcasts={queryPodcasts}
+                      loadingPodcasts={sectionLoading.podcasts}
+                      categoryPath={`/search?q=${encodeURIComponent(query)}`}
+                    />
+                  )}
+                </div>
               )}
 
               {showPodcastSection && <AdBreak slot="section-break" />}
 
-              {showNewsSection && hasLiveResults && sourceList.length > 0 && (
+              {showNewsSection && showRawArticleList && hasLiveResults && sourceList.length > 0 && (
                 <>
                   <div className="sr-results-header" id="search-results-list">
                     <div className="sr-results-header-row">

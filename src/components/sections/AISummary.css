@@ -11,8 +11,8 @@
 
 .summary-layout {
   display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 290px);
+  gap: 1.2rem;
   align-items: stretch;
 }
 
@@ -22,14 +22,14 @@
   box-shadow: none;
   border: 1px solid color-mix(in srgb, var(--border-color) 90%, var(--accent-color) 10%);
   overflow: hidden;
-  padding: 1.55rem 1.8rem 1.25rem;
+  padding: 1.35rem 1.5rem 1.1rem;
   min-height: 100%;
 }
 
 .summary-body {
   display: flex;
   flex-direction: column;
-  gap: 1.35rem;
+  gap: 1rem;
   min-width: 0;
   min-height: 100%;
 }
@@ -72,8 +72,8 @@
 
 .summary-headline {
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(1.8rem, 3vw, 2.25rem);
-  line-height: 1.18;
+  font-size: clamp(1.55rem, 2.4vw, 1.95rem);
+  line-height: 1.15;
   color: var(--text-primary);
   font-weight: 700;
   margin: 0;
@@ -81,10 +81,12 @@
 
 .summary-copy {
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(1.22rem, 2vw, 1.42rem);
+  font-size: clamp(1rem, 1.45vw, 1.16rem);
   color: var(--text-secondary);
-  line-height: 1.72;
+  line-height: var(--summary-line-height, 1.58);
   margin: 0;
+  max-width: 62ch;
+  transition: line-height 0.18s ease;
 }
 
 .summary-lead {
@@ -95,17 +97,17 @@
 
 .summary-note {
   margin-top: auto;
-  padding-top: 1.45rem;
+  padding-top: 1rem;
   border-top: 1px solid color-mix(in srgb, var(--border-color) 88%, #756bf0 12%);
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 0.95rem;
-  line-height: 1.5;
+  font-size: 0.82rem;
+  line-height: 1.4;
   font-style: italic;
   color: color-mix(in srgb, var(--text-secondary) 70%, white 30%);
 }
 
 .summary-footer {
-  padding-top: 1.2rem;
+  padding-top: 0.95rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -162,39 +164,62 @@
 }
 
 .summary-ad-rail {
-  width: 300px;
+  width: 100%;
   height: 100%;
+  display: flex;
 }
 
 .summary-ad-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: 18px;
   min-height: 100%;
   height: 100%;
-  width: 300px;
+  width: 100%;
   overflow: hidden;
   position: relative;
   display: flex;
   flex-direction: column;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: var(--shadow-md);
 }
 
-.summary-ad-label {
+.summary-ad-card--finance {
+  background: linear-gradient(180deg, #102333 0%, #1b4153 48%, #244958 100%);
+}
+
+.summary-ad-card--tech {
+  background: linear-gradient(180deg, #0b1838 0%, #19335f 48%, #224575 100%);
+}
+
+.summary-ad-card--travel {
+  background: linear-gradient(180deg, #112539 0%, #1a4459 45%, #2a5f6c 100%);
+}
+
+.summary-ad-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.8rem 0.45rem;
+  background: rgba(5, 13, 28, 0.32);
+}
+
+.summary-ad-label,
+.summary-ad-rotation {
   font-size: 0.5rem;
   letter-spacing: 2px;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.35);
-  padding: 0.6rem 0 0.4rem;
-  text-align: center;
-  background: linear-gradient(175deg, #0f2027 0%, #203a43 45%, #2c5364 100%);
 }
 
 .summary-ad-image {
   width: 100%;
-  height: 180px;
+  height: 166px;
   overflow: hidden;
   flex-shrink: 0;
-  background: linear-gradient(175deg, #0f2027 0%, #203a43 45%, #2c5364 100%);
+  background: transparent;
 }
 
 .summary-ad-image img {
@@ -206,14 +231,22 @@
 }
 
 .summary-ad-body {
-  padding: 1.4rem 1.2rem;
+  padding: 1.05rem 1rem 0.95rem;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.9rem;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 0.85rem;
   flex: 1;
-  text-align: center;
-  background: linear-gradient(175deg, #0f2027 0%, #203a43 45%, #2c5364 100%);
+  text-align: left;
+  background: transparent;
+}
+
+.summary-ad-main,
+.summary-ad-footer-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
 }
 
 .summary-ad-brand {
@@ -226,9 +259,9 @@
 
 .summary-ad-headline {
   font-weight: 900;
-  font-size: 1.35rem;
+  font-size: 1.22rem;
   color: #fff;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .summary-ad-rule {
@@ -239,15 +272,19 @@
 }
 
 .summary-ad-copy {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: rgba(255, 255, 255, 0.7);
   line-height: 1.5;
 }
 
+.summary-ad-copy-secondary {
+  color: rgba(255, 255, 255, 0.58);
+}
+
 .summary-ad-statbox {
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 0.8rem 1rem;
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
   width: 100%;
   text-align: left;
 }
@@ -274,20 +311,45 @@
 .summary-ad-cta {
   background: #e8b84b;
   color: #1a1000;
-  border: none;
   border-radius: 24px;
-  padding: 0.65rem 1.6rem;
+  padding: 0.7rem 1rem;
   font-weight: 900;
   font-size: 0.82rem;
-  cursor: pointer;
   letter-spacing: 0.5px;
   width: 100%;
+  text-align: center;
 }
 
 .summary-ad-disclaimer {
   font-size: 0.5rem;
   color: rgba(255, 255, 255, 0.25);
   line-height: 1.4;
+}
+
+.summary-ad-card[data-density='compact'] .summary-ad-image {
+  height: 126px;
+}
+
+.summary-ad-card[data-density='compact'] .summary-ad-copy-secondary,
+.summary-ad-card[data-density='compact'] .summary-ad-statbox,
+.summary-ad-card[data-density='compact'] .summary-ad-disclaimer {
+  display: none;
+}
+
+.summary-ad-card[data-density='compact'] .summary-ad-body {
+  padding: 0.85rem 0.9rem 0.9rem;
+}
+
+.summary-ad-card[data-density='balanced'] .summary-ad-disclaimer {
+  display: none;
+}
+
+.summary-ad-card[data-density='expanded'] .summary-ad-image {
+  height: 190px;
+}
+
+.summary-ad-card[data-density='expanded'] .summary-ad-headline {
+  font-size: 1.3rem;
 }
 
 @media (max-width: 900px) {
@@ -310,7 +372,7 @@
   }
 
   .summary-copy {
-    font-size: 1rem;
+    font-size: 0.98rem;
   }
 
   .summary-footer {

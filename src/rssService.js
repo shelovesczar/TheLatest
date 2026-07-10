@@ -5,19 +5,62 @@ import { deriveMediaOutlet } from './utils/sourceUtils';
 // RSS Aggregator endpoint - works both locally (with netlify dev) and in production
 const RSS_API_URL = '/.netlify/functions/rss-aggregator';
 const RSS_CACHE_VERSION = 'v9-video-density';
+const RSS_DISCOVERY_INDEX_KEY = `${RSS_CACHE_VERSION}_rss_bucket_index`;
 const REQUEST_TIMEOUT = 12000; // 12s — avoids aborting cold-start live searches that legitimately run past 8s
 const RETRY_ATTEMPTS = 1;      // no retry; stale cache is shown on failure instead
 const RETRY_BASE_DELAY_MS = 500;
 const FUNCTIONS_RECHECK_COOLDOWN_MS = 15000;
+const FEED_STALE_FALLBACK_TIMEOUT_MS = {
+  news: 7000,
+  opinions: 5500,
+  videos: 4500,
+  podcasts: 6500,
+};
 
 const getVersionedCacheKey = (type, category = null) => {
   const scoped = category ? `${type}_${category}` : type;
   return `${RSS_CACHE_VERSION}_${scoped}`;
 };
 
+const normalizeFeedCategory = (category = null) => {
+  const normalized = String(category || '').trim().toLowerCase();
+  return normalized && normalized !== 'news' ? normalized : null;
+};
+
 const getSearchCacheKey = (term) => {
   const normalized = String(term || '').trim().toLowerCase().replace(/\s+/g, '_');
   return `${RSS_CACHE_VERSION}_search_${normalized}`;
+};
+
+const getIndexedBucketKeys = () => {
+  if (typeof window === 'undefined' || !window.localStorage) return [];
+
+  try {
+    const raw = window.localStorage.getItem(RSS_DISCOVERY_INDEX_KEY);
+    const parsed = JSON.parse(raw || '[]');
+    return Array.isArray(parsed)
+      ? parsed.filter((key) => typeof key === 'string' && key.startsWith(`${RSS_CACHE_VERSION}_`) && !key.includes('_search_'))
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const registerBucketKey = (cacheKey) => {
+  if (!cacheKey || typeof window === 'undefined' || !window.localStorage) return;
+
+  try {
+    const currentKeys = getIndexedBucketKeys();
+    if (currentKeys.includes(cacheKey)) return;
+    window.localStorage.setItem(RSS_DISCOVERY_INDEX_KEY, JSON.stringify([...currentKeys, cacheKey]));
+  } catch {
+    // Ignore registry persistence failures; cache writes still succeed.
+  }
+};
+
+const setBucketCache = async (cacheKey, data) => {
+  await cacheManager.set(cacheKey, data);
+  registerBucketKey(cacheKey);
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -86,6 +129,69 @@ const getStaleOrEmpty = async (cacheKey, label) => {
     return staleData;
   }
   return [];
+};
+
+const fetchFeedWithCacheFallback = async ({
+  cacheKey,
+  label,
+  url,
+  timeoutMs,
+  transform,
+}) => {
+  const staleData = await getStaleOrEmpty(cacheKey, label);
+
+  if (!canAttemptFunctions()) {
+    console.log(`[RSS] Skipping ${label} fetch - functions unavailable`);
+    return staleData;
+  }
+
+  const fetchFresh = async () => {
+    const response = await requestWithRetry(url);
+    markFunctionsAvailable();
+
+    const nextData = transform(extractDataArray(response));
+    if (!nextData.length) {
+      console.warn(`[RSS] Empty ${label} payload returned from endpoint`);
+      return staleData;
+    }
+
+    await setBucketCache(cacheKey, nextData);
+    return nextData;
+  };
+
+  if (staleData.length > 0 && timeoutMs > 0) {
+    const timedResult = await Promise.race([
+      fetchFresh()
+        .then((data) => ({ kind: 'fresh', data }))
+        .catch((error) => ({ kind: 'error', error })),
+      sleep(timeoutMs).then(() => ({ kind: 'stale' }))
+    ]);
+
+    if (timedResult.kind === 'fresh') {
+      return timedResult.data;
+    }
+
+    if (timedResult.kind === 'error') {
+      console.error(`[RSS] Error fetching ${label}:`, timedResult.error.message);
+      if (shouldDisableFunctions(timedResult.error)) {
+        markFunctionsUnavailable();
+      }
+      return staleData;
+    }
+
+    console.warn(`[RSS] Returning stale ${label} cache for ${cacheKey} after ${timeoutMs}ms soft timeout`);
+    return staleData;
+  }
+
+  try {
+    return await fetchFresh();
+  } catch (error) {
+    console.error(`[RSS] Error fetching ${label}:`, error.message);
+    if (shouldDisableFunctions(error)) {
+      markFunctionsUnavailable();
+    }
+    return staleData;
+  }
 };
 
 const normalizeOutletSource = (item) => ({
@@ -202,8 +308,10 @@ const scoreLocalSearchResult = (item, searchTerm) => {
 
 const searchCachedContent = async (searchTerm) => {
   try {
-    const keys = await cacheManager.getAllKeys();
-    const cacheKeys = keys.filter((key) => typeof key === 'string' && !key.includes('_search_'));
+    const registeredKeys = getIndexedBucketKeys();
+    const cacheKeys = registeredKeys.length > 0
+      ? registeredKeys
+      : (await cacheManager.getAllKeys()).filter((key) => typeof key === 'string' && key.startsWith(`${RSS_CACHE_VERSION}_`) && !key.includes('_search_'));
 
     const cachedBuckets = await Promise.all(
       cacheKeys.map(async (key) => {
@@ -334,7 +442,8 @@ const markFunctionsAvailable = () => {
  * @returns {Promise<Array>} - Array of news articles
  */
 export async function fetchRSSNews(category = null) {
-  const cacheKey = getVersionedCacheKey('news', category);
+  const normalizedCategory = normalizeFeedCategory(category);
+  const cacheKey = getVersionedCacheKey('news', normalizedCategory);
   
   // Check cache first using IndexedDB
   const cachedData = await cacheManager.get(cacheKey);
@@ -343,49 +452,32 @@ export async function fetchRSSNews(category = null) {
     return cachedData;
   }
 
-  // If functions not available, return empty (will trigger fallback in newsService)
-  if (!canAttemptFunctions()) {
-    console.log('[RSS] Skipping RSS fetch - functions unavailable (use "netlify dev")');
-    return getStaleOrEmpty(cacheKey, 'news');
+  const params = new URLSearchParams({ type: 'news' });
+  if (normalizedCategory) {
+    params.append('category', normalizedCategory);
+    console.log(`[RSS] Fetching news with category filter: ${normalizedCategory}`);
   }
 
-  try {
-    const params = new URLSearchParams({ type: 'news' });
-    if (category) {
-      params.append('category', category);
-      console.log(`[RSS] Fetching news with category filter: ${category}`);
-    }
-    
-    const url = `${RSS_API_URL}?${params.toString()}`;
-    console.log(`[RSS] Request URL: ${url}`);
-    
-    const response = await requestWithRetry(url);
-    markFunctionsAvailable();
+  const url = `${RSS_API_URL}?${params.toString()}`;
+  console.log(`[RSS] Request URL: ${url}`);
 
-    const normalizedArticles = extractDataArray(response).map(normalizeOutletSource);
-    const articles = dedupeContentItems(normalizedArticles);
-    if (!articles.length) {
-      console.warn('[RSS] Empty news payload returned from endpoint');
-      return getStaleOrEmpty(cacheKey, 'news');
+  const articles = await fetchFeedWithCacheFallback({
+    cacheKey,
+    label: 'news',
+    url,
+    timeoutMs: FEED_STALE_FALLBACK_TIMEOUT_MS.news,
+    transform: (payload) => {
+      const normalizedArticles = payload.map(normalizeOutletSource);
+      const dedupedArticles = dedupeContentItems(normalizedArticles);
+      if (dedupedArticles.length !== normalizedArticles.length) {
+        console.log(`[RSS] Removed ${normalizedArticles.length - dedupedArticles.length} duplicate news items`);
+      }
+      return dedupedArticles;
     }
+  });
 
-    if (articles.length !== normalizedArticles.length) {
-      console.log(`[RSS] Removed ${normalizedArticles.length - articles.length} duplicate news items`);
-    }
-    
-    // Update cache with IndexedDB
-    await cacheManager.set(cacheKey, articles);
-    
-    console.log(`[RSS] Fetched ${articles.length} news articles${category ? ` for ${category}` : ''}`);
-    return articles;
-  } catch (error) {
-    console.error('[RSS] Error fetching news:', error.message);
-    // Mark functions as unavailable on first error
-    if (shouldDisableFunctions(error)) {
-      markFunctionsUnavailable();
-    }
-    return getStaleOrEmpty(cacheKey, 'news');
-  }
+  console.log(`[RSS] Resolved ${articles.length} news articles${normalizedCategory ? ` for ${normalizedCategory}` : ''}`);
+  return articles;
 }
 
 /**
@@ -394,7 +486,8 @@ export async function fetchRSSNews(category = null) {
  * @returns {Promise<Array>} - Array of opinion articles
  */
 export async function fetchRSSOpinions(category = null) {
-  const cacheKey = getVersionedCacheKey('opinions', category);
+  const normalizedCategory = normalizeFeedCategory(category);
+  const cacheKey = getVersionedCacheKey('opinions', normalizedCategory);
   
   // Check cache first using IndexedDB
   const cachedData = await cacheManager.get(cacheKey);
@@ -403,24 +496,19 @@ export async function fetchRSSOpinions(category = null) {
     return cachedData;
   }
 
-  if (!canAttemptFunctions()) {
-    console.log('[RSS] Skipping opinions fetch - functions unavailable');
-    return getStaleOrEmpty(cacheKey, 'opinions');
+  const params = new URLSearchParams({ type: 'opinions' });
+  if (normalizedCategory) {
+    params.append('category', normalizedCategory);
+    console.log(`[RSS] Fetching opinions with category filter: ${normalizedCategory}`);
   }
-  
-  try {
-    const params = new URLSearchParams({ type: 'opinions' });
-    if (category) {
-      params.append('category', category);
-      console.log(`[RSS] Fetching opinions with category filter: ${category}`);
-    }
-    
-    const response = await requestWithRetry(`${RSS_API_URL}?${params.toString()}`);
-    markFunctionsAvailable();
 
-    const payload = extractDataArray(response);
-    if (payload.length > 0) {
-      const normalizedOpinions = payload.map(item => {
+  const opinions = await fetchFeedWithCacheFallback({
+    cacheKey,
+    label: 'opinions',
+    url: `${RSS_API_URL}?${params.toString()}`,
+    timeoutMs: FEED_STALE_FALLBACK_TIMEOUT_MS.opinions,
+    transform: (payload) => {
+      const normalizedOpinions = payload.map((item) => {
         const normalized = normalizeOutletSource(item);
         return {
           ...normalized,
@@ -428,27 +516,16 @@ export async function fetchRSSOpinions(category = null) {
           date: item.publishedAt || 'Recently'
         };
       });
-      const opinions = dedupeContentItems(normalizedOpinions);
-
-      if (opinions.length !== normalizedOpinions.length) {
-        console.log(`[RSS] Removed ${normalizedOpinions.length - opinions.length} duplicate opinion items`);
+      const dedupedOpinions = dedupeContentItems(normalizedOpinions);
+      if (dedupedOpinions.length !== normalizedOpinions.length) {
+        console.log(`[RSS] Removed ${normalizedOpinions.length - dedupedOpinions.length} duplicate opinion items`);
       }
-      
-      // Update cache with IndexedDB
-      await cacheManager.set(cacheKey, opinions);
-      
-      console.log(`[RSS] Fetched ${opinions.length} opinion pieces${category ? ` for ${category}` : ''}`);
-      return opinions;
+      return dedupedOpinions;
     }
+  });
 
-    return getStaleOrEmpty(cacheKey, 'opinions');
-  } catch (error) {
-    console.error('[RSS] Error fetching opinions:', error.message);
-    if (shouldDisableFunctions(error)) {
-      markFunctionsUnavailable();
-    }
-    return getStaleOrEmpty(cacheKey, 'opinions');
-  }
+  console.log(`[RSS] Resolved ${opinions.length} opinion pieces${normalizedCategory ? ` for ${normalizedCategory}` : ''}`);
+  return opinions;
 }
 
 /**
@@ -457,7 +534,8 @@ export async function fetchRSSOpinions(category = null) {
  * @returns {Promise<Array>} - Array of video items
  */
 export async function fetchRSSVideos(category = null) {
-  const cacheKey = getVersionedCacheKey('videos', category);
+  const normalizedCategory = normalizeFeedCategory(category);
+  const cacheKey = getVersionedCacheKey('videos', normalizedCategory);
   
   // Check cache first using IndexedDB
   const cachedData = await cacheManager.get(cacheKey);
@@ -466,52 +544,36 @@ export async function fetchRSSVideos(category = null) {
     return cachedData;
   }
 
-  if (!canAttemptFunctions()) {
-    console.log('[RSS] Skipping videos fetch - functions unavailable');
-    return getStaleOrEmpty(cacheKey, 'videos');
+  const params = new URLSearchParams({ type: 'videos' });
+  if (normalizedCategory) {
+    params.append('category', normalizedCategory);
+    console.log(`[RSS] Fetching videos with category filter: ${normalizedCategory}`);
   }
 
-  try {
-    const params = new URLSearchParams({ type: 'videos' });
-    if (category) {
-      params.append('category', category);
-      console.log(`[RSS] Fetching videos with category filter: ${category}`);
-    }
-    
-    const response = await requestWithRetry(`${RSS_API_URL}?${params.toString()}`);
-    markFunctionsAvailable();
-
-    const payload = extractDataArray(response);
-    if (payload.length > 0) {
-      const normalizedVideos = payload.map(item => {
+  const videos = await fetchFeedWithCacheFallback({
+    cacheKey,
+    label: 'videos',
+    url: `${RSS_API_URL}?${params.toString()}`,
+    timeoutMs: FEED_STALE_FALLBACK_TIMEOUT_MS.videos,
+    transform: (payload) => {
+      const normalizedVideos = payload.map((item) => {
         const normalized = normalizeOutletSource(item);
         return {
           ...normalized,
           thumbnail: item.image,
-          duration: '5:30' // RSS doesn't provide duration, using placeholder
+          duration: '5:30'
         };
       });
-      const videos = dedupeContentItems(normalizedVideos);
-
-      if (videos.length !== normalizedVideos.length) {
-        console.log(`[RSS] Removed ${normalizedVideos.length - videos.length} duplicate video items`);
+      const dedupedVideos = dedupeContentItems(normalizedVideos);
+      if (dedupedVideos.length !== normalizedVideos.length) {
+        console.log(`[RSS] Removed ${normalizedVideos.length - dedupedVideos.length} duplicate video items`);
       }
-      
-      // Update cache with IndexedDB
-      await cacheManager.set(cacheKey, videos);
-      
-      console.log(`[RSS] Fetched ${videos.length} videos${category ? ` for ${category}` : ''}`);
-      return videos;
+      return dedupedVideos;
     }
+  });
 
-    return getStaleOrEmpty(cacheKey, 'videos');
-  } catch (error) {
-    console.error('[RSS] Error fetching videos:', error.message);
-    if (shouldDisableFunctions(error)) {
-      markFunctionsUnavailable();
-    }
-    return getStaleOrEmpty(cacheKey, 'videos');
-  }
+  console.log(`[RSS] Resolved ${videos.length} videos${normalizedCategory ? ` for ${normalizedCategory}` : ''}`);
+  return videos;
 }
 
 /**
@@ -520,7 +582,8 @@ export async function fetchRSSVideos(category = null) {
  * @returns {Promise<Array>} - Array of podcast items
  */
 export async function fetchRSSPodcasts(category = null) {
-  const cacheKey = getVersionedCacheKey('podcasts', category);
+  const normalizedCategory = normalizeFeedCategory(category);
+  const cacheKey = getVersionedCacheKey('podcasts', normalizedCategory);
   
   // Check cache first using IndexedDB
   const cachedData = await cacheManager.get(cacheKey);
@@ -529,24 +592,19 @@ export async function fetchRSSPodcasts(category = null) {
     return cachedData;
   }
 
-  if (!canAttemptFunctions()) {
-    console.log('[RSS] Skipping podcasts fetch - functions unavailable');
-    return getStaleOrEmpty(cacheKey, 'podcasts');
+  const params = new URLSearchParams({ type: 'podcasts' });
+  if (normalizedCategory) {
+    params.append('category', normalizedCategory);
+    console.log(`[RSS] Fetching podcasts with category filter: ${normalizedCategory}`);
   }
 
-  try {
-    const params = new URLSearchParams({ type: 'podcasts' });
-    if (category) {
-      params.append('category', category);
-      console.log(`[RSS] Fetching podcasts with category filter: ${category}`);
-    }
-    
-    const response = await requestWithRetry(`${RSS_API_URL}?${params.toString()}`);
-    markFunctionsAvailable();
-
-    const payload = extractDataArray(response);
-    if (payload.length > 0) {
-      const normalizedPodcasts = payload.map(item => {
+  const podcasts = await fetchFeedWithCacheFallback({
+    cacheKey,
+    label: 'podcasts',
+    url: `${RSS_API_URL}?${params.toString()}`,
+    timeoutMs: FEED_STALE_FALLBACK_TIMEOUT_MS.podcasts,
+    transform: (payload) => {
+      const normalizedPodcasts = payload.map((item) => {
         const normalized = normalizeOutletSource(item);
         return {
           ...normalized,
@@ -555,27 +613,16 @@ export async function fetchRSSPodcasts(category = null) {
           date: item.publishedAt
         };
       });
-      const podcasts = dedupeContentItems(normalizedPodcasts);
-
-      if (podcasts.length !== normalizedPodcasts.length) {
-        console.log(`[RSS] Removed ${normalizedPodcasts.length - podcasts.length} duplicate podcast items`);
+      const dedupedPodcasts = dedupeContentItems(normalizedPodcasts);
+      if (dedupedPodcasts.length !== normalizedPodcasts.length) {
+        console.log(`[RSS] Removed ${normalizedPodcasts.length - dedupedPodcasts.length} duplicate podcast items`);
       }
-      
-      // Update cache with IndexedDB
-      await cacheManager.set(cacheKey, podcasts);
-      
-      console.log(`[RSS] Fetched ${podcasts.length} podcasts${category ? ` for ${category}` : ''}`);
-      return podcasts;
+      return dedupedPodcasts;
     }
+  });
 
-    return getStaleOrEmpty(cacheKey, 'podcasts');
-  } catch (error) {
-    console.error('[RSS] Error fetching podcasts:', error.message);
-    if (shouldDisableFunctions(error)) {
-      markFunctionsUnavailable();
-    }
-    return getStaleOrEmpty(cacheKey, 'podcasts');
-  }
+  console.log(`[RSS] Resolved ${podcasts.length} podcasts${normalizedCategory ? ` for ${normalizedCategory}` : ''}`);
+  return podcasts;
 }
 
 /**

@@ -1107,6 +1107,8 @@ export const fetchOpinions = async (category = null, topic = '') => {
     console.log(`Fetching opinions from RSS feeds${category ? ` (${category})` : ''}...`);
 
     const MIN_UNIQUE_OPINIONS = 3;
+    const normalizedCategory = String(category || '').trim().toLowerCase();
+    const hasScopedCategory = Boolean(normalizedCategory && normalizedCategory !== 'news');
 
     const normalizeOpinionItem = (item) => ({
       ...item,
@@ -1126,20 +1128,23 @@ export const fetchOpinions = async (category = null, topic = '') => {
         .map(normalizeOpinionItem)
     );
 
-    const scopedOpinions = dedupeContentItems(applyTopicFilter(await getRSSOpinions(category), topic));
-    const generalOpinions = dedupeContentItems(applyTopicFilter(await getRSSOpinions(null), topic));
+    const [scopedOpinionSource, generalOpinionSource] = await Promise.all([
+      getRSSOpinions(hasScopedCategory ? category : null),
+      hasScopedCategory ? getRSSOpinions(null) : Promise.resolve([])
+    ]);
 
-    const newsPool = await fetchTopNews(category, topic);
-    const topicDerivedOpinions = dedupeContentItems((newsPool || []).filter(isOpinionLike).map(normalizeOpinionItem));
+    const scopedOpinions = dedupeContentItems(applyTopicFilter(scopedOpinionSource, topic));
+    const generalOpinions = dedupeContentItems(applyTopicFilter(generalOpinionSource, topic));
 
-    let mergedOpinions = mergeUniqueOpinions(scopedOpinions, generalOpinions, topicDerivedOpinions);
+    let mergedOpinions = mergeUniqueOpinions(scopedOpinions, generalOpinions);
 
-    if (mergedOpinions.length < MIN_UNIQUE_OPINIONS) {
-      const broaderOpinions = dedupeContentItems(await getRSSOpinions(null));
-      mergedOpinions = mergeUniqueOpinions(mergedOpinions, broaderOpinions);
+    if (mergedOpinions.length < MIN_UNIQUE_OPINIONS || Boolean(topic)) {
+      const newsPool = await fetchTopNews(category, topic);
+      const topicDerivedOpinions = dedupeContentItems((newsPool || []).filter(isOpinionLike).map(normalizeOpinionItem));
+      mergedOpinions = mergeUniqueOpinions(mergedOpinions, topicDerivedOpinions);
     }
 
-    if (mergedOpinions.length < MIN_UNIQUE_OPINIONS) {
+    if (mergedOpinions.length < MIN_UNIQUE_OPINIONS && (hasScopedCategory || Boolean(topic))) {
       const broaderNewsPool = await fetchTopNews(null, '');
       const broaderDerivedOpinions = dedupeContentItems((broaderNewsPool || []).filter(isOpinionLike).map(normalizeOpinionItem));
       mergedOpinions = mergeUniqueOpinions(mergedOpinions, broaderDerivedOpinions);

@@ -17,6 +17,7 @@ const AI_PROVIDERS = {
 }
 
 const SHARED_SUMMARY_ENDPOINT = '/.netlify/functions/sharedSummary'
+const SEARCH_ASSIST_ENDPOINT = '/.netlify/functions/searchAssist'
 const AUTH_STORAGE_KEY = 'thelatest_auth_session_v1'
 
 // Configuration - Add your API keys to .env
@@ -642,6 +643,23 @@ export async function getSharedSummary(requestOrTopic = '', options = {}) {
     return payload?.data || null
   } catch (error) {
     console.warn('Shared summary unavailable:', error)
+    return null
+  }
+}
+
+export async function getSearchAssist(query = '') {
+  const normalizedQuery = cleanText(query)
+  if (!normalizedQuery) return null
+
+  try {
+    const params = new URLSearchParams({ q: normalizedQuery })
+    const response = await fetch(`${SEARCH_ASSIST_ENDPOINT}?${params.toString()}`)
+    if (!response.ok) return null
+
+    const payload = await response.json()
+    return payload?.data || null
+  } catch (error) {
+    console.warn('Search assist unavailable:', error)
     return null
   }
 }

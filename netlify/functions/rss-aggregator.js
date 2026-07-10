@@ -34,15 +34,19 @@ let feedRotationOffsets = new Map();
 
 let articleImageCache = new Map();
 let feedFailureCache = new Map();
+let sourceOverrideCache = {
+  map: null,
+  expiresAt: 0
+};
 
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes — fewer cold fetches
 const SEARCH_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes — search should refresh faster than section feeds
 const MAX_ITEMS_PER_FEED = 15;          // only grab top 15 per feed for speed
 const MAX_FEEDS_PER_REQUEST = 6;        // default cap parallel feeds to avoid slow stragglers
 const MAX_FEEDS_BY_KEY = {
-  news: 10,
+  news: 6,
   politics: 8,
-  opinions: 8,
+  opinions: 6,
   videos: 10,
   podcasts: 8,
   sports: 8,
@@ -59,6 +63,15 @@ const IMAGE_ENRICH_CONCURRENCY = 5;
 const PERMANENT_FEED_FAILURE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 const TRANSIENT_FEED_FAILURE_TTL = 30 * 60 * 1000; // 30 minutes
 const SNAPSHOT_STALE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const SOURCE_OVERRIDE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const SOFT_TIMEOUT_BY_FEED_KEY = {
+  news: 7000,
+  politics: 7000,
+  opinions: 5500,
+  podcasts: 6500
+};
+
+const LOW_PRIORITY_FEED = 'low';
 
 const FALLBACK_IMAGE_URLS = new Set([
   'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=1600&q=85',
@@ -94,6 +107,10 @@ function buildManagedSourceKey(sourceId = '') {
 }
 
 async function getSourceOverrideMap() {
+  if (sourceOverrideCache.map && Date.now() < sourceOverrideCache.expiresAt) {
+    return sourceOverrideCache.map;
+  }
+
   try {
     const { blobs } = await listJson(STORE_NAMES.sources, { prefix: 'sources/' });
     const entries = await Promise.all(
@@ -103,7 +120,12 @@ async function getSourceOverrideMap() {
       })
     );
 
-    return new Map(entries.filter(Boolean));
+    const nextMap = new Map(entries.filter(Boolean));
+    sourceOverrideCache = {
+      map: nextMap,
+      expiresAt: Date.now() + SOURCE_OVERRIDE_CACHE_TTL
+    };
+    return nextMap;
   } catch (error) {
     console.warn('[SOURCES] Failed to read source overrides:', error.message);
     return new Map();
@@ -149,6 +171,15 @@ function buildSearchCacheKey(searchTerm = '', options = {}) {
   const fallback = options.allowRelaxedFallback ? 'fallback' : 'no-fallback';
   const minResults = Number(options.strictMinimum || 6) || 6;
   return `search:${normalizeKeyPart(searchTerm) || 'all'}:${mode}:${fallback}:${minResults}`;
+}
+
+function normalizeRequestCategory(category = '') {
+  const normalized = toLowerSearchText(category).trim();
+  return normalized && normalized !== 'news' ? normalized : '';
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function buildFeedHealthKey(feedConfig = {}) {
@@ -969,7 +1000,8 @@ const RSS_FEEDS = {
     { url: 'https://feeds.bbci.co.uk/news/rss.xml', source: 'BBC News', priority: 'high' },
     { url: 'https://www.theguardian.com/world/rss', source: 'The Guardian', priority: 'high' },
     { url: 'http://rss.cnn.com/rss/cnn_topstories.rss', source: 'CNN' },
-    { url: 'https://feeds.reuters.com/reuters/topNews', source: 'Reuters', priority: 'high' },
+    // Reuters topNews has frequent DNS failures in local/serverless runs, so keep it non-priority.
+    { url: 'https://feeds.reuters.com/reuters/topNews', source: 'Reuters', priority: 'low' },
     { url: 'https://feeds.npr.org/1001/rss.xml', source: 'NPR', priority: 'high' },
     { url: 'https://www.politico.com/rss/politicopicks.xml', source: 'Politico' },
     { url: 'https://feeds.washingtonpost.com/rss/national', source: 'Washington Post' },
@@ -996,7 +1028,8 @@ const RSS_FEEDS = {
     { url: 'https://www.cbsnews.com/latest/rss/main', source: 'CBS News' },
     { url: 'https://www.usatoday.com/rss/', source: 'USA Today' },
     { url: 'https://nypost.com/feed/', source: 'New York Post' },
-    { url: 'https://apnews.com/apf-topnews', source: 'Associated Press', priority: 'high' },
+    // AP's current endpoint often returns XML that rss-parser rejects, so avoid selecting it in the fast path.
+    { url: 'https://apnews.com/apf-topnews', source: 'Associated Press', priority: 'low' },
     
     // RSS APP feeds (for more niche topics)
     { url: 'https://rss.app/feeds/tTWnpqRL1kY8uxZD.xml', source: 'CNN' }
@@ -1015,14 +1048,14 @@ const RSS_FEEDS = {
     { url: 'https://rss.app/feeds/tTWnpqRL1kY8uxZD.xml', source: 'CNN' }
   ],
   opinions: [
-    { url: 'https://rss.nytimes.com/services/xml/rss/nyt/Opinion.xml', source: 'New York Times Opinion' },
-    { url: 'https://www.theguardian.com/uk/commentisfree/rss', source: 'The Guardian Opinion' },
-    { url: 'https://www.theguardian.com/us/commentisfree/rss', source: 'The Guardian US Opinion' },
+    { url: 'https://rss.nytimes.com/services/xml/rss/nyt/Opinion.xml', source: 'New York Times Opinion', priority: 'high' },
+    { url: 'https://www.theguardian.com/uk/commentisfree/rss', source: 'The Guardian Opinion', priority: 'high' },
+    { url: 'https://www.theguardian.com/us/commentisfree/rss', source: 'The Guardian US Opinion', priority: 'high' },
     { url: 'https://www.latimes.com/opinion/rss2.0.xml', source: 'LA Times Opinion' },
-    { url: 'https://feeds.washingtonpost.com/rss/opinions', source: 'Washington Post Opinion' },
+    { url: 'https://feeds.washingtonpost.com/rss/opinions', source: 'Washington Post Opinion', priority: 'low' },
     { url: 'https://thehill.com/opinion/feed/', source: 'The Hill Opinion' },
     { url: 'https://www.nationalreview.com/feed/', source: 'National Review' },
-    { url: 'https://www.wsj.com/xml/rss/3_7041.xml', source: 'WSJ Opinion' },
+    { url: 'https://www.wsj.com/xml/rss/3_7041.xml', source: 'WSJ Opinion', priority: 'low' },
     // RSS APP feeds (for more niche topics)
     { url: 'https://rss.app/feeds/wGtHhwQaOwup8JQs.xml', source: 'New York Post' }
     // Bundle feed is prepended automatically by prependBundleFeed() at position 1
@@ -1218,7 +1251,7 @@ const BUNDLE_ELIGIBLE_FEED_KEYS = new Set([
   // Keep the global bundle on generic feed groups only.
   // Category groups with dedicated bundles (e.g. sports/entertainment/lifestyle)
   // should not get this extra prepend to avoid timeout-heavy duplication.
-  'news', 'opinions', 'videos', 'podcasts',
+  'opinions', 'videos', 'podcasts',
   'politics', 'tech', 'business', 'culture'
 ]);
 
@@ -1705,27 +1738,29 @@ function selectFeedsForRequest(feedList = [], options = {}) {
   if (!Array.isArray(feedList) || feedList.length === 0 || maxFeeds <= 0) return [];
 
   const highPriorityFeeds = feedList.filter((feed) => feed?.priority === 'high');
-  const standardFeeds = feedList.filter((feed) => feed?.priority !== 'high');
+  const standardFeeds = feedList.filter((feed) => feed?.priority !== 'high' && feed?.priority !== LOW_PRIORITY_FEED);
+  const lowPriorityFeeds = feedList.filter((feed) => feed?.priority === LOW_PRIORITY_FEED);
 
   if (highPriorityFeeds.length >= maxFeeds) {
     return highPriorityFeeds.slice(0, maxFeeds);
   }
 
   const remainingSlots = maxFeeds - highPriorityFeeds.length;
-  if (standardFeeds.length <= remainingSlots) {
-    return [...highPriorityFeeds, ...standardFeeds];
+  const rotatableFeeds = [...standardFeeds, ...lowPriorityFeeds];
+  if (rotatableFeeds.length <= remainingSlots) {
+    return [...highPriorityFeeds, ...rotatableFeeds];
   }
 
   const feedKey = String(options.feedKey || 'default');
   const currentOffset = feedRotationOffsets.get(feedKey) || 0;
   const rotatedStandardFeeds = [
-    ...standardFeeds.slice(currentOffset),
-    ...standardFeeds.slice(0, currentOffset)
+    ...rotatableFeeds.slice(currentOffset),
+    ...rotatableFeeds.slice(0, currentOffset)
   ];
   const selectedStandardFeeds = rotatedStandardFeeds.slice(0, remainingSlots);
 
   if (!options.disableRotation) {
-    const nextOffset = (currentOffset + selectedStandardFeeds.length) % standardFeeds.length;
+    const nextOffset = (currentOffset + selectedStandardFeeds.length) % rotatableFeeds.length;
     feedRotationOffsets.set(feedKey, nextOffset);
   }
 
@@ -1734,6 +1769,10 @@ function selectFeedsForRequest(feedList = [], options = {}) {
 
 function getMaxFeedsForKey(feedKey = 'news') {
   return MAX_FEEDS_BY_KEY[feedKey] || MAX_FEEDS_PER_REQUEST;
+}
+
+function getSoftTimeoutForFeedKey(feedKey = 'news') {
+  return SOFT_TIMEOUT_BY_FEED_KEY[feedKey] || 0;
 }
 
 // Fetch multiple feeds in parallel, capped at MAX_FEEDS_PER_REQUEST to keep response fast
@@ -1806,11 +1845,12 @@ function isCacheValid(cacheKey) {
 
 exports.handler = async (event, context) => {
   const { type = 'news', category, search, sourceStats, strictSearch = '0', relaxSearchFallback = '1', minStrictResults = '6' } = event.queryStringParameters || {};
+  const normalizedCategory = normalizeRequestCategory(category);
   const includeSourceStats = ['1', 'true', 'yes'].includes(String(sourceStats || '').toLowerCase());
   const useStrictSearch = ['1', 'true', 'yes'].includes(String(strictSearch || '').toLowerCase());
   const allowRelaxedFallback = ['1', 'true', 'yes'].includes(String(relaxSearchFallback || '').toLowerCase());
   const strictMinimum = Math.max(1, Math.min(parseInt(minStrictResults, 10) || 6, 20));
-  let cacheKey = category ? `${type}_${category}` : type;
+  let cacheKey = normalizedCategory ? `${type}_${normalizedCategory}` : type;
   
   // Set CORS headers
   const headers = {
@@ -2090,13 +2130,15 @@ exports.handler = async (event, context) => {
       };
     }
 
+    const staleSnapshot = search ? null : await getPersistedSnapshot(cacheKey, SNAPSHOT_STALE_DURATION);
+
     // Determine which feeds to fetch
     let activeFeedKey = RSS_FEEDS[type] ? type : 'news';
     let feedsToFetch = await getEffectiveFeedList(activeFeedKey, prependBundleFeed(RSS_FEEDS[activeFeedKey] || RSS_FEEDS.news, activeFeedKey));
     
     // If category specified, fetch relevant feeds for ANY type (news, opinions, videos, podcasts)
-    if (category) {
-      const cat = toLowerSearchText(category);
+    if (normalizedCategory) {
+      const cat = normalizedCategory;
       
       if (cat === 'sports') {
         activeFeedKey = 'sports';
@@ -2134,10 +2176,43 @@ exports.handler = async (event, context) => {
 
     // Fetch fresh data
     console.log(`Fetching fresh data for ${cacheKey}`);
-    data = await fetchFeeds(feedsToFetch, {
+    const fetchPromise = fetchFeeds(feedsToFetch, {
       feedKey: activeFeedKey,
       maxFeeds: getMaxFeedsForKey(activeFeedKey)
     });
+
+    const softTimeoutMs = staleSnapshot?.items?.length ? getSoftTimeoutForFeedKey(activeFeedKey) : 0;
+
+    if (softTimeoutMs > 0) {
+      const timedFetch = await Promise.race([
+        fetchPromise.then((freshData) => ({ kind: 'fresh', data: freshData })).catch((fetchError) => ({ kind: 'error', error: fetchError })),
+        sleep(softTimeoutMs).then(() => ({ kind: 'stale' }))
+      ]);
+
+      if (timedFetch.kind === 'fresh') {
+        data = timedFetch.data;
+      } else if (timedFetch.kind === 'error') {
+        throw timedFetch.error;
+      } else {
+        console.warn(`[RSS] Soft timeout hit for ${cacheKey} after ${softTimeoutMs}ms; returning stale snapshot`);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            data: staleSnapshot.items,
+            cached: true,
+            persisted: true,
+            stale: true,
+            softTimeout: true,
+            timestamp: staleSnapshot.timestamp,
+            count: staleSnapshot.count || staleSnapshot.items.length,
+            ...(includeSourceStats ? { sourceStats: buildSourceBreakdown(staleSnapshot.items) } : {})
+          })
+        };
+      }
+    } else {
+      data = await fetchPromise;
+    }
 
     // ── Bundle-feed classification ────────────────────────────────────────────
     // Items fetched from the bundle feed are mixed content (news + opinions).
@@ -2173,7 +2248,7 @@ exports.handler = async (event, context) => {
 
     await persistSnapshot(cacheKey, data, {
       type,
-      category: category || '',
+      category: normalizedCategory || '',
       feedKey: activeFeedKey
     });
 

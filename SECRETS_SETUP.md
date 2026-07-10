@@ -74,7 +74,10 @@ For browser-side AI setup, also define whichever `VITE_*` provider keys you inte
 
 ## Notes
 
-- Netlify production usually injects Blob access automatically.
-- Manual Blob credentials are mainly for Docker, CI, or non-Netlify runtime testing.
-- Run `npm run verify:deploy-env` after setting values to confirm the gate can pass.
+- Netlify hosted Functions usually inject Blob access automatically, so production can run without manually setting Blob vars in the Netlify UI.
+- If you want zero local `netlify dev`, Docker, CI, or direct Node-function Blob warnings, set both `NETLIFY_BLOBS_SITE_ID` and `NETLIFY_BLOBS_TOKEN` in the root `.env` used on that machine.
+- To verify Blob-ready local or CI setup, run `npm run verify:deploy-env:blobs`.
+- To find `NETLIFY_BLOBS_SITE_ID`, open the Netlify project and copy `Project ID` from `Project configuration > General > Project information`.
+- To create `NETLIFY_BLOBS_TOKEN`, generate a Netlify Personal Access Token and keep it server-side only.
+- Run `npm run verify:deploy-env` after setting values to confirm the general gate can pass.
 - The guided helper is at `scripts/set-hosted-secrets.ps1`.

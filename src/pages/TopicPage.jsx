@@ -20,6 +20,7 @@ function TopicPage() {
   const { topicSlug } = useParams()
   const config = getTopicPageConfig(topicSlug)
   const sectionLabel = getTopicSectionLabel(topicSlug)
+  const isPerspectiveEligibleTopic = sectionLabel === 'Politics' || topicSlug === 'us-news'
   const [topicNews, setTopicNews] = useState([])
   const [opinions, setOpinions] = useState([])
   const [videos, setVideos] = useState([])
@@ -150,7 +151,7 @@ function TopicPage() {
   const tabItems = [
     { label: 'All', href: '#topic-top' },
     { label: 'AI', href: '#summary' },
-    { label: 'Side by Side', href: '#news' },
+    { label: isPerspectiveEligibleTopic ? 'Side by Side' : 'Top Stories', href: '#news' },
     { label: 'Opinions', href: '#opinions' },
     { label: 'Social', href: '#social-media' },
     { label: 'Videos', href: '#videos' },
@@ -228,9 +229,9 @@ function TopicPage() {
           setActiveStory={setActiveStory}
           categoryTitle={config.title}
           categoryPath={`${topicBasePath}/all-news`}
-          defaultPerspectiveView={true}
-          showPerspectiveToggle={false}
-          sideBySideClusters={storyClusters}
+          defaultPerspectiveView={isPerspectiveEligibleTopic}
+          showPerspectiveToggle={isPerspectiveEligibleTopic}
+          sideBySideClusters={isPerspectiveEligibleTopic ? storyClusters : []}
           sideBySideTitle="Top Stories - Side by Side"
           seeMoreLabel={`See all ${config.title} stories →`}
         />

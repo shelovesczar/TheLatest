@@ -12,6 +12,7 @@
     "build": "node scripts/generate-sitemap.mjs && vite build",
     "verify:deploy-env": "node scripts/verify-deploy-env.mjs",
     "verify:deploy-env:strict": "node scripts/verify-deploy-env.mjs --strict",
+    "verify:deploy-env:blobs": "node scripts/verify-deploy-env.mjs --require-blobs",
     "smoke:netlify-preview": "node scripts/smoke-netlify-preview.mjs",
     "lint": "eslint .",
     "test": "vitest run",
