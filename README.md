@@ -8,15 +8,16 @@ Recent work in this repo now includes:
 - A redesigned editorial homepage and section layout with stronger Apple News style structure.
 - A rebuilt desktop header with scrollable navigation, working dropdown flyouts, a profile menu, integrated date treatment, and tighter utility spacing.
 - A desktop header utility refinement that keeps the theme toggle adjacent to the profile/login icon.
-- A tighter 390px mobile shell with simplified top chrome, smaller section typography, and a native-app-style mobile footer removal in favor of the bottom dock.
+- A tighter 390px mobile shell with simplified top chrome, smaller section typography, a shared route-persistent mobile header, and a native-app-style mobile footer removal in favor of the bottom dock.
 - Dedicated topic destinations from navigation dropdowns, plus topic-specific all-news, all-opinions, all-videos, and all-podcasts pages.
 - Shared Jeff-style ad treatments through the reusable ad component, including rotating creative variations so placements do not feel static.
-- Netlify-backed auth, session persistence, following, dashboard flows, shared summaries, feed health endpoints, trending analytics, and engagement tracking.
+- Netlify-backed auth, session persistence, following, dashboard flows, shared summaries, feed health endpoints, trending analytics, engagement tracking, and Claude-assisted search support.
 - Graceful Netlify Blob fallbacks outside managed Netlify runtimes, plus optional manual Blob credentials for Docker, CI, and other non-Netlify environments.
 - Route-aware SEO metadata, structured data, sitemap generation, robots generation, and canonical handling.
 - Privacy and terms pages, cookie consent controls, and analytics gating tied to consent state.
-- Broader caching and resilience improvements across RSS aggregation, topic/search loading, stale-cache fallback, repeat-query performance, and cached backend search snapshots.
+- Broader caching and resilience improvements across RSS aggregation, topic/search loading, stale-cache fallback, repeat-query performance, cached backend search snapshots, normalized news cache keys, and lighter fast-path feed selection.
 - Advanced search improvements including faster repeat queries, source filters, query view pills, and research shortcuts.
+- Claude-powered shared summaries now carry provider/source context and enforce a concise 500-character summary cap.
 - Backend story clustering and perspective labeling for side-by-side editorial comparisons.
 - Deployment hardening through Docker, environment verification, and smoke-test automation for Netlify preview or production checks.
 
@@ -187,6 +188,24 @@ This includes:
 - fixing the dropdown state reset logic so opening a menu does not immediately close it
 - tightening the hover path between the top-level tab and flyout
 - adding a focused desktop hover regression test
+
+### 15) Claude summaries, search, and feed routing were tightened
+The AI and feed layers were refined so shared summaries are clearer, repeat searches are lighter, and generic news requests avoid redundant cold paths.
+
+This includes:
+- Claude-backed shared summaries that return provider/source context and stay capped at 500 characters.
+- Claude-assisted search endpoint support for smarter search guidance and article discovery.
+- Normalized `category=news` handling so generic news requests share the same cache and snapshot path.
+- Faster generic news and opinions fast paths by preferring the healthiest feed set first.
+- A lighter `fetchOpinions()` client wrapper so it avoids unnecessary sequential fallback work.
+
+### 16) The mobile header and section chrome were unified further
+The shared mobile shell was tightened so the header stays consistent across routes and section headers behave more predictably on smaller screens.
+
+This includes:
+- One persistent mobile header treatment across homepage, news, category, topic, and search routes.
+- A mobile search control beside the theme toggle in the shared header.
+- Tighter section spacing and header alignment updates for mobile Top Stories and category layouts.
 
 ---
 
