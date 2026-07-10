@@ -1,4 +1,6 @@
 const { getStore } = require('@netlify/blobs');
+const fs = require('fs');
+const path = require('path');
 
 const STORE_NAMES = {
   summaries: 'shared-ai-summaries',
@@ -11,9 +13,47 @@ const STORE_NAMES = {
   sessions: 'app-sessions'
 };
 
+let localEnvCache = null;
+
+function cleanText(value = '') {
+  return String(value || '').trim();
+}
+
+function readLocalEnvValue(name = '') {
+  if (localEnvCache === null) {
+    localEnvCache = {};
+    try {
+      const envPath = path.resolve(__dirname, '..', '..', '.env');
+      const content = fs.readFileSync(envPath, 'utf8');
+
+      content
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .forEach((line) => {
+          const trimmed = String(line || '').trim();
+          if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) return;
+          const separatorIndex = trimmed.indexOf('=');
+          const key = trimmed.slice(0, separatorIndex).trim();
+          const value = trimmed.slice(separatorIndex + 1).trim();
+          if (key) {
+            localEnvCache[key] = value;
+          }
+        });
+    } catch {
+      localEnvCache = {};
+    }
+  }
+
+  return cleanText(localEnvCache[name] || '');
+}
+
+function getConfigValue(name = '') {
+  return cleanText(process.env[name] || '') || readLocalEnvValue(name);
+}
+
 function getBlobAuthOptions() {
-  const siteID = String(process.env.NETLIFY_BLOBS_SITE_ID || '').trim();
-  const token = String(process.env.NETLIFY_BLOBS_TOKEN || '').trim();
+  const siteID = getConfigValue('NETLIFY_BLOBS_SITE_ID');
+  const token = getConfigValue('NETLIFY_BLOBS_TOKEN');
 
   if (!siteID || !token) {
     return {};

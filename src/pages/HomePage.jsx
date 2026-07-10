@@ -4,6 +4,7 @@ import { useSearch } from '../context/SearchContext'
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
 import { searchRSSContent, fetchRSSVideos } from '../rssService'
 import { getRandomTrendingPosts } from '../socialMediaService'
+import { fetchStoryClusters } from '../services/clusterService'
 import { dedupeContentItems } from '../utils/contentDeduplication'
 import { matchesTopicQuery } from '../utils/topicFiltering'
 import { useInView } from '../hooks/useInView'
@@ -113,6 +114,7 @@ function HomePage({
 
   // Content state - filters based on current topic
   const [topStories, setTopStories] = useState([])
+  const [storyClusters, setStoryClusters] = useState([])
   const [loading, setLoading] = useState(true)
   const [opinions, setOpinions] = useState([])
   const [videos, setVideos] = useState([])
@@ -326,6 +328,35 @@ function HomePage({
     }
   }, [topic, hasActiveTopic])
 
+  useEffect(() => {
+    let isCancelled = false
+
+    const loadStoryClusters = async () => {
+      try {
+        const clusters = await fetchStoryClusters({
+          type: 'news',
+          search: hasActiveTopic ? topic : '',
+          limit: 8
+        })
+
+        if (!isCancelled) {
+          setStoryClusters(Array.isArray(clusters) ? clusters : [])
+        }
+      } catch (error) {
+        console.error('Error loading story clusters:', error)
+        if (!isCancelled) {
+          setStoryClusters([])
+        }
+      }
+    }
+
+    loadStoryClusters()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [hasActiveTopic, topic])
+
   // Load additional sections when they become visible
   useEffect(() => {
     const loadOpinions = async () => {
@@ -486,6 +517,7 @@ function HomePage({
         loading={loading}
         activeStory={activeStory}
         setActiveStory={setActiveStory}
+        sideBySideClusters={storyClusters}
       />
 
       {/* ── 3. Trending Stories — visual follow-on ── */}

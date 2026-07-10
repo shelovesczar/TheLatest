@@ -3,7 +3,7 @@ import { useSearch } from '../context/SearchContext'
 import { useParams } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
-import DateTicker from '../components/layout/DateTicker'
+import AdBreak from '../components/common/AdBreak'
 import { fetchTrendingContent } from '../newsService'
 import { searchRSSContent, fetchRSSPodcasts } from '../rssService'
 import { getImageProps } from '../utils/imageUtils'
@@ -140,29 +140,20 @@ function AllPodcastsPage({ category = null }) {
     sourceTickerRef.current?.scrollBy({ left: 240, behavior: 'smooth' })
   }
 
-  const contextLabel = formatContextLabel(filterContext)
-  const monthDayLabel = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
   const leadStory = filteredPodcasts[0]
-  const mostReadStories = filteredPodcasts.slice(1, 6)
   const featuredStories = filteredPodcasts.slice(1, 4)
   const latestStoriesAll = filteredPodcasts.slice(4)
   const latestStories = latestStoriesAll.slice(0, visibleCount)
   const hasMore = visibleCount < latestStoriesAll.length
   const remaining = latestStoriesAll.length - visibleCount
   const quickUpdates = filteredPodcasts.slice(0, 8)
-  const breakingHeadlines = filteredPodcasts.slice(0, 10).map((item) => item.title).filter(Boolean)
 
   return (
     <div className="all-news-page">
       <div className="all-news-hero">
         <div className="all-news-hero-inner">
-          <span className="all-news-kicker">{monthDayLabel}</span>
           <h1 className="all-news-title">Top {categoryConfig.title} Podcasts</h1>
-          <p className="all-news-subtitle">
-            {filterContext
-              ? categoryConfig.subtitle
-              : 'Listen to the latest episodes, interviews, and analysis from across the news cycle.'}
-          </p>
+          <p className="all-news-subtitle">Select Source(s)</p>
           <div className="all-news-hero-stats">
             <div className="hero-stat">
               <span className="hero-stat-value">{filteredPodcasts.length}</span>
@@ -179,10 +170,6 @@ function AllPodcastsPage({ category = null }) {
           </div>
         </div>
       </div>
-
-      {!loading && breakingHeadlines.length > 0 && (
-        <DateTicker breakingNews={breakingHeadlines} sticky={false} label="PODCAST NOW" showDate={false} />
-      )}
 
       <div className="source-filter-container">
         <div className="source-filter-header">
@@ -250,28 +237,17 @@ function AllPodcastsPage({ category = null }) {
                 </article>
               )}
 
-              <aside className="most-read-panel">
-                <div className="panel-header">
-                  <span className="panel-kicker">Now Listening</span>
-                  <h2 className="panel-title">Top Episodes</h2>
-                </div>
-                <div className="most-read-list">
-                  {mostReadStories.map((item, index) => (
-                    <a
-                      key={`${item.link || item.title}-${index}`}
-                      href={item.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="most-read-item"
-                    >
-                      <span className="most-read-rank">{index + 1}</span>
-                      <div className="most-read-copy">
-                        <span className="most-read-tag">{item.hosts || item.source}</span>
-                        <h3 className="most-read-headline">{truncateText(item.title, 100)}</h3>
-                      </div>
-                    </a>
-                  ))}
-                </div>
+              <aside className="all-news-ad-panel" aria-label="Advertisement">
+                <AdBreak
+                  slot="article-sidebar"
+                  campaignIndex={3}
+                  variationKey="all-podcasts-top"
+                  sizes={{
+                    desktop: { width: 320, height: 350 },
+                    tablet: { width: 320, height: 250 },
+                    mobile: { width: 320, height: 100 }
+                  }}
+                />
               </aside>
             </section>
 

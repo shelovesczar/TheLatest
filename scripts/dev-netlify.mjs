@@ -1,11 +1,41 @@
 import { spawn } from 'node:child_process'
+import fs from 'node:fs'
 import net from 'node:net'
+import path from 'node:path'
 import process from 'node:process'
 
 const isWindows = process.platform === 'win32'
 const preferredNetlifyPort = 8888
 const preferredTargetPort = 5173
 const shutdownSignals = ['SIGINT', 'SIGTERM', 'SIGHUP']
+
+function loadLocalEnv() {
+  const values = {}
+
+  try {
+    const envPath = path.resolve(process.cwd(), '.env')
+    const content = fs.readFileSync(envPath, 'utf8')
+    content
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .forEach((line) => {
+        const trimmed = String(line || '').trim()
+        if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) return
+
+        const separatorIndex = trimmed.indexOf('=')
+        const key = trimmed.slice(0, separatorIndex).trim()
+        const value = trimmed.slice(separatorIndex + 1).trim()
+
+        if (key && !Object.prototype.hasOwnProperty.call(values, key)) {
+          values[key] = value
+        }
+      })
+  } catch {
+    return values
+  }
+
+  return values
+}
 
 function terminateChild(child) {
   if (!child || child.killed) {
@@ -68,6 +98,7 @@ async function waitForPort(port, host = '127.0.0.1', timeoutMs = 45000) {
 }
 
 async function main() {
+  const localEnv = loadLocalEnv()
   const targetPort = await findAvailablePort(preferredTargetPort)
   const netlifyPort = await findAvailablePort(preferredNetlifyPort)
 
@@ -79,7 +110,10 @@ async function main() {
   const viteCommand = `npx vite --host 127.0.0.1 --port ${targetPort} --strictPort`
   const netlifyProcess = spawn(`netlify dev --port ${netlifyPort} --framework vite --target-port ${targetPort} --command "${viteCommand}"`, {
     stdio: 'inherit',
-    env: process.env,
+    env: {
+      ...process.env,
+      ...localEnv
+    },
     shell: true,
   })
 

@@ -17,6 +17,7 @@ const AI_PROVIDERS = {
 }
 
 const SHARED_SUMMARY_ENDPOINT = '/.netlify/functions/sharedSummary'
+const AUTH_STORAGE_KEY = 'thelatest_auth_session_v1'
 
 // Configuration - Add your API keys to .env
 const CONFIG = {
@@ -102,6 +103,15 @@ const resolveSummaryRequest = (requestOrTopic = '', options = {}) => {
     topic,
     category,
     enforceCategory: Boolean(options.enforceCategory)
+  }
+}
+
+const getStoredAuthToken = () => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || 'null')
+    return typeof stored?.token === 'string' ? stored.token.trim() : ''
+  } catch {
+    return ''
   }
 }
 
@@ -406,7 +416,7 @@ async function generateEditorialSummary(topic = '', context = {}) {
     image,
     url,
     summary,
-    provider: 'Editorial Digest',
+    provider: 'Local Editorial Fallback',
     timestamp: new Date().toISOString(),
     isFallback: false,
     modelFree: true
@@ -614,10 +624,15 @@ export async function generateAISummary(requestOrTopic = '', options = {}) {
 export async function getSharedSummary(requestOrTopic = '', options = {}) {
   const request = resolveSummaryRequest(requestOrTopic, options)
   const params = new URLSearchParams()
+  const shouldRefresh = Boolean(options.refresh)
 
   if (request.topic) params.set('topic', request.topic)
   if (request.category) params.set('category', request.category)
-  params.set('allowStale', '1')
+  if (shouldRefresh) {
+    params.set('refresh', '1')
+  } else {
+    params.set('allowStale', '1')
+  }
 
   try {
     const response = await fetch(`${SHARED_SUMMARY_ENDPOINT}?${params.toString()}`)
@@ -635,11 +650,15 @@ export async function persistSharedSummary(requestOrTopic = '', summaryData, opt
   const request = resolveSummaryRequest(requestOrTopic, options)
   if (!summaryData?.summary) return null
 
+  const token = getStoredAuthToken()
+  if (!token) return null
+
   try {
     const response = await fetch(SHARED_SUMMARY_ENDPOINT, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
       },
       body: JSON.stringify({
         topic: request.topic,

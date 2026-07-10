@@ -1,3 +1,6 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
 const REQUIRED = [
   {
     key: 'SESSION_TOKEN_PEPPER',
@@ -49,8 +52,78 @@ const AI_GROUPS = [
   }
 ]
 
+let localEnvCache = null
+
+function loadLocalEnv() {
+  if (localEnvCache !== null) {
+    return localEnvCache
+  }
+
+  localEnvCache = {}
+
+  try {
+    const envPath = path.resolve(process.cwd(), '.env')
+    const content = fs.readFileSync(envPath, 'utf8')
+    content
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .forEach((line) => {
+        const trimmed = String(line || '').trim()
+        if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) return
+
+        const separatorIndex = trimmed.indexOf('=')
+        const key = trimmed.slice(0, separatorIndex).trim()
+        const value = trimmed.slice(separatorIndex + 1).trim()
+
+        if (key) {
+          localEnvCache[key] = value
+        }
+      })
+  } catch {
+    localEnvCache = {}
+  }
+
+  return localEnvCache
+}
+
 function hasValue(key) {
-  return String(process.env[key] || '').trim().length > 0
+  return getValue(key).length > 0
+}
+
+function getValue(key) {
+  return String(process.env[key] || loadLocalEnv()[key] || '').trim()
+}
+
+function looksLikePlaceholder(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  return !normalized || normalized.includes('your_') || normalized.includes('replace_me') || normalized.includes('example')
+}
+
+function validateAnthropicConfig(messages) {
+  const serverKey = getValue('ANTHROPIC_API_KEY')
+  const browserKey = getValue('VITE_ANTHROPIC_API_KEY')
+
+  if (serverKey) {
+    if (looksLikePlaceholder(serverKey)) {
+      messages.errors.push('ANTHROPIC_API_KEY looks like a placeholder. Set a real server-side Anthropic key.')
+    }
+
+    if (!serverKey.startsWith('sk-ant-')) {
+      messages.warnings.push('ANTHROPIC_API_KEY does not start with the expected Anthropic prefix. Double-check for typos or an outdated key.')
+    }
+
+    if (/\s/.test(serverKey)) {
+      messages.errors.push('ANTHROPIC_API_KEY contains whitespace. Paste the key as a single uninterrupted value.')
+    }
+  }
+
+  if (browserKey) {
+    if (looksLikePlaceholder(browserKey)) {
+      messages.warnings.push('VITE_ANTHROPIC_API_KEY is set but still looks like a placeholder.')
+    } else {
+      messages.warnings.push('VITE_ANTHROPIC_API_KEY is set. This exposes an Anthropic key to the browser bundle; prefer server-side ANTHROPIC_API_KEY only.')
+    }
+  }
 }
 
 function logSection(title, rows) {
@@ -94,6 +167,7 @@ function main() {
     }
   })
 
+  validateAnthropicConfig(messages)
   validateBlobPair(messages)
 
   logSection('Errors', messages.errors)

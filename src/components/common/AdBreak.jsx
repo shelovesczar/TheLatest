@@ -163,7 +163,11 @@ const resolveAdConfig = ({ type = 'standard', slot, sizes, label }) => {
   };
 };
 
-const getCreativeVariant = ({ slot, type, sponsor, variationKey, sizeLabel }) => {
+const getCreativeVariant = ({ slot, type, sponsor, variationKey, sizeLabel, campaignIndex }) => {
+  if (Number.isInteger(campaignIndex)) {
+    return AD_CAMPAIGNS[((campaignIndex % AD_CAMPAIGNS.length) + AD_CAMPAIGNS.length) % AD_CAMPAIGNS.length];
+  }
+
   if (sponsor) {
     return {
       ...AD_CAMPAIGNS[0],
@@ -205,13 +209,13 @@ const AdCreative = ({ creative, type, sizeLabel }) => (
   </div>
 );
 
-const AdBreak = ({ type = 'standard', slot, sponsor, sizes, children, label = 'Advertisement', variationKey = '' }) => {
+const AdBreak = ({ type = 'standard', slot, sponsor, sizes, children, label = 'Advertisement', variationKey = '', campaignIndex }) => {
   const adConfig = resolveAdConfig({ type, slot, sizes, label });
   const responsiveSizes = adConfig.sizes;
   const desktopSizeLabel = formatSize(responsiveSizes.desktop);
   const creative = useMemo(
-    () => getCreativeVariant({ slot, type: adConfig.type, sponsor, variationKey, sizeLabel: desktopSizeLabel }),
-    [adConfig.type, desktopSizeLabel, slot, sponsor, variationKey]
+    () => getCreativeVariant({ slot, type: adConfig.type, sponsor, variationKey, sizeLabel: desktopSizeLabel, campaignIndex }),
+    [adConfig.type, campaignIndex, desktopSizeLabel, slot, sponsor, variationKey]
   );
 
   const style = {

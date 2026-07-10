@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useSearch } from '../../context/SearchContext'
 import { generateAISummary, getCachedSummary, cacheSummary, getSharedSummary, persistSharedSummary } from '../../services/aiService'
-import { getTopicImage } from '../../utils/topicImages'
 import { getImageProps } from '../../utils/imageUtils'
 import './AISummary.css'
 
-const SUMMARY_CACHE_VERSION = 'v3'
+const SUMMARY_CACHE_VERSION = 'v4'
 
 function AISummary({ category = 'general', description, categoryImage, categoryTitle, ignoreTopic = false }) {
   const { topic, hasActiveTopic } = useSearch()
@@ -88,13 +87,11 @@ function AISummary({ category = 'general', description, categoryImage, categoryT
         enforceCategory: Boolean(contextCategory)
       }
 
-      if (!force) {
-        const shared = await getSharedSummary(summaryRequest)
-        if (shared && !shared.isFallback) {
-          setSummaryData(shared)
-          setLastUpdated(new Date(shared.timestamp || Date.now()))
-          return
-        }
+      const shared = await getSharedSummary(summaryRequest, { refresh: force })
+      if (shared && !shared.isFallback) {
+        setSummaryData(shared)
+        setLastUpdated(new Date(shared.timestamp || Date.now()))
+        return
       }
       
       const result = await generateAISummary(summaryRequest)
@@ -145,18 +142,6 @@ function AISummary({ category = 'general', description, categoryImage, categoryT
       : `Latest ${formatCategoryLabel()} Brief`
   }
 
-  const getDisplayImage = () => {
-    if (summaryData?.image) {
-      return summaryData.image
-    }
-
-    // Priority: topic-specific image > category image > default
-    if (useTopicFilter) {
-      return getTopicImage(topic, categoryImage)
-    }
-    return categoryImage || getTopicImage('general')
-  }
-
   const getCoverageUrl = () => {
     const candidate = String(summaryData?.url || '').trim()
     if (!candidate) return '/all-news'
@@ -199,53 +184,54 @@ function AISummary({ category = 'general', description, categoryImage, categoryT
   const coverageUrl = getCoverageUrl()
   const isExternalCoverage = /^https?:\/\//i.test(coverageUrl)
   const summaryParagraphs = splitSummaryIntoParagraphs(summaryData?.summary || description || 'Loading AI summary...')
+  const summaryBodyText = summaryParagraphs.join(' ')
   const providerLabel = summaryData?.provider || 'AI Summary'
-  const generatedAtLabel = `Generated today at ${formatUpdateTime()}`
-  const badgeLabel = summaryData?.isFallback ? 'AI Daily Briefing · Cached' : `AI Daily Briefing · ${formatUpdateTime()}`
+  const providerDisplay = providerLabel.startsWith('Claude') ? 'Claude by Anthropic' : providerLabel
+  const briefingLabel = useTopicFilter
+    ? topic.toUpperCase()
+    : (category === 'general' ? 'TOP STORIES' : formatCategoryLabel().toUpperCase())
+  const leadInLabel = useTopicFilter ? `${topic}:` : (category === 'general' ? "Today's Top Stories" : `Today's ${formatCategoryLabel()}`)
+  const noteLabel = 'Briefing based on current reporting signals. For real-time accuracy, verify with AP, Reuters, or NPR.'
+  const updateLabel = summaryData?.isFallback ? 'Cached briefing' : 'Updates every 30 min'
 
   return (
     <section className="section ai-summary-section">
-      <div className="section-hdr">
-        <h2>{useTopicFilter ? `AI Summary: ${topic}` : 'AI Summary'}</h2>
-        <a
-          href={coverageUrl}
-          target={isExternalCoverage ? '_blank' : undefined}
-          rel={isExternalCoverage ? 'noopener noreferrer' : undefined}
-          className="see-more"
-        >
-          Powered by {providerLabel} →
-        </a>
-      </div>
-
       <div className="summary-layout">
         <article className="summary-card">
-          <div className="summary-img">
-            <img {...getImageProps(getDisplayImage(), getHeadline(), 'news')} />
-          </div>
           <div className="summary-body">
-            <div className="summary-badge">
-              <span className="ai-dot"></span>
-              {badgeLabel}
+            <div className="summary-kicker-row">
+              <div className="summary-kicker-badge">C</div>
+              <div className="summary-kicker-text">AI DAILY BRIEFING — {briefingLabel}</div>
+              <div className="summary-kicker-rule" aria-hidden="true"></div>
             </div>
+
             <h3 className="summary-headline">{getHeadline()}</h3>
-            {summaryParagraphs.map((paragraph, index) => (
-              <p key={index} className="summary-text">
-                {paragraph}
-              </p>
-            ))}
-            <div className="summary-meta">
-              <span>{providerLabel}</span>
-              <span>·</span>
-              <span>{generatedAtLabel}</span>
-            </div>
-            <div className="summary-actions">
-              <button className="summary-refresh" onClick={handleRefresh} disabled={isRefreshing}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
-                  <polyline points="23 4 23 10 17 10" />
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                </svg>
-                {isRefreshing ? 'Refreshing...' : 'Refresh AI Summary'}
-              </button>
+
+            <p className="summary-copy">
+              <span className="summary-lead">{leadInLabel}</span>
+              {summaryBodyText}
+            </p>
+
+            <div className="summary-note">{noteLabel}</div>
+
+            <div className="summary-footer">
+              <a
+                href={coverageUrl}
+                target={isExternalCoverage ? '_blank' : undefined}
+                rel={isExternalCoverage ? 'noopener noreferrer' : undefined}
+                className="summary-provider"
+              >
+                <span className="summary-provider-label">Summary generated by</span>
+                <span className="summary-provider-badge">C</span>
+                <span className="summary-provider-name">{providerDisplay}</span>
+              </a>
+
+              <div className="summary-footer-actions">
+                <span className="summary-update-label">{updateLabel}</span>
+                <button className="summary-refresh" onClick={handleRefresh} disabled={isRefreshing}>
+                  {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
             </div>
           </div>
         </article>

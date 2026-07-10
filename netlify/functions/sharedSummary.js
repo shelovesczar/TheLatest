@@ -1,5 +1,8 @@
 const { STORE_NAMES, getJsonWithMetadata, setJson, isBlobConfigurationError } = require('./blobStore');
 const { requireAdminAccess } = require('./adminAccess');
+const rssAggregator = require('./rss-aggregator');
+const fs = require('fs');
+const path = require('path');
 
 const SUMMARY_TTL_MS = 60 * 60 * 1000;
 const STALE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -34,6 +37,242 @@ function isFresh(timestamp, ttlMs = SUMMARY_TTL_MS) {
   return (Date.now() - parsed) < ttlMs;
 }
 
+function cleanText(value = '') {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+let localEnvCache = null;
+
+function readLocalEnvValue(name = '') {
+  if (localEnvCache === null) {
+    localEnvCache = {};
+    const candidatePaths = [
+      path.resolve(process.cwd(), '.env'),
+      path.resolve(__dirname, '..', '..', '.env')
+    ];
+
+    for (const envPath of candidatePaths) {
+      try {
+        const content = fs.readFileSync(envPath, 'utf8');
+        content
+          .split(/\r?\n/)
+          .filter(Boolean)
+          .forEach((line) => {
+            const trimmed = String(line || '').trim();
+            if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) return;
+            const separatorIndex = trimmed.indexOf('=');
+            const key = trimmed.slice(0, separatorIndex).trim();
+            const value = trimmed.slice(separatorIndex + 1).trim();
+            if (key) {
+              localEnvCache[key] = value;
+            }
+          });
+
+        break;
+      } catch {
+        // try the next candidate path
+      }
+    }
+  }
+
+  return cleanText(localEnvCache[name] || '');
+}
+
+function getConfigValue(name = '') {
+  const localValue = readLocalEnvValue(name);
+  if (localValue) return localValue;
+  return cleanText(process.env[name] || '');
+}
+
+function logSummaryIssue(message, details = null) {
+  if (details === null || details === undefined || details === '') {
+    console.warn(`[sharedSummary] ${message}`);
+    return;
+  }
+
+  console.warn(`[sharedSummary] ${message}: ${details}`);
+}
+
+function toTitleCase(value = '') {
+  return cleanText(value)
+    .split(/[-\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function extractAnthropicTextBlocks(payload) {
+  const blocks = Array.isArray(payload?.content) ? payload.content : [];
+  return blocks
+    .filter((block) => block?.type === 'text' && typeof block?.text === 'string')
+    .map((block) => block.text)
+    .join('\n')
+    .trim();
+}
+
+function truncateText(value = '', max = 220) {
+  const text = cleanText(value);
+  if (text.length <= max) return text;
+  return `${text.slice(0, max).trim().replace(/[,:;\-]+$/, '')}...`;
+}
+
+async function getLiveSummaryItems({ topic = '', category = '' } = {}) {
+  const response = await rssAggregator.handler({
+    httpMethod: 'GET',
+    queryStringParameters: {
+      type: 'news',
+      ...(cleanText(category) ? { category: cleanText(category) } : {}),
+      ...(cleanText(topic)
+        ? { search: cleanText(topic), strictSearch: '0', relaxSearchFallback: '1', minStrictResults: '4' }
+        : {})
+    }
+  }, {});
+
+  if (response?.statusCode !== 200) {
+    logSummaryIssue('rss-aggregator returned non-200 for summary context', response?.statusCode);
+    return [];
+  }
+
+  const payload = JSON.parse(response.body || '{}');
+  const items = Array.isArray(payload?.data) ? payload.data : [];
+  return items.filter(Boolean).slice(0, 8);
+}
+
+function buildCoverageContext(items = []) {
+  return items
+    .map((item, index) => {
+      const title = truncateText(item?.title || '', 140);
+      const source = truncateText(item?.source || item?.category || 'Unknown Source', 40);
+      const description = truncateText(item?.description || item?.content || '', 220);
+      const publishedAt = cleanText(item?.publishedAt || item?.date || item?.pubDate || '');
+
+      return `${index + 1}. Source: ${source}\nTitle: ${title}\nPublished: ${publishedAt || 'Unknown'}\nDetail: ${description || 'No additional detail provided.'}`;
+    })
+    .join('\n\n');
+}
+
+function buildSummaryPrompt(topic = '', category = '', items = []) {
+  const cleanTopic = cleanText(topic);
+  const cleanCategory = cleanText(category);
+  const scope = cleanTopic && cleanCategory
+    ? `topic "${cleanTopic}" within the ${toTitleCase(cleanCategory)} news category`
+    : cleanTopic
+      ? `topic "${cleanTopic}"`
+      : cleanCategory
+        ? `${toTitleCase(cleanCategory)} news coverage`
+        : 'today\'s top global news coverage';
+
+  return [
+    'You are writing a concise homepage briefing for a news aggregation app.',
+    `Summarize the latest major developments for ${scope} using only the coverage notes below.`,
+    'Return JSON only in the form {"headline":"...","summary":"..."}.',
+    'Constraints:',
+    '- headline: under 90 characters',
+    '- summary: 110-170 words',
+    '- neutral, factual tone',
+    '- no markdown, no bullets, no preamble',
+    '- do not say that you lack browsing, real-time access, or external context',
+    '',
+    'Coverage notes:',
+    buildCoverageContext(items)
+  ].join('\n');
+}
+
+async function generateAnthropicSummary({ topic = '', category = '' } = {}) {
+  const apiKey = getConfigValue('ANTHROPIC_API_KEY');
+  if (!apiKey) {
+    logSummaryIssue('ANTHROPIC_API_KEY is missing');
+    return null;
+  }
+
+  const items = await getLiveSummaryItems({ topic, category });
+  if (items.length === 0) {
+    logSummaryIssue('no live summary items were available');
+    return null;
+  }
+
+  const model = getConfigValue('ANTHROPIC_SUMMARY_MODEL') || 'claude-sonnet-5';
+  const prompt = buildSummaryPrompt(topic, category, items);
+  const leadItem = items[0] || {};
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1200,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = cleanText(await response.text().catch(() => ''));
+      logSummaryIssue(
+        `Anthropic request failed with status ${response.status}`,
+        truncateText(errorText || response.statusText || 'Unknown response error', 260)
+      );
+      return null;
+    }
+
+    const payload = await response.json().catch(() => null);
+    const text = cleanText(extractAnthropicTextBlocks(payload));
+    if (!text) {
+      logSummaryIssue('Anthropic response did not include any text blocks');
+      return null;
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+    } catch (error) {
+      logSummaryIssue('Anthropic response was not valid JSON', truncateText(text, 260));
+      return null;
+    }
+
+    const summary = cleanText(parsed?.summary || '');
+    if (!summary) {
+      logSummaryIssue('Anthropic JSON response did not include summary text');
+      return null;
+    }
+
+    return {
+      headline: cleanText(parsed?.headline || leadItem?.title || ''),
+      summary,
+      provider: `Claude (${model})`,
+      timestamp: new Date().toISOString(),
+      topic: cleanText(topic),
+      category: cleanText(category),
+      url: cleanText(leadItem?.link || ''),
+      image: cleanText(leadItem?.image || ''),
+      source: cleanText(leadItem?.source || '')
+    };
+  } catch (error) {
+    logSummaryIssue('Anthropic summary generation threw an exception', error?.message || 'Unknown error');
+    return null;
+  }
+}
+
+async function tryPersistGeneratedSummary(key, payload) {
+  try {
+    await setJson(STORE_NAMES.summaries, key, payload, {
+      metadata: {
+        topic: normalizePart(payload.topic) || 'general',
+        category: normalizePart(payload.category) || 'general',
+        provider: String(payload.provider || 'Unknown').slice(0, 80)
+      }
+    });
+  } catch (error) {
+    if (!isBlobConfigurationError(error)) {
+      throw error;
+    }
+  }
+}
+
 exports.handler = async (event) => {
   const headers = jsonHeaders();
 
@@ -43,33 +282,70 @@ exports.handler = async (event) => {
 
   try {
     if (event.httpMethod === 'GET') {
-      const { topic = '', category = '', allowStale = '0' } = event.queryStringParameters || {};
+      const { topic = '', category = '', allowStale = '0', refresh = '0' } = event.queryStringParameters || {};
       const key = buildSummaryKey(topic, category);
-      const cached = await getJsonWithMetadata(STORE_NAMES.summaries, key);
+      const shouldRefresh = String(refresh) === '1';
+      let cached = null;
+      let cacheUnavailable = false;
+
+      try {
+        cached = await getJsonWithMetadata(STORE_NAMES.summaries, key);
+      } catch (error) {
+        if (!isBlobConfigurationError(error)) {
+          throw error;
+        }
+        cacheUnavailable = true;
+      }
+
+      const maxAge = String(allowStale) === '1' ? STALE_TTL_MS : SUMMARY_TTL_MS;
+      if (!shouldRefresh && cached?.data && isFresh(cached.data.timestamp, maxAge)) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            found: true,
+            cached: true,
+            key,
+            data: cached.data,
+            metadata: cached.metadata || null
+          })
+        };
+      }
+
+      const generated = await generateAnthropicSummary({ topic, category });
+      if (generated) {
+        await tryPersistGeneratedSummary(key, {
+          ...generated,
+          persistedAt: new Date().toISOString()
+        });
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            found: true,
+            cached: false,
+            key,
+            data: generated,
+            metadata: null
+          })
+        };
+      }
 
       if (!cached || !cached.data) {
         return {
           statusCode: 404,
           headers,
-          body: JSON.stringify({ found: false, key })
-        };
-      }
-
-      const maxAge = String(allowStale) === '1' ? STALE_TTL_MS : SUMMARY_TTL_MS;
-      if (!isFresh(cached.data.timestamp, maxAge)) {
-        return {
-          statusCode: 404,
-          headers,
-          body: JSON.stringify({ found: false, stale: true, key })
+          body: JSON.stringify({ found: false, key, unavailable: cacheUnavailable })
         };
       }
 
       return {
-        statusCode: 200,
+        statusCode: 404,
         headers,
         body: JSON.stringify({
-          found: true,
-          cached: true,
+          found: false,
+          stale: true,
           key,
           data: cached.data,
           metadata: cached.metadata || null
@@ -105,13 +381,7 @@ exports.handler = async (event) => {
         persistedAt: new Date().toISOString()
       };
 
-      await setJson(STORE_NAMES.summaries, key, payload, {
-        metadata: {
-          topic: normalizePart(topic) || 'general',
-          category: normalizePart(category) || 'general',
-          provider: String(payload.provider || 'Unknown').slice(0, 80)
-        }
-      });
+      await tryPersistGeneratedSummary(key, payload);
 
       return {
         statusCode: 200,
