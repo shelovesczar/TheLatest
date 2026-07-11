@@ -99,6 +99,9 @@ export function buildRouteMetadata(locationLike = {}, options = {}) {
   } else if (pathname === '/about') {
     title = `About | ${SITE_NAME}`
     description = 'What The Latest is building, how it approaches news discovery, and what it prioritizes in product trust.'
+  } else if (pathname === '/advertise') {
+    title = `Advertise | ${SITE_NAME}`
+    description = 'Advertising, sponsorship, and branded placement information for campaigns on The Latest.'
   } else if (pathname === '/editorial-standards') {
     title = `Editorial Standards | ${SITE_NAME}`
     description = 'How The Latest handles source selection, generated fallback content, labeling, and corrections.'

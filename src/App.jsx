@@ -37,6 +37,7 @@ const ArticleReader   = lazy(() => import('./pages/ArticleReader'))
 const PrivacyPage     = lazy(() => import('./pages/PrivacyPage'))
 const TermsPage       = lazy(() => import('./pages/TermsPage'))
 const AboutPage       = lazy(() => import('./pages/AboutPage'))
+const AdvertisePage   = lazy(() => import('./pages/AdvertisePage'))
 const EditorialStandardsPage = lazy(() => import('./pages/EditorialStandardsPage'))
 const CorrectionsPage = lazy(() => import('./pages/CorrectionsPage'))
 const ContactPage     = lazy(() => import('./pages/ContactPage'))
@@ -230,6 +231,7 @@ function App() {
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/about" element={<AboutPage />} />
+            <Route path="/advertise" element={<AdvertisePage />} />
             <Route path="/editorial-standards" element={<EditorialStandardsPage />} />
             <Route path="/corrections" element={<CorrectionsPage />} />
             <Route path="/contact" element={<ContactPage />} />
