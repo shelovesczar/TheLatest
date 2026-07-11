@@ -1,6 +1,6 @@
 import { getImageProps } from '../../utils/imageUtils'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faXTwitter, faInstagram, faTiktok } from '@fortawesome/free-brands-svg-icons'
+import { faXTwitter, faTiktok } from '@fortawesome/free-brands-svg-icons'
 import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -54,7 +54,6 @@ function SocialMedia({ socialPosts, loadingSocial }) {
       case 'Instagram':
       case 'Truth Social':
         return faTruthSocial
-        return faInstagram
       case 'TikTok':
         return faTiktok
       default:

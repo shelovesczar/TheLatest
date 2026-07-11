@@ -80,15 +80,19 @@ export const deriveMediaOutlet = (itemOrSource, maybeUrl) => {
     ? (itemOrSource.url || itemOrSource.link)
     : maybeUrl;
 
+  const cleanedSource = cleanText(source);
+
   try {
     const hostname = new URL(String(url || '')).hostname;
+    if (hostname === 'fallback.thelatest.local') {
+      return cleanedSource || 'The Latest';
+    }
     const outletFromUrl = formatHostnameOutlet(hostname);
     if (outletFromUrl) return outletFromUrl;
   } catch {
     // Ignore invalid URLs and fall back to source text.
   }
 
-  const cleanedSource = cleanText(source);
   if (!cleanedSource) return 'Unknown Source';
   if (looksLikeByline(cleanedSource)) return 'Unknown Source';
   return cleanedSource;

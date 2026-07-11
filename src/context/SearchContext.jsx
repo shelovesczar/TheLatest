@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 
 const SearchContext = createContext()
@@ -14,6 +14,7 @@ export const useSearch = () => {
 export const SearchProvider = ({ children }) => {
   const navigate = useNavigate()
   const location = useLocation()
+  const urlTopic = new URLSearchParams(location.search).get('topic') || ''
   
   // Initialize topic from URL params or localStorage
   const getInitialTopic = () => {
@@ -25,9 +26,11 @@ export const SearchProvider = ({ children }) => {
     return savedTopic || ''
   }
 
-  const [topic, setTopicState] = useState(getInitialTopic)
-  const [searchQuery, setSearchQuery] = useState(getInitialTopic)
+  const [topicState, setTopicState] = useState(getInitialTopic)
+  const [searchQueryState, setSearchQuery] = useState(getInitialTopic)
   const [suggestedTopic, setSuggestedTopic] = useState(null)
+  const topic = urlTopic || topicState
+  const searchQuery = urlTopic || searchQueryState
 
   // Update URL when topic changes
   const setTopic = (newTopic) => {
@@ -60,16 +63,6 @@ export const SearchProvider = ({ children }) => {
       navigate('/')
     }
   }
-
-  // Sync with URL changes
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const urlTopic = params.get('topic')
-    if (urlTopic && urlTopic !== topic) {
-      setTopicState(urlTopic)
-      setSearchQuery(urlTopic)
-    }
-  }, [location.search])
 
   const value = {
     topic,

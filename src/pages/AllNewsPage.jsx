@@ -12,9 +12,34 @@ import { getTopicPageConfig } from '../utils/navigationConfig'
 import { filterContentByCategory } from '../utils/categoryFiltering'
 import { dedupeContentItems } from '../utils/contentDeduplication'
 import { formatDateOnly } from '../utils/dateUtils'
+import { buildStoryHref } from '../utils/storyRouting'
+import { getGeneratedContentLabel } from '../utils/contentLabels'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import './AllNewsPage.css'
+
+function toTextValue(value) {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number') return String(value)
+  if (Array.isArray(value)) return value.map(toTextValue).filter(Boolean).join(', ')
+  if (typeof value === 'object' && typeof value._ === 'string') return value._
+  return ''
+}
+
+function normalizeNewsArticle(item) {
+  return {
+    ...item,
+    title: toTextValue(item?.title),
+    description: toTextValue(item?.description),
+    content: toTextValue(item?.content),
+    source: toTextValue(item?.source),
+    category: toTextValue(item?.category),
+    publishedAt: toTextValue(item?.publishedAt || item?.time),
+    link: toTextValue(item?.link || item?.url),
+    image: toTextValue(item?.image),
+  }
+}
 
 function AllNewsPage({ category = null }) {
   const { categoryName, topicSlug } = useParams()
@@ -31,36 +56,10 @@ function AllNewsPage({ category = null }) {
   // Navigate to the on-site article reader
   const goToArticle = useCallback((article) => {
     recordHistory(article)
-    navigate('/article', { state: { article } })
+    navigate(buildStoryHref(article), { state: { article } })
   }, [navigate])
 
-  const toStr = (value) => {
-    if (value === null || value === undefined) return ''
-    if (typeof value === 'string') return value
-    if (typeof value === 'number') return String(value)
-    if (Array.isArray(value)) return value.map(toStr).filter(Boolean).join(', ')
-    if (typeof value === 'object' && typeof value._ === 'string') return value._
-    return ''
-  }
-
-  const normalizeArticle = (item) => ({
-    ...item,
-    title: toStr(item?.title),
-    description: toStr(item?.description),
-    content: toStr(item?.content),
-    source: toStr(item?.source),
-    category: toStr(item?.category),
-    publishedAt: toStr(item?.publishedAt || item?.time),
-    link: toStr(item?.link || item?.url),
-    image: toStr(item?.image),
-  })
-
-  const formatContextLabel = (value) => {
-    if (!value) return 'All News'
-    return value
-      .replace(/-/g, ' ')
-      .replace(/\b\w/g, (char) => char.toUpperCase())
-  }
+  const getStoryHref = useCallback((article) => buildStoryHref(article), [])
 
   const truncateText = (text, maxLength) => {
     if (!text) return ''
@@ -95,17 +94,7 @@ function AllNewsPage({ category = null }) {
     image: topicConfig.image
   } : getCategoryConfig(filterContext)
 
-  useEffect(() => {
-    loadNews()
-  }, [activeTopicQuery, categoryName, category, topic])
-
-  useEffect(() => {
-    if (selectedSource !== 'ALL' && !news.some((item) => item.source === selectedSource)) {
-      setSelectedSource('ALL')
-    }
-  }, [news, selectedSource])
-
-  const loadNews = async () => {
+  const loadNews = useCallback(async () => {
     setLoading(true)
     try {
       let newsData
@@ -113,11 +102,14 @@ function AllNewsPage({ category = null }) {
         // Use the search endpoint so the server fetches topic-specific RSS content
         console.log('[AllNewsPage] Searching by topic:', activeTopicQuery)
         newsData = await searchRSSContent(activeTopicQuery)
+        if (!Array.isArray(newsData) || newsData.length === 0) {
+          newsData = await fetchRSSNews(null, activeTopicQuery)
+        }
         console.log('[AllNewsPage] Search returned:', newsData?.length || 0, 'articles')
       } else if (filterContext) {
         console.log('[AllNewsPage] Loading by category:', filterContext)
         const rawData = await fetchRSSNews(filterContext)
-        const normalizedRaw = (Array.isArray(rawData) ? rawData : []).map(normalizeArticle)
+        const normalizedRaw = (Array.isArray(rawData) ? rawData : []).map(normalizeNewsArticle)
         setNews(dedupeContentItems(filterContentByCategory(normalizedRaw, filterContext, 1, { strict: true })))
         setLoading(false)
         return
@@ -125,7 +117,7 @@ function AllNewsPage({ category = null }) {
         console.log('[AllNewsPage] Loading all news')
         newsData = await fetchRSSNews()
       }
-      const normalizedNews = (Array.isArray(newsData) ? newsData : []).map(normalizeArticle)
+      const normalizedNews = (Array.isArray(newsData) ? newsData : []).map(normalizeNewsArticle)
       console.log('[AllNewsPage] Final news to display:', normalizedNews.length)
       setNews(dedupeContentItems(normalizedNews))
     } catch (error) {
@@ -134,7 +126,17 @@ function AllNewsPage({ category = null }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [activeTopicQuery, filterContext])
+
+  useEffect(() => {
+    loadNews()
+  }, [loadNews])
+
+  useEffect(() => {
+    if (selectedSource !== 'ALL' && !news.some((item) => item.source === selectedSource)) {
+      setSelectedSource('ALL')
+    }
+  }, [news, selectedSource])
 
   const sources = ['ALL', ...new Set(news.map((item) => item.source).filter(Boolean))]
   const filteredNews = selectedSource === 'ALL'
@@ -233,16 +235,17 @@ function AllNewsPage({ category = null }) {
               {leadStory && (
                 <article className="lead-story-card">
                   {leadStory.image && (
-                    <a href="#" onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="lead-story-image">
+                    <a href={getStoryHref(leadStory)} onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="lead-story-image">
                       <OptimizedImage src={leadStory.image} alt={leadStory.title} category="news" sizes="(max-width: 768px) 100vw, 60vw" />
                     </a>
                   )}
                   <div className="lead-story-content">
                     <div className="news-card-meta lead-story-meta">
                       <span className="news-card-source">{leadStory.category || leadStory.source}</span>
+                      {getGeneratedContentLabel(leadStory) && <span className="news-card-time">{getGeneratedContentLabel(leadStory)}</span>}
                       {leadStory.publishedAt && <span className="news-card-time">{formatDateOnly(leadStory.publishedAt)}</span>}
                     </div>
-                    <a href="#" onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="lead-story-headline-link">
+                    <a href={getStoryHref(leadStory)} onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="lead-story-headline-link">
                       <h2 className="lead-story-headline">{leadStory.title}</h2>
                     </a>
                     <p className="lead-story-description">
@@ -250,7 +253,7 @@ function AllNewsPage({ category = null }) {
                     </p>
                     <div className="lead-story-footer">
                       <span className="lead-story-source">{leadStory.source}</span>
-                      <a href="#" onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="read-more-link">
+                      <a href={getStoryHref(leadStory)} onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="read-more-link">
                         Read full story →
                       </a>
                     </div>
@@ -277,16 +280,17 @@ function AllNewsPage({ category = null }) {
                 {featuredStories.map((item, index) => (
                   <article key={`${item.link || item.title}-${index}`} className="secondary-story-card">
                     {item.image && (
-                      <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="secondary-story-image">
+                      <a href={getStoryHref(item)} onClick={e => { e.preventDefault(); goToArticle(item) }} className="secondary-story-image">
                         <OptimizedImage src={item.image} alt={item.title} category="news" sizes="(max-width: 768px) 100vw, 33vw" />
                       </a>
                     )}
                     <div className="secondary-story-content">
                       <div className="news-card-meta">
                         <span className="news-card-source">{item.source}</span>
+                        {getGeneratedContentLabel(item) && <span className="news-card-time">{getGeneratedContentLabel(item)}</span>}
                         {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
                       </div>
-                      <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="secondary-story-link">
+                      <a href={getStoryHref(item)} onClick={e => { e.preventDefault(); goToArticle(item) }} className="secondary-story-link">
                         <h3 className="secondary-story-headline">{item.title}</h3>
                       </a>
                     </div>
@@ -322,16 +326,17 @@ function AllNewsPage({ category = null }) {
                           >
                             <article className="latest-story-card">
                               {item.image && (
-                                <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-image">
+                                <a href={getStoryHref(item)} onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-image">
                                   <OptimizedImage src={item.image} alt={item.title} category="news" sizes="(max-width: 768px) 100vw, 45vw" />
                                 </a>
                               )}
                               <div className="latest-story-content">
                                 <div className="news-card-meta">
                                   <span className="news-card-source">{item.category || item.source}</span>
+                                  {getGeneratedContentLabel(item) && <span className="news-card-time">{getGeneratedContentLabel(item)}</span>}
                                   {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
                                 </div>
-                                <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-link">
+                                <a href={getStoryHref(item)} onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-link">
                                   <h3 className="latest-story-headline">{item.title}</h3>
                                 </a>
                                 {item.description && (
@@ -341,7 +346,7 @@ function AllNewsPage({ category = null }) {
                                       : truncateText(item.description, 180)}
                                   </p>
                                 )}
-                                <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="read-more-link">
+                                <a href={getStoryHref(item)} onClick={e => { e.preventDefault(); goToArticle(item) }} className="read-more-link">
                                   Continue reading →
                                 </a>
                               </div>
@@ -358,16 +363,17 @@ function AllNewsPage({ category = null }) {
                       return (
                       <article key={`${item.link || item.title}-${index}`} className={`latest-story-card${isLast ? ' latest-story-card--fade' : ''}`}>
                         {item.image && (
-                          <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-image">
+                          <a href={getStoryHref(item)} onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-image">
                             <OptimizedImage src={item.image} alt={item.title} category="news" sizes="(max-width: 768px) 100vw, 45vw" />
                           </a>
                         )}
                         <div className="latest-story-content">
                           <div className="news-card-meta">
                             <span className="news-card-source">{item.category || item.source}</span>
+                            {getGeneratedContentLabel(item) && <span className="news-card-time">{getGeneratedContentLabel(item)}</span>}
                             {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
                           </div>
-                          <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-link">
+                          <a href={getStoryHref(item)} onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-link">
                             <h3 className="latest-story-headline">{item.title}</h3>
                           </a>
                           {item.description && (
@@ -377,7 +383,7 @@ function AllNewsPage({ category = null }) {
                                 : truncateText(item.description, 180)}
                             </p>
                           )}
-                          <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="read-more-link">
+                          <a href={getStoryHref(item)} onClick={e => { e.preventDefault(); goToArticle(item) }} className="read-more-link">
                             Continue reading →
                           </a>
                         </div>
@@ -411,7 +417,7 @@ function AllNewsPage({ category = null }) {
                   {quickUpdates.map((item, index) => (
                     <a
                       key={`${item.link || item.title}-quick-${index}`}
-                      href="#"
+                      href={getStoryHref(item)}
                       onClick={e => { e.preventDefault(); goToArticle(item) }}
                       className="quick-update-item"
                     >

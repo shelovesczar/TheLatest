@@ -20,7 +20,9 @@ const LazyImage = ({
   // Keep the original src so we can fall back to it if the proxy is blocked.
   const processedSrc = processImageUrl(src, { width, quality, sharpen: true });
   const isProxied = processedSrc !== src;
-  const [imageSrc, setImageSrc] = useState(placeholder);
+  const [imageSrc, setImageSrc] = useState(() => (
+    typeof IntersectionObserver === 'undefined' ? processedSrc : placeholder
+  ));
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const imageRef = useRef(null);
@@ -51,9 +53,6 @@ const LazyImage = ({
           }
         );
         observer.observe(imageRef.current);
-      } else {
-        // Fallback for browsers that don't support IntersectionObserver
-        setImageSrc(processedSrc);
       }
     }
     
@@ -64,7 +63,7 @@ const LazyImage = ({
         observer.disconnect();
       }
     };
-  }, [src, imageSrc, placeholder]);
+  }, [imageSrc, placeholder, processedSrc]);
 
   const handleLoad = () => {
     setIsLoading(false);

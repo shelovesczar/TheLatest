@@ -5,6 +5,8 @@ import { Link } from 'react-router-dom'
 import { getImageProps } from '../../utils/imageUtils'
 import { deriveMediaOutlet } from '../../utils/sourceUtils'
 import { formatDateOnly } from '../../utils/dateUtils'
+import { resolveContentHref } from '../../utils/storyRouting'
+import { getGeneratedContentLabel } from '../../utils/contentLabels'
 import './Opinions.css'
 
 function Opinions({ loadingOpinions, opinions, categoryPath }) {
@@ -75,10 +77,12 @@ function Opinions({ loadingOpinions, opinions, categoryPath }) {
             </button>
 
             <div className="opinions-slider">
-              {visibleOpinions.map((opinion, index) => (
+              {visibleOpinions.map((opinion, index) => {
+                const href = resolveContentHref(opinion)
+                return (
             <a 
               key={currentIndex + index} 
-              href={opinion.url} 
+              href={href} 
               target="_blank" 
               rel="noopener noreferrer"
               className="opinion-card" 
@@ -93,6 +97,7 @@ function Opinions({ loadingOpinions, opinions, categoryPath }) {
               <div className="card-body-inner">
                 <div className="card-source-row">
                   <span className="card-source">{deriveMediaOutlet(opinion)}</span>
+                  {getGeneratedContentLabel(opinion) && <span className="card-date">{getGeneratedContentLabel(opinion)}</span>}
                   <span className="card-date">{formatDateOnly(opinion.date)}</span>
                 </div>
                 <div className="card-headline-text">{truncateText(opinion.title, 120)}</div>
@@ -103,7 +108,8 @@ function Opinions({ loadingOpinions, opinions, categoryPath }) {
                 </div>
               </div>
               </a>
-            ))}
+                )
+              })}
             </div>
 
             <button 

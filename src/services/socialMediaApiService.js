@@ -62,8 +62,8 @@ export async function fetchTwitterPosts(topic = '', limit = 10) {
  * Fetch top posts from Reddit using official API
  */
 export async function fetchRedditPosts(topic = '', limit = 10) {
-  const clientId = API_KEYS.reddit
-  const clientSecret = API_KEYS.redditSecret
+  void API_KEYS.reddit
+  void API_KEYS.redditSecret
 
   try {
     let url
@@ -147,7 +147,7 @@ export async function fetchYouTubePosts(topic = '', limit = 10) {
 /**
  * Fetch Instagram posts (requires business account and approved app)
  */
-export async function fetchInstagramPosts(topic = '', limit = 10) {
+export async function fetchInstagramPosts() {
   const apiKey = API_KEYS.instagram
   
   if (!apiKey) {

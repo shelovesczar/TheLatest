@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-exports.handler = async (event, context) => {
+exports.handler = async (event, _context) => {
   const NEWS_API_KEY = process.env.NEWS_API_KEY;
   const GNEWS_API_KEY = process.env.GNEWS_API_KEY;
 

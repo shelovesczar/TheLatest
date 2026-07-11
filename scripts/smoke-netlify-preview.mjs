@@ -56,6 +56,27 @@ async function main() {
   assertStatus('sharedSummary', sharedSummary, [200, 404, 503])
   assertJsonLike('sharedSummary', sharedSummary)
 
+  const generatedContent = await request('/.netlify/functions/generatedContent?type=news&topic=technology&count=1')
+  assertStatus('generatedContent', generatedContent, [200, 429, 503])
+  assertJsonLike('generatedContent', generatedContent)
+
+  const storySnapshot = await request('/.netlify/functions/storySnapshot', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      article: {
+        title: 'Smoke snapshot test',
+        source: 'Smoke Test',
+        publishedAt: new Date().toISOString(),
+        url: `${baseUrl}/smoke-story`
+      }
+    })
+  })
+  assertStatus('storySnapshot', storySnapshot, [200])
+  assertJsonLike('storySnapshot', storySnapshot)
+
   const auth = await request('/.netlify/functions/auth')
   assertStatus('auth', auth, [200, 401])
   assertJsonLike('auth', auth)
@@ -76,6 +97,13 @@ async function main() {
 
   const privacy = await request('/privacy')
   assertStatus('privacy route', privacy, [200])
+
+  const editorialStandards = await request('/editorial-standards')
+  assertStatus('editorial standards route', editorialStandards, [200])
+
+  const siteHealth = await request('/.netlify/functions/siteHealth')
+  assertStatus('siteHealth', siteHealth, [200])
+  assertJsonLike('siteHealth', siteHealth)
 
   console.log('Smoke test passed.')
 }

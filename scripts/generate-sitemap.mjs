@@ -1,8 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { CATEGORY_CONFIG } from '../src/utils/categoryConfig.js'
-import { TOPIC_PAGE_CONFIG } from '../src/utils/navigationConfig.js'
+import { getIndexableRoutes } from '../src/utils/siteRoutes.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -12,39 +11,7 @@ const publicDir = path.join(projectRoot, 'public')
 const siteUrl = String(process.env.VITE_SITE_URL || 'https://thelatest.news').replace(/\/$/, '')
 const today = new Date().toISOString().slice(0, 10)
 
-const staticRoutes = [
-  '/',
-  '/news',
-  '/social',
-  '/videos',
-  '/opinions',
-  '/podcasts',
-  '/sports',
-  '/privacy',
-  '/terms',
-  '/all-news',
-  '/all-opinions',
-  '/all-videos',
-  '/all-podcasts'
-]
-
-const categoryRoutes = Object.keys(CATEGORY_CONFIG).flatMap((category) => ([
-  `/category/${category}`,
-  `/category/${category}/all-news`,
-  `/category/${category}/all-opinions`,
-  `/category/${category}/all-videos`,
-  `/category/${category}/all-podcasts`
-]))
-
-const topicRoutes = Object.keys(TOPIC_PAGE_CONFIG).flatMap((slug) => ([
-  `/topic/${slug}`,
-  `/topic/${slug}/all-news`,
-  `/topic/${slug}/all-opinions`,
-  `/topic/${slug}/all-videos`,
-  `/topic/${slug}/all-podcasts`
-]))
-
-const routes = [...new Set([...staticRoutes, ...categoryRoutes, ...topicRoutes])]
+const routes = getIndexableRoutes()
 
 function xmlEscape(value = '') {
   return String(value)

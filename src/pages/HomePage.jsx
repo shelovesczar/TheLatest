@@ -1,10 +1,8 @@
 import { useState, useEffect, lazy, Suspense, useRef } from 'react'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useSearch } from '../context/SearchContext'
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
 import { searchRSSContent, fetchRSSVideos } from '../rssService'
 import { getRandomTrendingPosts } from '../socialMediaService'
-import { fetchStoryClusters } from '../services/clusterService'
 import { getSharedSummary } from '../services/aiService'
 import { dedupeContentItems } from '../utils/contentDeduplication'
 import { matchesTopicQuery } from '../utils/topicFiltering'
@@ -49,7 +47,7 @@ function extractTopicsFromHeadlines(articles, topN = 12) {
 
   articles.forEach((article) => {
     const tokens = String(article?.title || '')
-      .split(/[\s\-–—/|:,;!?"()\[\]]+/)
+      .split(/[\s\-–—/|:,;!?"()[\]]+/)
       .filter(Boolean)
 
     let phrase = []
@@ -104,82 +102,79 @@ const sanitizeRailTopics = (values = []) => {
   return topics.slice(0, 7)
 }
 
+const normalizeCrossDedupeUrl = (value) => {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+
+  try {
+    const parsed = new URL(raw, 'https://thelatest.local')
+    parsed.hash = ''
+
+    const trackingParams = new Set([
+      'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+      'fbclid', 'gclid', 'mc_cid', 'mc_eid', 'guccounter', 'cmpid', 'ocid',
+      'ref', 'ref_src', 'ref_url', 'source', 'spm', 'igshid'
+    ])
+
+    const kept = []
+    parsed.searchParams.forEach((paramValue, paramKey) => {
+      const key = String(paramKey || '').toLowerCase()
+      if (!trackingParams.has(key)) {
+        kept.push([key, String(paramValue || '')])
+      }
+    })
+
+    kept.sort((a, b) => {
+      if (a[0] === b[0]) return a[1].localeCompare(b[1])
+      return a[0].localeCompare(b[0])
+    })
+
+    parsed.search = ''
+    kept.forEach(([key, paramValue]) => parsed.searchParams.append(key, paramValue))
+
+    const pathname = parsed.pathname.replace(/\/+$/, '') || '/'
+    const query = parsed.searchParams.toString()
+    return `${parsed.origin}${pathname}${query ? `?${query}` : ''}`.toLowerCase()
+  } catch {
+    return raw.replace(/#.*$/, '').toLowerCase()
+  }
+}
+
+const itemKey = (item) => {
+  const normalizedUrl = normalizeCrossDedupeUrl(item?.url || item?.link)
+  if (normalizedUrl) return `url:${normalizedUrl}`
+  const fallbackTitle = String(item?.title || '').trim().toLowerCase()
+  const fallbackSource = String(item?.source || '').trim().toLowerCase()
+  return fallbackTitle ? `title:${fallbackSource}|${fallbackTitle}` : ''
+}
+
+const splitMediaWithoutOverlap = (videoItems, podcastItems) => {
+  const uniqueVideos = dedupeContentItems(videoItems || [])
+  const videoKeys = new Set(uniqueVideos.map(itemKey).filter(Boolean))
+  const uniquePodcasts = dedupeContentItems(podcastItems || []).filter((item) => {
+    const key = itemKey(item)
+    return key && !videoKeys.has(key)
+  })
+  return { uniqueVideos, uniquePodcasts }
+}
+
+const ensureTopicCoverage = (primaryItems, backupPool, topicValue, minItems) => {
+  const primary = Array.isArray(primaryItems) ? primaryItems : []
+  const backup = Array.isArray(backupPool) ? backupPool : []
+
+  const topicMatchedBackup = backup.filter((item) => matchesTopicQuery(item, topicValue))
+  const merged = dedupeContentItems([...primary, ...topicMatchedBackup])
+
+  if (merged.length < minItems) {
+    console.log(`[HomePage] Topic "${topicValue}" has limited matches (${merged.length}/${minItems})`)
+  }
+
+  return merged
+}
+
 function HomePage({
-  email,
-  setEmail,
-  handleSubscribe,
   onBreakingNewsChange
 }) {
-  const normalizeCrossDedupeUrl = (value) => {
-    const raw = String(value || '').trim()
-    if (!raw) return ''
-
-    try {
-      const parsed = new URL(raw, 'https://thelatest.local')
-      parsed.hash = ''
-
-      const trackingParams = new Set([
-        'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
-        'fbclid', 'gclid', 'mc_cid', 'mc_eid', 'guccounter', 'cmpid', 'ocid',
-        'ref', 'ref_src', 'ref_url', 'source', 'spm', 'igshid'
-      ])
-
-      const kept = []
-      parsed.searchParams.forEach((paramValue, paramKey) => {
-        const key = String(paramKey || '').toLowerCase()
-        if (!trackingParams.has(key)) {
-          kept.push([key, String(paramValue || '')])
-        }
-      })
-
-      kept.sort((a, b) => {
-        if (a[0] === b[0]) return a[1].localeCompare(b[1])
-        return a[0].localeCompare(b[0])
-      })
-
-      parsed.search = ''
-      kept.forEach(([key, paramValue]) => parsed.searchParams.append(key, paramValue))
-
-      const pathname = parsed.pathname.replace(/\/+$/, '') || '/'
-      const query = parsed.searchParams.toString()
-      return `${parsed.origin}${pathname}${query ? `?${query}` : ''}`.toLowerCase()
-    } catch {
-      return raw.replace(/#.*$/, '').toLowerCase()
-    }
-  }
-
-  const itemKey = (item) => {
-    const normalizedUrl = normalizeCrossDedupeUrl(item?.url || item?.link)
-    if (normalizedUrl) return `url:${normalizedUrl}`
-    const fallbackTitle = String(item?.title || '').trim().toLowerCase()
-    const fallbackSource = String(item?.source || '').trim().toLowerCase()
-    return fallbackTitle ? `title:${fallbackSource}|${fallbackTitle}` : ''
-  }
-
-  const splitMediaWithoutOverlap = (videoItems, podcastItems) => {
-    const uniqueVideos = dedupeContentItems(videoItems || [])
-    const videoKeys = new Set(uniqueVideos.map(itemKey).filter(Boolean))
-    const uniquePodcasts = dedupeContentItems(podcastItems || []).filter((item) => {
-      const key = itemKey(item)
-      return key && !videoKeys.has(key)
-    })
-    return { uniqueVideos, uniquePodcasts }
-  }
-
-  const ensureTopicCoverage = (primaryItems, backupPool, topicValue, minItems) => {
-    const primary = Array.isArray(primaryItems) ? primaryItems : []
-    const backup = Array.isArray(backupPool) ? backupPool : []
-
-    const topicMatchedBackup = backup.filter((item) => matchesTopicQuery(item, topicValue))
-    const merged = dedupeContentItems([...primary, ...topicMatchedBackup])
-
-    if (merged.length < minItems) {
-      console.log(`[HomePage] Topic "${topicValue}" has limited matches (${merged.length}/${minItems})`)
-    }
-
-    return merged
-  }
-
   const { topic, setTopic, clearTopic, hasActiveTopic } = useSearch()
   const [activeStory, setActiveStory] = useState(0)
   const [suggestedTopic, setSuggestedTopic] = useState(null)
@@ -188,7 +183,6 @@ function HomePage({
 
   // Content state - filters based on current topic
   const [topStories, setTopStories] = useState([])
-  const [storyClusters, setStoryClusters] = useState([])
   const [loading, setLoading] = useState(true)
   const [opinions, setOpinions] = useState([])
   const [videos, setVideos] = useState([])
@@ -203,7 +197,6 @@ function HomePage({
   const { ref: videosRef, isInView: videosInView } = useInView({ rootMargin: '220px' })
   const { ref: podcastsRef, isInView: podcastsInView } = useInView({ rootMargin: '220px' })
   const { ref: socialRef, isInView: socialInView } = useInView({ rootMargin: '220px' })
-  const { ref: topStoriesRef, isInView: topStoriesInView } = useInView({ rootMargin: '220px' })
   const { ref: summaryLeadRef, isInView: summaryLeadInView } = useInView({ rootMargin: '180px' })
   const topicTickerRef = useRef(null)
   const lastSocialQueryRef = useRef(null)
@@ -253,17 +246,6 @@ function HomePage({
 
     setVisibleTopics(HOME_TOPIC_RAIL)
   }, [topStories])
-
-  const scrollTopicIntoView = (topicValue) => {
-    if (!topicTickerRef.current) return
-    const chipSelector = topicValue === '__all__'
-      ? '[data-topic-value="__all__"]'
-      : `[data-topic-value="${topicValue}"]`
-    const chip = topicTickerRef.current.querySelector(chipSelector)
-    if (chip) {
-      chip.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
-    }
-  }
 
   // Load initial content (top stories only)
   useEffect(() => {
@@ -384,37 +366,6 @@ function HomePage({
   useEffect(() => {
     let isCancelled = false
 
-    const loadStoryClusters = async () => {
-      if (!topStoriesInView) return
-
-      try {
-        const clusters = await fetchStoryClusters({
-          type: 'news',
-          search: hasActiveTopic ? topic : '',
-          limit: 8
-        })
-
-        if (!isCancelled) {
-          setStoryClusters(Array.isArray(clusters) ? clusters : [])
-        }
-      } catch (error) {
-        console.error('Error loading story clusters:', error)
-        if (!isCancelled) {
-          setStoryClusters([])
-        }
-      }
-    }
-
-    loadStoryClusters()
-
-    return () => {
-      isCancelled = true
-    }
-  }, [hasActiveTopic, topStoriesInView, topic])
-
-  useEffect(() => {
-    let isCancelled = false
-
     if (!summaryLeadInView || summaryTopicsRequestedRef.current) {
       return () => {
         isCancelled = true
@@ -460,7 +411,7 @@ function HomePage({
       }
     }
     loadOpinions()
-  }, [opinionsInView, hasActiveTopic])
+  }, [opinions.length, opinionsInView, hasActiveTopic])
 
   useEffect(() => {
     const loadVideos = async () => {
@@ -483,7 +434,7 @@ function HomePage({
       }
     }
     loadVideos()
-  }, [videosInView, hasActiveTopic])
+  }, [hasActiveTopic, videos.length, videosInView])
 
   useEffect(() => {
     const loadPodcasts = async () => {
@@ -502,7 +453,7 @@ function HomePage({
       }
     }
     loadPodcasts()
-  }, [podcastsInView, hasActiveTopic])
+  }, [hasActiveTopic, podcasts.length, podcastsInView, videos])
 
   useEffect(() => {
     const loadSocial = async () => {
@@ -524,7 +475,7 @@ function HomePage({
       }
     }
     loadSocial()
-  }, [socialInView, hasActiveTopic, topic])
+  }, [socialInView, hasActiveTopic, socialPosts.length, topic])
 
   return (
     <main className="main-content home-main-content">
@@ -601,7 +552,7 @@ function HomePage({
         </div>
       )}
 
-      <div ref={topStoriesRef}>
+      <div>
         <TopStories
           topStories={topStories}
           loading={loading}

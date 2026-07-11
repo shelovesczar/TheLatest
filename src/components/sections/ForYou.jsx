@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import NewsCard from '../common/NewsCard';
 import './ForYou.css';
 
@@ -10,11 +10,7 @@ const ForYou = ({ userId }) => {
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchRecommendations();
-  }, [userId]);
-
-  const fetchRecommendations = async () => {
+  const fetchRecommendations = useCallback(async () => {
     try {
       // In production, this would use a recommendation algorithm based on:
       // - User's reading history
@@ -36,7 +32,11 @@ const ForYou = ({ userId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchRecommendations();
+  }, [fetchRecommendations, userId]);
 
   const getFallbackRecommendations = () => [
     {

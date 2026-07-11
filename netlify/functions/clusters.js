@@ -1,3 +1,4 @@
+/* global require, exports */
 const rssAggregator = require('./rss-aggregator');
 const { labelStoryPerspective } = require('./perspective');
 
@@ -7,6 +8,8 @@ const STOP_WORDS = new Set([
   'amid', 'amidst', 'through', 'across', 'what', 'when', 'where', 'which', 'while', 'news', 'latest',
   'says', 'say', 'said', 'just', 'more', 'than', 'them', 'they', 'your', 'onto', 'still', 'also'
 ]);
+
+const MIN_PERSPECTIVE_CLUSTER_SOURCES = 2;
 
 function jsonHeaders() {
   return {
@@ -63,6 +66,33 @@ function buildClusterTopic(cluster = {}) {
     .map(([token]) => token.charAt(0).toUpperCase() + token.slice(1));
 
   return terms.length > 0 ? terms.join(' · ') : 'Coverage cluster';
+}
+
+function summarizePerspectiveSources(sources = []) {
+  const summary = {
+    totalSources: Array.isArray(sources) ? sources.length : 0,
+    unclassifiedSources: 0,
+    classifiedSources: 0,
+    methods: {},
+    confidence: {}
+  };
+
+  (Array.isArray(sources) ? sources : []).forEach((story) => {
+    const key = String(story?.perspectiveKey || 'unknown').trim().toLowerCase();
+    const method = String(story?.perspectiveMethod || 'unclassified').trim().toLowerCase();
+    const confidence = String(story?.perspectiveConfidence || 'low').trim().toLowerCase();
+
+    if (key === 'unknown') {
+      summary.unclassifiedSources += 1;
+    } else {
+      summary.classifiedSources += 1;
+    }
+
+    summary.methods[method] = (summary.methods[method] || 0) + 1;
+    summary.confidence[confidence] = (summary.confidence[confidence] || 0) + 1;
+  });
+
+  return summary;
 }
 
 async function clusterStories(items = [], limit = 8) {
@@ -128,11 +158,11 @@ async function clusterStories(items = [], limit = 8) {
     })
     .slice(0, limit);
 
-  return Promise.all(ranked.map(async (cluster) => ({
-    ...cluster,
-    sources: await Promise.all(cluster.sources.map(async (story) => {
+  const annotatedClusters = await Promise.all(ranked.map(async (cluster) => {
+    const annotatedSources = await Promise.all(cluster.sources.map(async (story) => {
       const perspective = await labelStoryPerspective({
         headline: story.title || '',
+        description: `${story.description || ''} ${story.content || ''}`,
         source: story.source || ''
       });
 
@@ -140,10 +170,23 @@ async function clusterStories(items = [], limit = 8) {
         ...story,
         perspectiveKey: perspective.key,
         perspectiveLabel: perspective.label,
-        perspectiveStyle: perspective.sourceStyle
+        perspectiveStyle: perspective.sourceStyle,
+        perspectiveMethod: perspective.method,
+        perspectiveConfidence: perspective.confidence,
+        perspectiveRationale: perspective.rationale,
+        perspectiveEstimated: perspective.isEstimated
       };
-    }))
-  })));
+    }));
+
+    return {
+      ...cluster,
+      sources: annotatedSources,
+      comparisonEligible: cluster.sourceCount >= MIN_PERSPECTIVE_CLUSTER_SOURCES && annotatedSources.length >= MIN_PERSPECTIVE_CLUSTER_SOURCES,
+      perspectiveHealth: summarizePerspectiveSources(annotatedSources)
+    };
+  }));
+
+  return annotatedClusters.filter((cluster) => cluster.comparisonEligible);
 }
 
 exports.handler = async (event) => {
@@ -181,6 +224,7 @@ exports.handler = async (event) => {
         clusters,
         count: clusters.length,
         totalStories: items.length,
+        minPerspectiveSources: MIN_PERSPECTIVE_CLUSTER_SOURCES,
         type,
         category,
         search

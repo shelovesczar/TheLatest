@@ -1,4 +1,6 @@
 const Parser = require('rss-parser');
+const axios = require('axios');
+const { enforceRateLimit } = require('./rateLimit');
 const { STORE_NAMES, getJson, getJsonWithMetadata, setJson, listJson } = require('./blobStore');
 const parser = new Parser({
   timeout: 5000, // 5 seconds — fail fast on slow feeds
@@ -838,7 +840,7 @@ function shouldEnrichImage(item = {}) {
   return false;
 }
 
-async function enrichItemsWithArticleImages(items = []) {
+async function _enrichItemsWithArticleImages(items = []) {
   if (!Array.isArray(items) || items.length === 0) return [];
 
   pruneArticleImageCache();
@@ -1642,7 +1644,7 @@ function extractSource(item, defaultSource) {
       // Capitalize first letter of domain name
       const baseDomain = domain.split('.')[0];
       return baseDomain.charAt(0).toUpperCase() + baseDomain.slice(1);
-    } catch (e) {
+    } catch (_error) {
       // If URL parsing fails, use default
     }
   }
@@ -1843,7 +1845,7 @@ function isCacheValid(cacheKey) {
   return Boolean(cached.data);
 }
 
-exports.handler = async (event, context) => {
+exports.handler = async (event, _context) => {
   const { type = 'news', category, search, sourceStats, strictSearch = '0', relaxSearchFallback = '1', minStrictResults = '6' } = event.queryStringParameters || {};
   const normalizedCategory = normalizeRequestCategory(category);
   const includeSourceStats = ['1', 'true', 'yes'].includes(String(sourceStats || '').toLowerCase());
@@ -1863,6 +1865,21 @@ exports.handler = async (event, context) => {
   // Handle preflight
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
+  }
+
+  const rateLimit = await enforceRateLimit(event, {
+    scope: 'rss-aggregator',
+    maxRequests: search && search.trim().length > 0 ? 25 : 90,
+    windowMs: 60 * 1000,
+    keySuffix: search && search.trim().length > 0 ? 'search' : String(type || 'news')
+  });
+
+  if (!rateLimit.allowed) {
+    return {
+      statusCode: 429,
+      headers: { ...headers, ...rateLimit.headers },
+      body: JSON.stringify({ error: 'Rate limit exceeded' })
+    };
   }
 
   try {

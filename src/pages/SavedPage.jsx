@@ -1,15 +1,16 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faBookmark, faTrash, faClock, faSearch } from '@fortawesome/free-solid-svg-icons'
 import { getSavedArticles, getHistory, unsaveArticle, clearAllSaved, clearHistory } from '../utils/savedArticles'
 import { getImageProps } from '../utils/imageUtils'
+import { buildStoryHref } from '../utils/storyRouting'
 import './SavedPage.css'
 
 function SavedPage() {
   const [tab, setTab] = useState('saved')      // 'saved' | 'history'
-  const [saved, setSaved] = useState([])
-  const [history, setHistory] = useState([])
+  const [saved, setSaved] = useState(() => getSavedArticles())
+  const [history, setHistory] = useState(() => getHistory())
   const [filter, setFilter] = useState('')
   const navigate = useNavigate()
 
@@ -17,8 +18,6 @@ function SavedPage() {
     setSaved(getSavedArticles())
     setHistory(getHistory())
   }, [])
-
-  useEffect(() => { reload() }, [reload])
 
   const handleUnsave = (e, article) => {
     e.stopPropagation()
@@ -36,7 +35,7 @@ function SavedPage() {
   }
 
   const openArticle = (article) => {
-    navigate('/article', { state: { article } })
+    navigate(buildStoryHref(article), { state: { article } })
   }
 
   const activeList = tab === 'saved' ? saved : history

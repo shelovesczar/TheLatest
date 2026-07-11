@@ -77,8 +77,12 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
   }, [])
 
   useEffect(() => {
-    setOpenDropdown(null)
-    setProfileMenuOpen(false)
+    const frameId = window.requestAnimationFrame(() => {
+      setOpenDropdown(null)
+      setProfileMenuOpen(false)
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
   }, [location.pathname, location.search])
 
   useEffect(() => {

@@ -47,7 +47,7 @@ const cleanText = (value = '') => String(value || '')
 const trimHeadline = (value = '', max = 95) => {
   const text = cleanText(value)
   if (text.length <= max) return text
-  return `${text.slice(0, max).trim().replace(/[,:;\-]+$/, '')}...`
+  return `${text.slice(0, max).trim().replace(/[,:;-]+$/, '')}...`
 }
 
 const toSentence = (value = '') => {

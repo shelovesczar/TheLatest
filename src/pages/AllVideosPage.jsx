@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { useParams } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -9,13 +9,23 @@ import { searchRSSContent, fetchRSSVideos } from '../rssService'
 import { getImageProps } from '../utils/imageUtils'
 import { getCategoryConfig } from '../utils/categoryConfig'
 import { filterContentByCategory } from '../utils/categoryFiltering'
-import { dedupeContentItems } from '../utils/contentDeduplication'
 import { deriveMediaOutlet } from '../utils/sourceUtils'
 import { matchesTopicQuery } from '../utils/topicFiltering'
 import { getTopicPageConfig } from '../utils/navigationConfig'
 import { isVideoItem, isPodcastItem, dedupeByMediaKey, removeCrossDuplicates } from '../utils/mediaClassification'
 import { formatDateOnly } from '../utils/dateUtils'
+import { resolveContentHref } from '../utils/storyRouting'
+import { getGeneratedContentLabel } from '../utils/contentLabels'
 import './AllNewsPage.css'
+
+function toTextValue(value) {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number') return String(value)
+  if (Array.isArray(value)) return value.map(toTextValue).filter(Boolean).join(', ')
+  if (typeof value === 'object' && typeof value._ === 'string') return value._
+  return ''
+}
 
 function AllVideosPage({ category = null }) {
   const { categoryName, topicSlug } = useParams()
@@ -26,22 +36,6 @@ function AllVideosPage({ category = null }) {
   const [visibleCount, setVisibleCount] = useState(8)
   const LOAD_MORE_SIZE = 8
   const sourceTickerRef = useRef(null)
-
-  const toStr = (value) => {
-    if (value === null || value === undefined) return ''
-    if (typeof value === 'string') return value
-    if (typeof value === 'number') return String(value)
-    if (Array.isArray(value)) return value.map(toStr).filter(Boolean).join(', ')
-    if (typeof value === 'object' && typeof value._ === 'string') return value._
-    return ''
-  }
-
-  const formatContextLabel = (value) => {
-    if (!value) return 'All Videos'
-    return value
-      .replace(/-/g, ' ')
-      .replace(/\b\w/g, (char) => char.toUpperCase())
-  }
 
   const truncateText = (text, maxLength) => {
     if (!text) return ''
@@ -59,30 +53,20 @@ function AllVideosPage({ category = null }) {
     image: topicConfig.image
   } : getCategoryConfig(filterContext)
 
-  useEffect(() => {
-    loadVideos()
-  }, [activeTopicQuery, categoryName, category, topic])
-
-  useEffect(() => {
-    if (selectedSource !== 'ALL' && !videos.some((item) => item.source === selectedSource)) {
-      setSelectedSource('ALL')
-    }
-  }, [videos, selectedSource])
-
-  const loadVideos = async () => {
+  const loadVideos = useCallback(async () => {
     setLoading(true)
     try {
       const normalizeVideoItem = (item) => ({
         ...item,
-        title: toStr(item?.title),
-        description: toStr(item?.description),
-        source: deriveMediaOutlet({ source: toStr(item?.source), url: toStr(item?.link || item?.url) }) || 'Video Desk',
-        type: toStr(item?.type),
-        category: toStr(item?.category),
-        publishedAt: toStr(item?.publishedAt || item?.time),
-        link: toStr(item?.link || item?.url),
-        image: toStr(item?.thumbnail) || toStr(item?.image),
-        duration: toStr(item?.duration),
+        title: toTextValue(item?.title),
+        description: toTextValue(item?.description),
+        source: deriveMediaOutlet({ source: toTextValue(item?.source), url: toTextValue(item?.link || item?.url) }) || 'Video Desk',
+        type: toTextValue(item?.type),
+        category: toTextValue(item?.category),
+        publishedAt: toTextValue(item?.publishedAt || item?.time),
+        link: toTextValue(item?.link || item?.url),
+        image: toTextValue(item?.thumbnail) || toTextValue(item?.image),
+        duration: toTextValue(item?.duration),
       })
 
       if (activeTopicQuery && activeTopicQuery.trim().length > 0) {
@@ -100,6 +84,11 @@ function AllVideosPage({ category = null }) {
             .filter((item) => !isPodcastItem(item))
             .filter((item) => matchesTopicQuery(item, activeTopicQuery))
           topicVideos = dedupeByMediaKey([...topicVideos, ...supplemental])
+        }
+
+        if (topicVideos.length < MIN_TOPIC_VIDEOS) {
+          const generatedFallback = await fetchVideos(null, activeTopicQuery)
+          topicVideos = dedupeByMediaKey([...topicVideos, ...(Array.isArray(generatedFallback) ? generatedFallback : []).map(normalizeVideoItem)])
         }
 
         setVideos(dedupeByMediaKey(topicVideos))
@@ -122,7 +111,17 @@ function AllVideosPage({ category = null }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [activeTopicQuery, filterContext])
+
+  useEffect(() => {
+    loadVideos()
+  }, [loadVideos])
+
+  useEffect(() => {
+    if (selectedSource !== 'ALL' && !videos.some((item) => item.source === selectedSource)) {
+      setSelectedSource('ALL')
+    }
+  }, [videos, selectedSource])
 
   const sources = ['ALL', ...new Set(videos.map((item) => item.source).filter(Boolean))]
   const filteredVideos = selectedSource === 'ALL'
@@ -143,6 +142,7 @@ function AllVideosPage({ category = null }) {
   }
 
   const leadStory = filteredVideos[0]
+  const leadStoryHref = leadStory ? resolveContentHref(leadStory) : ''
   const featuredStories = filteredVideos.slice(1, 4)
   const latestStoriesAll = filteredVideos.slice(4)
   const latestStories = latestStoriesAll.slice(0, visibleCount)
@@ -214,16 +214,17 @@ function AllVideosPage({ category = null }) {
               {leadStory && (
                 <article className="lead-story-card">
                   {leadStory.image && (
-                    <a href={leadStory.link} target="_blank" rel="noopener noreferrer" className="lead-story-image">
+                    <a href={leadStoryHref} target="_blank" rel="noopener noreferrer" className="lead-story-image">
                       <img {...getImageProps(leadStory.image, leadStory.title, 'videos')} />
                     </a>
                   )}
                   <div className="lead-story-content">
                     <div className="news-card-meta lead-story-meta">
                       <span className="news-card-source">{leadStory.category || leadStory.source}</span>
+                      {getGeneratedContentLabel(leadStory) && <span className="news-card-time">{getGeneratedContentLabel(leadStory)}</span>}
                       {leadStory.publishedAt && <span className="news-card-time">{formatDateOnly(leadStory.publishedAt)}</span>}
                     </div>
-                    <a href={leadStory.link} target="_blank" rel="noopener noreferrer" className="lead-story-headline-link">
+                    <a href={leadStoryHref} target="_blank" rel="noopener noreferrer" className="lead-story-headline-link">
                       <h2 className="lead-story-headline">{leadStory.title}</h2>
                     </a>
                     <p className="lead-story-description">
@@ -231,7 +232,7 @@ function AllVideosPage({ category = null }) {
                     </p>
                     <div className="lead-story-footer">
                       <span className="lead-story-source">{leadStory.duration || leadStory.source}</span>
-                      <a href={leadStory.link} target="_blank" rel="noopener noreferrer" className="read-more-link">
+                      <a href={leadStoryHref} target="_blank" rel="noopener noreferrer" className="read-more-link">
                         Watch video →
                       </a>
                     </div>
@@ -258,16 +259,17 @@ function AllVideosPage({ category = null }) {
                 {featuredStories.map((item, index) => (
                   <article key={`${item.link || item.title}-${index}`} className="secondary-story-card">
                     {item.image && (
-                      <a href={item.link} target="_blank" rel="noopener noreferrer" className="secondary-story-image">
+                      <a href={resolveContentHref(item)} target="_blank" rel="noopener noreferrer" className="secondary-story-image">
                         <img {...getImageProps(item.image, item.title, 'videos')} />
                       </a>
                     )}
                     <div className="secondary-story-content">
                       <div className="news-card-meta">
                         <span className="news-card-source">{item.source}</span>
+                        {getGeneratedContentLabel(item) && <span className="news-card-time">{getGeneratedContentLabel(item)}</span>}
                         {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
                       </div>
-                      <a href={item.link} target="_blank" rel="noopener noreferrer" className="secondary-story-link">
+                      <a href={resolveContentHref(item)} target="_blank" rel="noopener noreferrer" className="secondary-story-link">
                         <h3 className="secondary-story-headline">{item.title}</h3>
                       </a>
                     </div>
@@ -286,19 +288,21 @@ function AllVideosPage({ category = null }) {
                 <div className="latest-news-list">
                   {(latestStories.length > 0 ? latestStories : filteredVideos.slice(1)).map((item, index) => {
                     const isLast = index === latestStories.length - 1 && hasMore
+                    const href = resolveContentHref(item)
                     return (
                     <article key={`${item.link || item.title}-${index}`} className={`latest-story-card${isLast ? ' latest-story-card--fade' : ''}`}>
                       {item.image && (
-                        <a href={item.link} target="_blank" rel="noopener noreferrer" className="latest-story-image">
+                        <a href={href} target="_blank" rel="noopener noreferrer" className="latest-story-image">
                           <img {...getImageProps(item.image, item.title, 'videos')} />
                         </a>
                       )}
                       <div className="latest-story-content">
                         <div className="news-card-meta">
                           <span className="news-card-source">{item.category || item.source}</span>
+                          {getGeneratedContentLabel(item) && <span className="news-card-time">{getGeneratedContentLabel(item)}</span>}
                           {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
                         </div>
-                        <a href={item.link} target="_blank" rel="noopener noreferrer" className="latest-story-link">
+                        <a href={href} target="_blank" rel="noopener noreferrer" className="latest-story-link">
                           <h3 className="latest-story-headline">{item.title}</h3>
                         </a>
                         {item.description && (
@@ -306,7 +310,7 @@ function AllVideosPage({ category = null }) {
                             {truncateText(item.description, 180)}
                           </p>
                         )}
-                        <a href={item.link} target="_blank" rel="noopener noreferrer" className="read-more-link">
+                        <a href={href} target="_blank" rel="noopener noreferrer" className="read-more-link">
                           Watch now →
                         </a>
                       </div>

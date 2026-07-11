@@ -1,4 +1,5 @@
 const rssAggregator = require('./rss-aggregator');
+const { enforceRateLimit } = require('./rateLimit');
 const fs = require('fs');
 const path = require('path');
 
@@ -18,7 +19,7 @@ function cleanText(value = '') {
 function truncateText(value = '', max = 220) {
   const text = cleanText(value);
   if (text.length <= max) return text;
-  return `${text.slice(0, max).trim().replace(/[,:;\-]+$/, '')}...`;
+  return `${text.slice(0, max).trim().replace(/[,:;-]+$/, '')}...`;
 }
 
 function extractAnthropicTextBlocks(payload) {
@@ -300,6 +301,20 @@ exports.handler = async (event) => {
     };
   }
 
+  const rateLimit = await enforceRateLimit(event, {
+    scope: 'search-assist',
+    maxRequests: 30,
+    windowMs: 60 * 1000
+  });
+
+  if (!rateLimit.allowed) {
+    return {
+      statusCode: 429,
+      headers: { ...headers, ...rateLimit.headers },
+      body: JSON.stringify({ error: 'Rate limit exceeded' })
+    };
+  }
+
   try {
     const query = cleanText(event.queryStringParameters?.q || '');
     if (!query) {
@@ -314,7 +329,7 @@ exports.handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers,
+      headers: { ...headers, ...rateLimit.headers },
       body: JSON.stringify({
         found: Boolean(data),
         data
@@ -323,7 +338,7 @@ exports.handler = async (event) => {
   } catch (error) {
     return {
       statusCode: 500,
-      headers,
+      headers: { ...headers, ...rateLimit.headers },
       body: JSON.stringify({
         error: 'Search assist failed',
         details: cleanText(error?.message || 'Unknown error')

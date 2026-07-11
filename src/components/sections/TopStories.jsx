@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getImageProps } from '../../utils/imageUtils'
 import { recordHistory } from '../../utils/savedArticles'
+import { buildStoryHref } from '../../utils/storyRouting'
+import { getGeneratedContentLabel } from '../../utils/contentLabels'
 import './TopStories.css'
 
 const PERSPECTIVE_MAP = [
@@ -21,10 +23,22 @@ const PERSPECTIVE_MAP = [
     key: 'right',
     label: 'Right-Center',
     sourceStyle: { background: '#fef3c7', color: '#92400e' }
+  },
+  {
+    key: 'unknown',
+    label: 'Unclassified',
+    sourceStyle: { background: '#e5e7eb', color: '#374151' }
   }
 ]
 
 const PERSPECTIVE_LOOKUP = Object.fromEntries(PERSPECTIVE_MAP.map((item) => [item.key, item]))
+const PERSPECTIVE_METHOD_LABELS = {
+  'ai-headline': 'AI estimate',
+  'source-map': 'Source map',
+  'unclassified': 'Needs review'
+}
+
+const MIN_PERSPECTIVE_CLUSTER_SOURCES = 2
 
 function TopStories({
   loading,
@@ -40,32 +54,50 @@ function TopStories({
   seeMoreLabel,
   sideBySideTitle
 }) {
-    const resolvePerspective = useCallback((story, fallbackIndex = 0) => {
+    const resolvePerspective = useCallback((story) => {
       const explicitKey = String(story?.perspectiveKey || '').trim().toLowerCase()
       if (explicitKey && PERSPECTIVE_LOOKUP[explicitKey]) {
         return {
           ...PERSPECTIVE_LOOKUP[explicitKey],
           label: story?.perspectiveLabel || PERSPECTIVE_LOOKUP[explicitKey].label,
-          sourceStyle: story?.perspectiveStyle || PERSPECTIVE_LOOKUP[explicitKey].sourceStyle
+          sourceStyle: story?.perspectiveStyle || PERSPECTIVE_LOOKUP[explicitKey].sourceStyle,
+          method: story?.perspectiveMethod || 'unclassified',
+          confidence: story?.perspectiveConfidence || 'low',
+          rationale: story?.perspectiveRationale || '',
+          isEstimated: Boolean(story?.perspectiveEstimated)
         }
       }
 
-      return PERSPECTIVE_MAP[fallbackIndex] || PERSPECTIVE_MAP[PERSPECTIVE_MAP.length - 1]
+      return {
+        ...PERSPECTIVE_LOOKUP.unknown,
+        method: 'unclassified',
+        confidence: 'low',
+        rationale: '',
+        isEstimated: false
+      }
     }, [])
 
   const navigate = useNavigate()
-  const [showPerspectives, setShowPerspectives] = useState(defaultPerspectiveView)
+  const [nowTimestamp] = useState(() => Date.now())
+  const [showPerspectivesRequested, setShowPerspectivesRequested] = useState(defaultPerspectiveView)
   const [perspectiveFilter, setPerspectiveFilter] = useState('all')
-  const [activePerspectiveSourceIndex, setActivePerspectiveSourceIndex] = useState(0)
+  const [perspectiveSelection, setPerspectiveSelection] = useState({ key: 'all:0', index: 0 })
   const clusterItems = useMemo(
-    () => (Array.isArray(sideBySideClusters) ? sideBySideClusters.filter((item) => Array.isArray(item?.sources) && item.sources.length > 0) : []),
+    () => (Array.isArray(sideBySideClusters)
+      ? sideBySideClusters.filter((item) => {
+          const sourceCount = Number(item?.sourceCount || 0)
+          const sources = Array.isArray(item?.sources) ? item.sources : []
+          return item?.comparisonEligible !== false
+            && sourceCount >= MIN_PERSPECTIVE_CLUSTER_SOURCES
+            && sources.length >= MIN_PERSPECTIVE_CLUSTER_SOURCES
+        })
+      : []),
     [sideBySideClusters]
   )
   const useClusteredSideBySide = clusterItems.length > 0
-
-  useEffect(() => {
-    setShowPerspectives(defaultPerspectiveView)
-  }, [defaultPerspectiveView])
+  const canShowPerspectiveToggle = showPerspectiveToggle && useClusteredSideBySide
+  const showPerspectives = showPerspectivesRequested && useClusteredSideBySide
+  const isPerspectiveMode = showPerspectives && useClusteredSideBySide
 
   const getMediaOutlet = useCallback((story) => {
     if (!story) return 'Unknown Source'
@@ -148,7 +180,7 @@ function TopStories({
     const parsed = new Date(candidate)
     if (Number.isNaN(parsed.getTime())) return 'Latest'
 
-    const diffMs = Date.now() - parsed.getTime()
+    const diffMs = nowTimestamp - parsed.getTime()
     const diffHours = Math.max(1, Math.round(diffMs / (1000 * 60 * 60)))
     if (diffHours < 24) return `${diffHours}h ago`
 
@@ -158,7 +190,7 @@ function TopStories({
 
   const goToArticle = useCallback((article) => {
     recordHistory(article)
-    navigate('/article', { state: { article } })
+    navigate(buildStoryHref(article), { state: { article } })
   }, [navigate])
 
   useEffect(() => {
@@ -180,10 +212,6 @@ function TopStories({
     return Math.floor(activeStory / 3) % storyGroupCount
   }, [activeStory, storyGroupCount, useClusteredSideBySide])
 
-  useEffect(() => {
-    setActivePerspectiveSourceIndex(0)
-  }, [perspectiveFilter, perspectiveGroupIndex])
-
   const visibleStories = useMemo(() => {
     if (!Array.isArray(topStories) || topStories.length === 0) return []
 
@@ -200,22 +228,14 @@ function TopStories({
       const activeCluster = clusterItems[perspectiveGroupIndex]
       const items = Array.isArray(activeCluster?.sources) ? activeCluster.sources : []
 
-      return items.map((story, index) => ({
+      return items.map((story) => ({
         story,
-        perspective: resolvePerspective(story, index)
+        perspective: resolvePerspective(story)
       }))
     }
 
-    if (!Array.isArray(topStories) || topStories.length === 0) return []
-
-    const startIndex = perspectiveGroupIndex * 3
-    const items = topStories.slice(startIndex, startIndex + 3)
-
-    return items.map((story, index) => ({
-      story,
-      perspective: resolvePerspective(story, index)
-    }))
-  }, [clusterItems, perspectiveGroupIndex, resolvePerspective, topStories, useClusteredSideBySide])
+    return []
+  }, [clusterItems, perspectiveGroupIndex, resolvePerspective, useClusteredSideBySide])
 
   const filteredPerspectiveStories = useMemo(() => {
     if (perspectiveFilter === 'all') return perspectiveStories
@@ -227,10 +247,12 @@ function TopStories({
     return perspectiveStories
   }, [filteredPerspectiveStories, perspectiveStories])
 
+  const perspectiveSelectionKey = `${perspectiveFilter}:${perspectiveGroupIndex}`
   const resolvedPerspectiveSourceIndex = useMemo(() => {
     if (visiblePerspectiveStories.length === 0) return 0
-    return Math.min(activePerspectiveSourceIndex, visiblePerspectiveStories.length - 1)
-  }, [activePerspectiveSourceIndex, visiblePerspectiveStories])
+    const requestedIndex = perspectiveSelection.key === perspectiveSelectionKey ? perspectiveSelection.index : 0
+    return Math.min(requestedIndex, visiblePerspectiveStories.length - 1)
+  }, [perspectiveSelection, perspectiveSelectionKey, visiblePerspectiveStories])
 
   const activePerspectiveItem = visiblePerspectiveStories[resolvedPerspectiveSourceIndex] || null
 
@@ -277,11 +299,23 @@ function TopStories({
     ? `${categoryTitle} coverage`
     : 'Coverage cluster'
 
+  const getPerspectiveMethodLabel = (perspective = {}) =>
+    PERSPECTIVE_METHOD_LABELS[perspective.method] || 'Needs review'
+
+  const getPerspectiveConfidenceLabel = (perspective = {}) => {
+    const confidence = String(perspective.confidence || 'low').trim().toLowerCase()
+    return confidence ? `${confidence.charAt(0).toUpperCase()}${confidence.slice(1)} confidence` : 'Low confidence'
+  }
+
   const cyclePerspectiveSource = (delta) => {
     if (visiblePerspectiveStories.length === 0) return
-    setActivePerspectiveSourceIndex((prev) => {
+    setPerspectiveSelection((prev) => {
       const total = visiblePerspectiveStories.length
-      return (prev + delta + total) % total
+      const currentIndex = prev.key === perspectiveSelectionKey ? prev.index : 0
+      return {
+        key: perspectiveSelectionKey,
+        index: (currentIndex + delta + total) % total
+      }
     })
   }
 
@@ -290,11 +324,11 @@ function TopStories({
       <div className="section-hdr top-stories-hdr">
         <h2>{showPerspectives ? resolvedSideBySideTitle : resolvedSectionTitle}</h2>
         <div className="top-stories-actions">
-          {showPerspectiveToggle && (
+          {canShowPerspectiveToggle && (
             <button
               type="button"
               className="top-stories-toggle"
-              onClick={() => setShowPerspectives((value) => !value)}
+              onClick={() => setShowPerspectivesRequested((value) => !value)}
             >
               {showPerspectives ? '✕ Back to Top Stories' : '⇄ See Multiple Perspectives'}
             </button>
@@ -308,7 +342,7 @@ function TopStories({
           <p className="loading-text">Loading top stories...</p>
         </div>
       ) : visibleStories.length > 0 ? (
-        !showPerspectives ? (
+        !isPerspectiveMode ? (
           <div id="storiesCarousel">
             <div className="carousel-wrap">
               <button className="carousel-arrow prev" onClick={prevStory} aria-label="Previous stories">
@@ -324,11 +358,12 @@ function TopStories({
                     <div className="card-body-inner">
                       <div className="card-source-row">
                         <span className="card-source">{getMediaOutlet(story)}</span>
+                        {getGeneratedContentLabel(story) && <span className="card-date">{getGeneratedContentLabel(story)}</span>}
                         <span className="card-date">{getStoryTime(story)}</span>
                       </div>
                       <div className="card-headline-text">
                         <a
-                          href="#"
+                          href={buildStoryHref(story)}
                           onClick={(event) => {
                             event.preventDefault()
                             goToArticle(story)
@@ -377,10 +412,11 @@ function TopStories({
                 <div className="sbs-cluster-badges">
                   <span className="sbs-cluster-badge sbs-cluster-badge-sources">{visiblePerspectiveStories.length} sources</span>
                   <span className="sbs-cluster-badge sbs-cluster-badge-mode">
-                    {perspectiveFilter === 'all' ? 'Multiple perspectives' : activePerspectiveItem?.perspective.label || 'Focused view'}
+                    {perspectiveFilter === 'all' ? 'Perspective estimates' : activePerspectiveItem?.perspective.label || 'Focused view'}
                   </span>
                 </div>
               </div>
+              <div className="sbs-cluster-note">Labels are estimates based on source history or headline framing, not definitive bias ratings.</div>
 
               <div className="sbs-source-nav">
                 <button className="sbs-source-arrow" type="button" onClick={() => cyclePerspectiveSource(-1)} aria-label="Previous source comparison">
@@ -393,7 +429,7 @@ function TopStories({
                       key={`${story.url || story.title || 'source'}-${index}`}
                       type="button"
                       className={`sbs-source-tab${index === resolvedPerspectiveSourceIndex ? ' active' : ''}`}
-                      onClick={() => setActivePerspectiveSourceIndex(index)}
+                      onClick={() => setPerspectiveSelection({ key: perspectiveSelectionKey, index })}
                     >
                       {getMediaOutlet(story)}
                       <span className="sbs-source-tab-perspective">{perspective.label}</span>
@@ -422,12 +458,14 @@ function TopStories({
                       <div className="sbs-feature-body">
                         <div className="sbs-source-row">
                           <span className="sbs-source-badge" style={activePerspectiveItem.perspective.sourceStyle}>● {getMediaOutlet(activePerspectiveItem.story)}</span>
+                          {getGeneratedContentLabel(activePerspectiveItem.story) && <span className="sbs-persp-meta">{getGeneratedContentLabel(activePerspectiveItem.story)}</span>}
                           <span className="sbs-persp-label" style={activePerspectiveItem.perspective.sourceStyle}>{activePerspectiveItem.perspective.label}</span>
+                          <span className="sbs-persp-meta">{getPerspectiveMethodLabel(activePerspectiveItem.perspective)} · {getPerspectiveConfidenceLabel(activePerspectiveItem.perspective)}</span>
                           <span className="sbs-time">{getStoryTime(activePerspectiveItem.story)}</span>
                         </div>
                         <div className="sbs-headline sbs-headline-feature">
                           <a
-                            href="#"
+                            href={buildStoryHref(activePerspectiveItem.story)}
                             onClick={(event) => {
                               event.preventDefault()
                               goToArticle(activePerspectiveItem.story)
@@ -440,7 +478,7 @@ function TopStories({
                         <div className="sbs-footer">
                           <span className="sbs-author">{activePerspectiveItem.story.author || getMediaOutlet(activePerspectiveItem.story)}</span>
                           <a
-                            href="#"
+                            href={buildStoryHref(activePerspectiveItem.story)}
                             className="sbs-read"
                             onClick={(event) => {
                               event.preventDefault()
@@ -462,7 +500,7 @@ function TopStories({
                           key={`${story.url || story.title || 'rail'}-${index}`}
                           type="button"
                           className={`sbs-rail-item${index === resolvedPerspectiveSourceIndex ? ' active' : ''}`}
-                          onClick={() => setActivePerspectiveSourceIndex(index)}
+                          onClick={() => setPerspectiveSelection({ key: perspectiveSelectionKey, index })}
                         >
                           <span className="sbs-rail-source" style={perspective.sourceStyle}>{getMediaOutlet(story)}</span>
                           <span className="sbs-rail-headline">{truncateText(story.title, 88)}</span>

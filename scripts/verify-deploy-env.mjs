@@ -36,6 +36,14 @@ const RECOMMENDED = [
   {
     key: 'SOCIAL_RSS_FEEDS',
     reason: 'Lets you override baked-in social feed definitions per environment.'
+  },
+  {
+    key: 'ANTHROPIC_SUMMARY_MODEL',
+    reason: 'Pins the summary model used for shared AI briefings instead of relying on code defaults.'
+  },
+  {
+    key: 'ANTHROPIC_CONTENT_FALLBACK_MODEL',
+    reason: 'Pins the generated-content fallback model used when RSS coverage is thin.'
   }
 ]
 
@@ -141,7 +149,7 @@ function validateBlobPair(messages) {
   } else if (hasSiteID && hasToken) {
     messages.info.push('Manual Netlify Blobs credentials detected for non-Netlify runtime support.')
   } else {
-    messages.info.push('Manual Blob credentials not set. This is fine on Netlify; Docker/CI/manual runtimes will use graceful Blob fallbacks.')
+    messages.info.push('Manual Blob credentials not set. This is fine on Netlify; Docker/CI/manual runtimes will use graceful Blob fallbacks, but story persistence, rate-limit buckets, and generated-content caching will be partial or disabled.')
   }
 }
 

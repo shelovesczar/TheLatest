@@ -11,15 +11,19 @@ Recent work in this repo now includes:
 - A tighter 390px mobile shell with simplified top chrome, smaller section typography, a shared route-persistent mobile header, and a native-app-style mobile footer removal in favor of the bottom dock.
 - Dedicated topic destinations from navigation dropdowns, plus topic-specific all-news, all-opinions, all-videos, and all-podcasts pages.
 - Shared Jeff-style ad treatments through the reusable ad component, including rotating creative variations so placements do not feel static.
-- Netlify-backed auth, session persistence, following, dashboard flows, shared summaries, feed health endpoints, trending analytics, engagement tracking, and Claude-assisted search support.
+- Netlify-backed auth, session persistence, following, dashboard flows, shared summaries, feed health endpoints, story snapshot persistence, trending analytics, engagement tracking, and Claude-assisted search support.
 - Graceful Netlify Blob fallbacks outside managed Netlify runtimes, plus optional manual Blob credentials for Docker, CI, and other non-Netlify environments.
+- Stable story routes backed by persisted article snapshots so saved items, generated content, and direct story links are more reliable.
+- Shared backend rate limiting across expensive RSS and AI function paths to reduce abuse and cold-path churn.
+- Trust and editorial transparency pages for about, editorial standards, corrections, and contact.
+- Generated-content labeling across key story surfaces so fallback AI content is clearly identified in the UI.
 - Route-aware SEO metadata, structured data, sitemap generation, robots generation, and canonical handling.
 - Privacy and terms pages, cookie consent controls, and analytics gating tied to consent state.
 - Broader caching and resilience improvements across RSS aggregation, topic/search loading, stale-cache fallback, repeat-query performance, cached backend search snapshots, normalized news cache keys, and lighter fast-path feed selection.
 - Advanced search improvements including faster repeat queries, source filters, query view pills, and research shortcuts.
-- Claude-powered shared summaries now carry provider/source context and enforce a concise 500-character summary cap.
+- Claude-powered shared summaries now carry provider/source context and enforce a concise 700-character summary cap.
 - Backend story clustering and perspective labeling for side-by-side editorial comparisons.
-- Deployment hardening through Docker, environment verification, and smoke-test automation for Netlify preview or production checks.
+- Deployment hardening through Docker, environment verification, smoke-test automation, bundle audits, latency audits, and deploy-readiness workflow checks.
 
 ## What this app does
 
@@ -141,26 +145,30 @@ Expected user-facing impact:
 - Reduced layout jumping during asynchronous loads.
 - Better performance consistency on older phones and budget laptops.
 
-### 10) Auth, follows, summaries, and operational endpoints were added
+### 10) Auth, follows, summaries, persistence, and operational endpoints were added
 The app now supports a fuller logged-in experience and more backend operational tooling.
 
 This includes:
 - Session-backed authentication.
 - Following and dashboard pages.
 - Shared summary storage.
+- Story snapshot persistence for stable story-reader hydration and durable story links.
+- Shared rate limiting for expensive AI and feed endpoints.
 - Feed health and warm-content endpoints.
 - Engagement tracking and trending data collection.
 
-### 11) Search, SEO, and legal/compliance work were added
+### 11) Search, SEO, trust, and compliance work were added
 The app now has a more production-ready search/discovery layer and stronger launch-readiness basics.
 
 This includes:
 - Route-level SEO metadata with Open Graph, Twitter tags, canonicals, and JSON-LD.
 - Build-time `sitemap.xml` and `robots.txt` generation.
+- About, editorial standards, corrections, and contact routes linked from the shared footer.
 - Privacy and terms routes linked from the shared footer.
 - Cookie consent state with analytics opt-in gating.
 - Advanced search view filters, source filters, and research links.
 - Cached backend search snapshots so repeated searches avoid redoing the full feed fan-out.
+- Generated-content labeling on major content surfaces so fallback content stays transparent.
 
 ### 12) Local Netlify development on Windows was hardened
 The local Netlify launcher was reworked to be more reliable on Windows.
@@ -193,11 +201,20 @@ This includes:
 The AI and feed layers were refined so shared summaries are clearer, repeat searches are lighter, and generic news requests avoid redundant cold paths.
 
 This includes:
-- Claude-backed shared summaries that return provider/source context and stay capped at 500 characters.
+- Claude-backed shared summaries that return provider/source context and stay capped at 700 characters.
 - Claude-assisted search endpoint support for smarter search guidance and article discovery.
 - Normalized `category=news` handling so generic news requests share the same cache and snapshot path.
 - Faster generic news and opinions fast paths by preferring the healthiest feed set first.
 - A lighter `fetchOpinions()` client wrapper so it avoids unnecessary sequential fallback work.
+
+### 17) Launch-readiness guardrails were expanded
+The repo now has stronger operational checks around deploys, feed health, and generated fallback behavior.
+
+This includes:
+- A site health endpoint for feed, analytics, and generated-content visibility.
+- Bundle and latency audit scripts for release checks.
+- A deploy-readiness workflow and stronger predeploy verification paths.
+- Additional repo cleanup so lint, tests, and production builds are easier to keep green.
 
 ### 16) The mobile header and section chrome were unified further
 The shared mobile shell was tightened so the header stays consistent across routes and section headers behave more predictably on smaller screens.
@@ -376,8 +393,8 @@ Each feed can be route-based or URL-based, with topic tags.
 
 - [ ] Implement full side-by-side UI parity on top of the clustering and perspective backend.
 - [ ] Continue backend caching work for slower secondary query surfaces and feed fan-out paths.
-- [ ] Harden production auth flows with email verification, password reset, and rate limiting.
-- [ ] Add monitoring and error reporting for frontend and Netlify functions.
+- [ ] Harden production auth flows with email verification and password reset.
+- [ ] Expand monitoring from the health endpoint into alerting and frontend/function error reporting.
 - [ ] Review and clean dependency audit issues.
 
 ---

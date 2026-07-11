@@ -10,7 +10,7 @@ export default defineConfig({
   },
   server: {
     host: true,   // bind to 0.0.0.0 so phones on the same Wi-Fi can connect
-    port: 5173,
+    port: Number(process.env.VITE_PORT || 5173),
   },
   // Drop console/debugger calls during minification (top-level esbuild option)
   esbuild: {

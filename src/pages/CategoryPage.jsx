@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import AISummary from '../components/sections/AISummary'
 import TopStories from '../components/sections/TopStories'
 import Opinions from '../components/sections/Opinions'
@@ -10,14 +11,21 @@ import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '
 import { fetchStoryClusters } from '../services/clusterService'
 import { filterContentByCategory } from '../utils/categoryFiltering'
 import { dedupeContentItems } from '../utils/contentDeduplication'
+import { NAV_ITEMS } from '../utils/navigationConfig'
 import './CategoryPage.css'
 
-function CategoryPage({ 
-  category, 
-  email, 
-  setEmail, 
-  handleSubscribe 
-}) {
+function resolveCategoryFeed(category) {
+  if (category === 'sports') return 'sports'
+  if (category === 'business') return 'business'
+  if (category === 'tech') return 'tech'
+  if (category === 'business-tech') return 'tech'
+  if (category === 'entertainment') return 'entertainment'
+  if (category === 'lifestyle') return 'lifestyle'
+  if (category === 'culture') return 'culture'
+  return 'news'
+}
+
+function CategoryPage({ category }) {
   const [categoryNews, setCategoryNews] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeStory, setActiveStory] = useState(0)
@@ -206,96 +214,122 @@ function CategoryPage({
   }
 
   const config = categoryConfig[category] || categoryConfig['top-stories']
+  const categoryPath = `/category/${category}`
+  const categoryNavGroup = NAV_ITEMS.find((item) =>
+    Array.isArray(item.matchPaths) && item.matchPaths.includes(categoryPath)
+  ) || null
+  const categoryNavItems = Array.isArray(categoryNavGroup?.items) ? categoryNavGroup.items : []
+  const categorySectionLabel = categoryNavGroup?.label || config.title
 
   useEffect(() => {
+    let ignore = false
+
     const loadCategoryContent = async () => {
       setLoading(true)
       setLoadingOpinions(true)
       setLoadingVideos(true)
       setLoadingPodcasts(true)
       setStoryClusters([])
+      setActiveStory(0)
 
       try {
-        // Map category to RSS category name - ALWAYS pass a category to get relevant feeds
-        let rssCategory = 'news'; // Default
-        if (category === 'sports') rssCategory = 'sports';
-        else if (category === 'business') rssCategory = 'business';
-        else if (category === 'tech') rssCategory = 'tech';
-        else if (category === 'business-tech') rssCategory = 'tech';
-        else if (category === 'entertainment') rssCategory = 'entertainment';
-        else if (category === 'lifestyle') rssCategory = 'lifestyle';
-        else if (category === 'culture') rssCategory = 'culture';
-        else if (category === 'politics') rssCategory = 'news';
-        else if (category === 'top-stories') rssCategory = 'news';
+        const rssCategory = resolveCategoryFeed(category)
         
-        console.log(`[CategoryPage] Loading ${category} → RSS category: ${rssCategory}`);
+        console.log(`[CategoryPage] Loading ${category} → RSS category: ${rssCategory}`)
+
+        const [newsResult, opinionResult, videoResult, podcastResult, clusterResult] = await Promise.allSettled([
+          fetchRSSNews(rssCategory),
+          fetchOpinions(rssCategory),
+          fetchVideos(rssCategory),
+          fetchTrendingContent(rssCategory),
+          isPoliticalCategory
+            ? fetchStoryClusters({ type: 'news', category: 'news', search: config.title, limit: 8 })
+            : Promise.resolve([])
+        ])
+
+        if (ignore) return
         
-        // Fetch news - always get general news and filter by category
-        let allNews = [];
-        try {
-          // Fetch category-specific RSS feeds for stronger relevance
-          allNews = await fetchRSSNews(rssCategory);
-          console.log(`[CategoryPage] Fetched ${allNews?.length || 0} total articles`);
-        } catch (rssError) {
-          console.error(`[CategoryPage] RSS fetch failed:`, rssError.message);
-          allNews = [];
+        let allNews = []
+        if (newsResult.status === 'fulfilled') {
+          allNews = Array.isArray(newsResult.value) ? newsResult.value : []
+          console.log(`[CategoryPage] Fetched ${allNews.length} total articles`)
+        } else {
+          console.error('[CategoryPage] RSS fetch failed:', newsResult.reason?.message || newsResult.reason)
         }
         
-        // Use category-specific filtering
-        let finalNews;
+        let finalNews
         
         if (category && category !== 'top-stories') {
-          // Filter by category keywords
-          const filtered = filterContentByCategory(allNews, category, 1, { strict: true });
-          console.log(`[CategoryPage] Filtered to ${filtered.length} ${category} articles`);
-          finalNews = dedupeContentItems(filtered).slice(0, 15);
+          const filtered = filterContentByCategory(allNews, category, 1, { strict: true })
+          console.log(`[CategoryPage] Filtered to ${filtered.length} ${category} articles`)
+          finalNews = dedupeContentItems(filtered).slice(0, 15)
         } else {
-          // Top-stories: use all news
-          finalNews = dedupeContentItems(allNews).slice(0, 15);
+          finalNews = dedupeContentItems(allNews).slice(0, 15)
         }
         
         setCategoryNews(finalNews)
         setLoading(false)
 
-        if (isPoliticalCategory) {
-          const clusters = await fetchStoryClusters({ type: 'news', category: 'news', search: config.title, limit: 8 }).catch(() => [])
-          setStoryClusters(Array.isArray(clusters) ? clusters : [])
+        if (clusterResult.status === 'fulfilled') {
+          setStoryClusters(Array.isArray(clusterResult.value) ? clusterResult.value : [])
+        } else if (isPoliticalCategory) {
+          console.error('[CategoryPage] Cluster fetch failed:', clusterResult.reason?.message || clusterResult.reason)
+          setStoryClusters([])
         }
 
-        // Load opinions - fetch general opinions and filter by category
-        const opinionData = await fetchOpinions(rssCategory)
+        const opinionData = opinionResult.status === 'fulfilled' && Array.isArray(opinionResult.value)
+          ? opinionResult.value
+          : []
+
         if (category && category !== 'top-stories') {
           const filteredOpinions = filterContentByCategory(opinionData, category, 1, { strict: true })
-          console.log(`[CategoryPage] Filtered ${filteredOpinions.length} opinions for ${category} from ${opinionData.length} total`);
+          console.log(`[CategoryPage] Filtered ${filteredOpinions.length} opinions for ${category} from ${opinionData.length} total`)
           setOpinions(dedupeContentItems(filteredOpinions).slice(0, 6))
         } else {
           setOpinions(dedupeContentItems(opinionData).slice(0, 6))
         }
         setLoadingOpinions(false)
 
-        // Load videos - fetch general videos and filter by category
-        const videoData = await fetchVideos(rssCategory)
+        if (opinionResult.status === 'rejected') {
+          console.error('[CategoryPage] Opinion fetch failed:', opinionResult.reason?.message || opinionResult.reason)
+        }
+
+        const videoData = videoResult.status === 'fulfilled' && Array.isArray(videoResult.value)
+          ? videoResult.value
+          : []
+
         if (category && category !== 'top-stories') {
           const filteredVideos = filterContentByCategory(videoData, category, 1, { strict: true })
-          console.log(`[CategoryPage] Filtered ${filteredVideos.length} videos for ${category} from ${videoData.length} total`);
+          console.log(`[CategoryPage] Filtered ${filteredVideos.length} videos for ${category} from ${videoData.length} total`)
           setVideos(dedupeContentItems(filteredVideos).slice(0, 6))
         } else {
           setVideos(dedupeContentItems(videoData).slice(0, 6))
         }
         setLoadingVideos(false)
 
-        // Load podcasts - fetch general podcasts and filter by category
-        const podcastData = await fetchTrendingContent(rssCategory)
+        if (videoResult.status === 'rejected') {
+          console.error('[CategoryPage] Video fetch failed:', videoResult.reason?.message || videoResult.reason)
+        }
+
+        const podcastData = podcastResult.status === 'fulfilled' && Array.isArray(podcastResult.value)
+          ? podcastResult.value
+          : []
+
         if (category && category !== 'top-stories') {
           const filteredPodcasts = filterContentByCategory(podcastData, category, 1, { strict: true })
-          console.log(`[CategoryPage] Filtered ${filteredPodcasts.length} podcasts for ${category} from ${podcastData.length} total`);
+          console.log(`[CategoryPage] Filtered ${filteredPodcasts.length} podcasts for ${category} from ${podcastData.length} total`)
           setPodcasts(dedupeContentItems(filteredPodcasts).slice(0, 6))
         } else {
           setPodcasts(dedupeContentItems(podcastData).slice(0, 6))
         }
         setLoadingPodcasts(false)
 
+        if (podcastResult.status === 'rejected') {
+          console.error('[CategoryPage] Podcast fetch failed:', podcastResult.reason?.message || podcastResult.reason)
+        }
+
       } catch (error) {
+        if (ignore) return
         console.error('Failed to load category content:', error)
         setCategoryNews([])
         setOpinions([])
@@ -310,13 +344,34 @@ function CategoryPage({
     }
 
     loadCategoryContent()
+    return () => {
+      ignore = true
+    }
   }, [category, config.title, isPoliticalCategory])
 
   return (
     <main className="main-content category-page">
       <div className="category-hero">
-        <h1 className="category-title">{config.title}</h1>
-        <p className="category-description">{config.description}</p>
+        <div className="topic-page-shell category-hero-inner">
+          <div className="category-hero-copy">
+            <div className="category-hero-eyebrow">{categorySectionLabel} coverage</div>
+            <h1 className="category-title">{config.title}</h1>
+            <p className="category-description">{config.description}</p>
+
+            {categoryNavItems.length > 0 && (
+              <div className="category-mobile-subnav" aria-label={`${categorySectionLabel} topics`}>
+                <Link to={categoryPath} className="category-mobile-subnav-link active">
+                  Overview
+                </Link>
+                {categoryNavItems.map((item) => (
+                  <Link key={item.slug} to={item.target} className="category-mobile-subnav-link">
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="page-body category-page-body">

@@ -68,7 +68,7 @@ export const useInfiniteScroll = ({
   // Load initial page
   useEffect(() => {
     loadMore();
-  }, []); // Only on mount
+  }, [loadMore]);
 
   const reset = useCallback(() => {
     setItems([]);

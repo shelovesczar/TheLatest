@@ -5,6 +5,8 @@ import { Link } from 'react-router-dom'
 import { getImageProps } from '../../utils/imageUtils'
 import { deriveMediaOutlet } from '../../utils/sourceUtils'
 import { formatDateOnly } from '../../utils/dateUtils'
+import { resolveContentHref } from '../../utils/storyRouting'
+import { getGeneratedContentLabel } from '../../utils/contentLabels'
 import './Videos.css'
 
 function Videos({ loadingVideos, videos, categoryPath }) {
@@ -133,11 +135,12 @@ function Videos({ loadingVideos, videos, categoryPath }) {
                 const isHovered = hoveredVideoKey === cardKey
                 const canPreview = Boolean(embedUrl)
                 const sourceLabel = getVideoSourceLabel(video)
+                const href = resolveContentHref(video)
 
                 return (
             <a 
               key={cardKey}
-              href={video.url}
+              href={href}
               target="_blank"
               rel="noopener noreferrer"
               className="video-card" 
@@ -170,6 +173,7 @@ function Videos({ loadingVideos, videos, categoryPath }) {
               <div className="card-body-inner">
                 <div className="card-source-row">
                   <span className="card-source">{sourceLabel.primary}</span>
+                  {getGeneratedContentLabel(video) && <span className="card-date">{getGeneratedContentLabel(video)}</span>}
                   <span className="card-date">{formatDateOnly(video.date)}</span>
                 </div>
                 <div className="card-headline-text">{video.title}</div>

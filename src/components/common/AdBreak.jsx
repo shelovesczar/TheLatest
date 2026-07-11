@@ -1,5 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import './AdBreak.css';
+
+const AD_ROTATE_MS = 12000;
 
 const AD_SIZE_PRESETS = {
   standard: {
@@ -163,7 +165,7 @@ const resolveAdConfig = ({ type = 'standard', slot, sizes, label }) => {
   };
 };
 
-const getCreativeVariant = ({ slot, type, sponsor, variationKey, sizeLabel, campaignIndex }) => {
+const getCreativeVariant = ({ slot, type, sponsor, variationKey, sizeLabel, campaignIndex, rotationIndex = 0 }) => {
   if (Number.isInteger(campaignIndex)) {
     return AD_CAMPAIGNS[((campaignIndex % AD_CAMPAIGNS.length) + AD_CAMPAIGNS.length) % AD_CAMPAIGNS.length];
   }
@@ -182,7 +184,8 @@ const getCreativeVariant = ({ slot, type, sponsor, variationKey, sizeLabel, camp
 
   const dayKey = new Date().toISOString().slice(0, 10);
   const seed = `${slot || type}-${variationKey || ''}-${dayKey}`;
-  return AD_CAMPAIGNS[hashValue(seed) % AD_CAMPAIGNS.length];
+  const baseIndex = hashValue(seed) % AD_CAMPAIGNS.length;
+  return AD_CAMPAIGNS[(baseIndex + rotationIndex) % AD_CAMPAIGNS.length];
 };
 
 const AdCreative = ({ creative, type, sizeLabel }) => (
@@ -210,12 +213,35 @@ const AdCreative = ({ creative, type, sizeLabel }) => (
 );
 
 const AdBreak = ({ type = 'standard', slot, sponsor, sizes, children, label = 'Advertisement', variationKey = '', campaignIndex }) => {
+  const [rotationIndex, setRotationIndex] = useState(0);
   const adConfig = resolveAdConfig({ type, slot, sizes, label });
   const responsiveSizes = adConfig.sizes;
   const desktopSizeLabel = formatSize(responsiveSizes.desktop);
+  const useStaticCreative = Number.isInteger(campaignIndex) || sponsor || children;
+
+  useEffect(() => {
+    if (useStaticCreative) {
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      setRotationIndex((current) => (current + 1) % AD_CAMPAIGNS.length);
+    }, AD_ROTATE_MS);
+
+    return () => clearInterval(interval);
+  }, [useStaticCreative]);
+
   const creative = useMemo(
-    () => getCreativeVariant({ slot, type: adConfig.type, sponsor, variationKey, sizeLabel: desktopSizeLabel, campaignIndex }),
-    [adConfig.type, campaignIndex, desktopSizeLabel, slot, sponsor, variationKey]
+    () => getCreativeVariant({
+      slot,
+      type: adConfig.type,
+      sponsor,
+      variationKey,
+      sizeLabel: desktopSizeLabel,
+      campaignIndex,
+      rotationIndex: useStaticCreative ? 0 : rotationIndex
+    }),
+    [adConfig.type, campaignIndex, desktopSizeLabel, rotationIndex, slot, sponsor, useStaticCreative, variationKey]
   );
 
   const style = {

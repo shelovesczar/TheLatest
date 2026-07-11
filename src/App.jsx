@@ -36,6 +36,10 @@ const DashboardPage   = lazy(() => import('./pages/DashboardPage'))
 const ArticleReader   = lazy(() => import('./pages/ArticleReader'))
 const PrivacyPage     = lazy(() => import('./pages/PrivacyPage'))
 const TermsPage       = lazy(() => import('./pages/TermsPage'))
+const AboutPage       = lazy(() => import('./pages/AboutPage'))
+const EditorialStandardsPage = lazy(() => import('./pages/EditorialStandardsPage'))
+const CorrectionsPage = lazy(() => import('./pages/CorrectionsPage'))
+const ContactPage     = lazy(() => import('./pages/ContactPage'))
 
 // Minimal spinner shown while a route chunk is downloading
 const RouteLoader = () => (
@@ -142,10 +146,6 @@ function App() {
     setEmail('')
   }, [email])
 
-  const toggleMenu = useCallback(() => {
-    setMenuOpen(prev => !prev)
-  }, [])
-
   const toggleTheme = useCallback(() => {
     setDarkMode(prev => !prev)
   }, [])
@@ -229,9 +229,14 @@ function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/terms" element={<TermsPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/editorial-standards" element={<EditorialStandardsPage />} />
+            <Route path="/corrections" element={<CorrectionsPage />} />
+            <Route path="/contact" element={<ContactPage />} />
 
             {/* On-site article reader */}
             <Route path="/article" element={<ArticleReader />} />
+            <Route path="/story/:storySlug" element={<ArticleReader />} />
             
             {/* All content pages (See More pages) */}
             <Route path="/all-news" element={<AllNewsPage />} />

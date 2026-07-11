@@ -5,6 +5,8 @@ import { Link } from 'react-router-dom'
 import { getImageProps } from '../../utils/imageUtils'
 import { deriveMediaOutlet } from '../../utils/sourceUtils'
 import { formatDateOnly } from '../../utils/dateUtils'
+import { resolveContentHref } from '../../utils/storyRouting'
+import { getGeneratedContentLabel } from '../../utils/contentLabels'
 import './Podcasts.css'
 
 function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
@@ -75,10 +77,12 @@ function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
             </button>
 
             <div className="podcasts-slider">
-              {visiblePodcasts.map((podcast, index) => (
+              {visiblePodcasts.map((podcast, index) => {
+                const href = resolveContentHref(podcast)
+                return (
             <a 
               key={currentIndex + index} 
-              href={podcast.url}
+              href={href}
               target="_blank"
               rel="noopener noreferrer"
               className="podcast-card" 
@@ -93,6 +97,7 @@ function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
               <div className="card-body-inner">
                 <div className="card-source-row">
                   <span className="card-source">{deriveMediaOutlet(podcast)}</span>
+                  {getGeneratedContentLabel(podcast) && <span className="card-date">{getGeneratedContentLabel(podcast)}</span>}
                   <span className="card-date">{formatDateOnly(podcast.date)}</span>
                 </div>
                 <div className="card-headline-text">{truncateText(podcast.title, 100)}</div>
@@ -103,7 +108,8 @@ function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
                 </div>
               </div>
               </a>
-            ))}
+                )
+              })}
             </div>
 
             <button 

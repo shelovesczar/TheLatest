@@ -1,12 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 
-const VALID_KEYS = new Set(['left', 'center', 'right']);
+const VALID_KEYS = new Set(['left', 'center', 'right', 'unknown']);
+const VALID_CONFIDENCE = new Set(['low', 'medium', 'high']);
 
 const DISPLAY_MAP = {
   left: { key: 'left', label: 'Left-Center', sourceStyle: { background: '#dbeafe', color: '#1e40af' } },
   center: { key: 'center', label: 'Center', sourceStyle: { background: '#d1fae5', color: '#065f46' } },
-  right: { key: 'right', label: 'Right-Center', sourceStyle: { background: '#fef3c7', color: '#92400e' } }
+  right: { key: 'right', label: 'Right-Center', sourceStyle: { background: '#fef3c7', color: '#92400e' } },
+  unknown: { key: 'unknown', label: 'Unclassified', sourceStyle: { background: '#e5e7eb', color: '#374151' } }
 };
 
 const SOURCE_LEAN_MAP = {
@@ -38,6 +40,11 @@ const SOURCE_LEAN_MAP = {
 
 function normalizeText(value = '') {
   return String(value || '').trim().toLowerCase();
+}
+
+function normalizeConfidence(value = '') {
+  const normalized = normalizeText(value);
+  return VALID_CONFIDENCE.has(normalized) ? normalized : 'low';
 }
 
 let localEnvCache = null;
@@ -101,27 +108,32 @@ function jsonHeaders() {
   };
 }
 
-function fallbackPerspective({ headline = '', source = '' } = {}) {
+function fallbackPerspective({ source = '' } = {}) {
   const sourceText = normalizeText(source);
   const directMatch = Object.entries(SOURCE_LEAN_MAP).find(([name]) => sourceText.includes(name));
   if (directMatch) {
-    return directMatch[1];
+    return {
+      key: directMatch[1],
+      method: 'source-map',
+      confidence: 'medium',
+      rationale: `Matched source lean map for ${source || 'known outlet'}.`
+    };
   }
 
-  const headlineText = normalizeText(headline);
-  if (/opinion|editorial|column|analysis|commentary/.test(headlineText)) {
-    return 'center';
-  }
-
-  return 'center';
+  return {
+    key: 'unknown',
+    method: 'unclassified',
+    confidence: 'low',
+    rationale: 'No trusted source-map or AI perspective estimate was available.'
+  };
 }
 
-async function classifyWithAnthropic({ headline = '', source = '' } = {}) {
+async function classifyWithAnthropic({ headline = '', description = '', source = '' } = {}) {
   const apiKey = getConfigValue('ANTHROPIC_API_KEY');
-  if (!apiKey || !headline) return null;
+  if (!apiKey || (!headline && !description)) return null;
 
   const model = getConfigValue('ANTHROPIC_PERSPECTIVE_MODEL') || 'claude-haiku-4-5';
-  const prompt = `Classify the political perspective of this headline using only the headline's framing and emphasis.\n\nSource: ${source || 'Unknown'}\nHeadline: ${headline}\n\nReturn JSON only in the form {"label":"left|center|right","rationale":"..."}`;
+  const prompt = `Estimate the political perspective framing of this news item using the source, headline, and summary text. Be cautious: if the signal is weak, return unknown.\n\nSource: ${source || 'Unknown'}\nHeadline: ${headline || 'Unavailable'}\nSummary: ${description || 'Unavailable'}\n\nReturn JSON only in the form {"label":"left|center|right|unknown","confidence":"low|medium|high","rationale":"..."}`;
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -146,16 +158,31 @@ async function classifyWithAnthropic({ headline = '', source = '' } = {}) {
 
     const parsed = JSON.parse(String(text).replace(/```json|```/g, '').trim());
     const label = normalizeText(parsed?.label);
-    return VALID_KEYS.has(label) ? label : null;
+    if (!VALID_KEYS.has(label)) return null;
+
+    return {
+      key: label,
+      method: 'ai-headline',
+      confidence: normalizeConfidence(parsed?.confidence),
+      rationale: String(parsed?.rationale || '').trim()
+    };
   } catch {
     return null;
   }
 }
 
-async function labelStoryPerspective({ headline = '', source = '' } = {}) {
-  const aiLabel = await classifyWithAnthropic({ headline, source });
-  const key = aiLabel || fallbackPerspective({ headline, source });
-  return DISPLAY_MAP[key] || DISPLAY_MAP.center;
+async function labelStoryPerspective({ headline = '', description = '', source = '' } = {}) {
+  const aiPerspective = await classifyWithAnthropic({ headline, description, source });
+  const resolved = aiPerspective || fallbackPerspective({ source });
+  const display = DISPLAY_MAP[resolved.key] || DISPLAY_MAP.unknown;
+
+  return {
+    ...display,
+    method: resolved.method || 'unclassified',
+    confidence: normalizeConfidence(resolved.confidence),
+    rationale: String(resolved.rationale || '').trim(),
+    isEstimated: display.key !== 'unknown'
+  };
 }
 
 exports.handler = async (event) => {
@@ -174,25 +201,30 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { headline = '', source = '' } = event.queryStringParameters || {};
-    if (!String(headline || '').trim()) {
+    const { headline = '', description = '', source = '' } = event.queryStringParameters || {};
+    if (!String(headline || '').trim() && !String(description || '').trim()) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: 'Missing headline query parameter' })
+        body: JSON.stringify({ error: 'Missing headline or description query parameter' })
       };
     }
 
-    const perspective = await labelStoryPerspective({ headline, source });
+    const perspective = await labelStoryPerspective({ headline, description, source });
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         headline,
+        description,
         source,
         perspectiveKey: perspective.key,
         perspectiveLabel: perspective.label,
-        perspectiveStyle: perspective.sourceStyle
+        perspectiveStyle: perspective.sourceStyle,
+        perspectiveMethod: perspective.method,
+        perspectiveConfidence: perspective.confidence,
+        perspectiveRationale: perspective.rationale,
+        perspectiveEstimated: perspective.isEstimated
       })
     };
   } catch (error) {

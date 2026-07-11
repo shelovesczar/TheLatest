@@ -70,6 +70,15 @@
   font-size: 0.9rem;
 }
 
+.footer-support {
+  margin: 0 0 var(--spacing-lg);
+  color: var(--text-secondary);
+}
+
+.footer-support a {
+  color: var(--accent-color);
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .footer-text {
@@ -104,6 +113,7 @@
 
 @media (max-width: 768px) {
   .footer {
-    display: none;
+    display: block;
+    padding-bottom: calc(var(--spacing-xl) + 4rem);
   }
 }

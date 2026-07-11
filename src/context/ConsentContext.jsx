@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 
 const CONSENT_STORAGE_KEY = 'thelatest_cookie_preferences_v1'
 
@@ -29,26 +29,26 @@ export function ConsentProvider({ children }) {
     updatedAt: null
   })
 
-  const persistPreferences = (nextPreferences) => {
+  const persistPreferences = useCallback((nextPreferences) => {
     setPreferences(nextPreferences)
     localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify(nextPreferences))
-  }
+  }, [])
 
-  const acceptAll = () => {
+  const acceptAll = useCallback(() => {
     persistPreferences({
       analytics: true,
       status: 'granted',
       updatedAt: new Date().toISOString()
     })
-  }
+  }, [persistPreferences])
 
-  const acceptEssentialOnly = () => {
+  const acceptEssentialOnly = useCallback(() => {
     persistPreferences({
       analytics: false,
       status: 'essential-only',
       updatedAt: new Date().toISOString()
     })
-  }
+  }, [persistPreferences])
 
   const value = useMemo(() => ({
     preferences,
@@ -56,7 +56,7 @@ export function ConsentProvider({ children }) {
     hasConsentChoice: preferences.status !== 'pending',
     acceptAll,
     acceptEssentialOnly
-  }), [preferences])
+  }), [acceptAll, acceptEssentialOnly, preferences])
 
   return <ConsentContext.Provider value={value}>{children}</ConsentContext.Provider>
 }

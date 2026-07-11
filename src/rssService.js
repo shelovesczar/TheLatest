@@ -200,6 +200,7 @@ const normalizeOutletSource = (item) => ({
 });
 
 const SEARCH_FAST_PATH_TIMEOUT_MS = 600;
+const SEARCH_REMOTE_COLD_TIMEOUT_MS = 2800;
 
 const normalizeSearchText = (value) => String(value || '')
   .toLowerCase()
@@ -643,6 +644,8 @@ export async function searchRSSContent(searchTerm, options = {}) {
   const relaxSearchFallback = options.relaxSearchFallback !== false;
   const preferFresh = options.preferFresh === true;
   const fastLocalOnly = options.fastLocalOnly === true;
+  const parsedRemoteWait = Number.parseInt(options.maxBackendWaitMs, 10);
+  const maxBackendWaitMs = Number.isNaN(parsedRemoteWait) ? 0 : Math.max(0, parsedRemoteWait);
   const parsedMinStrict = Number.parseInt(options.minStrictResults, 10);
   const minStrictResults = Number.isNaN(parsedMinStrict) ? 6 : Math.max(1, Math.min(parsedMinStrict, 20));
 
@@ -741,26 +744,48 @@ export async function searchRSSContent(searchTerm, options = {}) {
 
     const url = buildSearchUrl(searchTerm);
     console.log(`[RSS Search] Searching for "${searchTerm}" at ${url}`);
-    
-    const response = await requestWithRetry(url);
-    markFunctionsAvailable();
-    
-    console.log('[RSS Search] Response received:', {
-      status: response.status,
-      dataLength: response?.data?.data?.length || 0,
-      responseStructure: Object.keys(response?.data || {})
+
+    const remoteSearchPromise = (async () => {
+      const response = await requestWithRetry(url);
+      markFunctionsAvailable();
+
+      console.log('[RSS Search] Response received:', {
+        status: response.status,
+        dataLength: response?.data?.data?.length || 0,
+        responseStructure: Object.keys(response?.data || {})
+      });
+
+      const normalizedResults = extractDataArray(response).map(normalizeOutletSource);
+      console.log(`[RSS Search] After extraction: ${normalizedResults.length} items`);
+
+      const results = dedupeContentItems(normalizedResults);
+      console.log(`[RSS Search] After dedup: ${results.length} items`);
+      return { results, normalizedCount: normalizedResults.length };
+    })();
+
+    remoteSearchPromise.catch((error) => {
+      console.warn('[RSS Search] Cold remote search failed:', error.message);
+      return null;
     });
 
-    const normalizedResults = extractDataArray(response).map(normalizeOutletSource);
-    console.log(`[RSS Search] After extraction: ${normalizedResults.length} items`);
-    
-    const results = dedupeContentItems(normalizedResults);
-    console.log(`[RSS Search] After dedup: ${results.length} items`);
-    
+    const remoteOutcome = maxBackendWaitMs > 0
+      ? await Promise.race([
+          remoteSearchPromise,
+          sleep(maxBackendWaitMs).then(() => null)
+        ])
+      : await remoteSearchPromise;
+
+    if (!remoteOutcome) {
+      console.warn(`[RSS Search] Backend search exceeded ${maxBackendWaitMs || SEARCH_REMOTE_COLD_TIMEOUT_MS}ms for "${searchTerm}"; falling back to local results`);
+      return [];
+    }
+
+    const { results, normalizedCount } = remoteOutcome;
+
     if (results.length > 0) {
       await cacheManager.set(searchCacheKey, results);
-      if (results.length !== normalizedResults.length) {
-        console.log(`[RSS Search] Removed ${normalizedResults.length - results.length} duplicates`);
+      if (results.length !== normalizedCount) {
+        console.log(`[RSS Search] Removed ${normalizedCount - results.length} duplicates`);
       }
       console.log(`[RSS Search] ✓ Found ${results.length} results for "${searchTerm}"`);
       return results;

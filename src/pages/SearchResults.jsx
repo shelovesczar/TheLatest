@@ -4,6 +4,8 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { searchRSSContent } from '../rssService'
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
 import { recordHistory, searchArchive } from '../utils/savedArticles'
+import { buildStoryHref } from '../utils/storyRouting'
+import { getGeneratedContentLabel } from '../utils/contentLabels'
 import DateTicker from '../components/layout/DateTicker'
 import TopStories from '../components/sections/TopStories'
 import AISummary from '../components/sections/AISummary'
@@ -278,14 +280,15 @@ function SearchResults() {
     })
 
     const resolveFallbackSearchResults = async () => {
-      const fallbackPool = await fetchRSSNews(null)
+      const fallbackPool = await fetchRSSNews(null, query)
       return sortResults(dedupeContentItems((Array.isArray(fallbackPool) ? fallbackPool : []).filter((item) => matchesSearchFallback(item, query))))
     }
 
     searchRSSContent(query, {
       strictSearch: false,
       relaxSearchFallback: true,
-      minStrictResults: 4
+      minStrictResults: 4,
+      maxBackendWaitMs: 2800
     })
       .then(async (data) => {
         if (ignore) return
@@ -578,8 +581,10 @@ function SearchResults() {
 
   const goToArticle = useCallback((article) => {
     recordHistory(article)
-    navigate('/article', { state: { article } })
+    navigate(buildStoryHref(article), { state: { article } })
   }, [navigate])
+
+  const getStoryHref = useCallback((article) => buildStoryHref(article), [])
 
   const handleClear = () => {
     setInputValue('')
@@ -1018,7 +1023,7 @@ function SearchResults() {
                             style={{ transform: `translateY(${virtualRow.start}px)` }}
                           >
                             <a
-                              href="#"
+                              href={getStoryHref(article)}
                               onClick={e => { e.preventDefault(); goToArticle(article) }}
                               className="result-card"
                             >
@@ -1066,7 +1071,7 @@ function SearchResults() {
                     {archiveResults.map((article, i) => (
                       <a
                         key={i}
-                        href="#"
+                        href={getStoryHref(article)}
                         onClick={e => { e.preventDefault(); goToArticle(article) }}
                         className="result-card result-card--archive"
                       >
@@ -1148,22 +1153,23 @@ function SearchResults() {
                   {leadStory && (
                     <article className="lead-story-card">
                       {leadStory.image && (
-                        <a href="#" onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="lead-story-image">
+                        <a href={getStoryHref(leadStory)} onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="lead-story-image">
                           <img {...getImageProps(leadStory.image, leadStory.title, 'news')} />
                         </a>
                       )}
                       <div className="lead-story-content">
                         <div className="news-card-meta lead-story-meta">
                           <span className="news-card-source">{leadStory.source}</span>
+                          {getGeneratedContentLabel(leadStory) && <span className="news-card-time">{getGeneratedContentLabel(leadStory)}</span>}
                           {leadStory.publishedAt && <span className="news-card-time">{formatDateOnly(leadStory.publishedAt)}</span>}
                         </div>
-                        <a href="#" onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="lead-story-headline-link">
+                        <a href={getStoryHref(leadStory)} onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="lead-story-headline-link">
                           <h2 className="lead-story-headline">{leadStory.title}</h2>
                         </a>
                         <p className="lead-story-description">{truncate(leadStory.description || '', 260)}</p>
                         <div className="lead-story-footer">
                           <span className="lead-story-source">{leadStory.source}</span>
-                          <a href="#" onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="read-more-link">
+                          <a href={getStoryHref(leadStory)} onClick={e => { e.preventDefault(); goToArticle(leadStory) }} className="read-more-link">
                             Read full story →
                           </a>
                         </div>
@@ -1178,7 +1184,7 @@ function SearchResults() {
                     </div>
                     <div className="most-read-list">
                       {mostReadStories.map((item, i) => (
-                        <a key={i} href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="most-read-item">
+                        <a key={i} href={getStoryHref(item)} onClick={e => { e.preventDefault(); goToArticle(item) }} className="most-read-item">
                           <span className="most-read-rank">{i + 1}</span>
                           <div className="most-read-copy">
                             <span className="most-read-tag">{item.source}</span>
@@ -1195,16 +1201,17 @@ function SearchResults() {
                     {featuredStories.map((item, i) => (
                       <article key={i} className="secondary-story-card">
                         {item.image && (
-                          <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="secondary-story-image">
+                          <a href={getStoryHref(item)} onClick={e => { e.preventDefault(); goToArticle(item) }} className="secondary-story-image">
                             <img {...getImageProps(item.image, item.title, 'news')} />
                           </a>
                         )}
                         <div className="secondary-story-content">
                           <div className="news-card-meta">
                             <span className="news-card-source">{item.source}</span>
+                            {getGeneratedContentLabel(item) && <span className="news-card-time">{getGeneratedContentLabel(item)}</span>}
                             {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
                           </div>
-                          <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="secondary-story-link">
+                          <a href={getStoryHref(item)} onClick={e => { e.preventDefault(); goToArticle(item) }} className="secondary-story-link">
                             <h3 className="secondary-story-headline">{item.title}</h3>
                           </a>
                         </div>
@@ -1223,22 +1230,23 @@ function SearchResults() {
                       {(latestStories.length > 0 ? latestStories : displayFeed.slice(1)).map((item, i) => (
                         <article key={i} className="latest-story-card">
                           {item.image && (
-                            <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-image">
+                            <a href={getStoryHref(item)} onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-image">
                               <img {...getImageProps(item.image, item.title, 'news')} />
                             </a>
                           )}
                           <div className="latest-story-content">
                             <div className="news-card-meta">
                               <span className="news-card-source">{item.source}</span>
+                              {getGeneratedContentLabel(item) && <span className="news-card-time">{getGeneratedContentLabel(item)}</span>}
                               {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
                             </div>
-                            <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-link">
+                            <a href={getStoryHref(item)} onClick={e => { e.preventDefault(); goToArticle(item) }} className="latest-story-link">
                               <h3 className="latest-story-headline">{item.title}</h3>
                             </a>
                             {item.description && (
                               <p className="latest-story-description">{truncate(item.description, 180)}</p>
                             )}
-                            <a href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="read-more-link">
+                            <a href={getStoryHref(item)} onClick={e => { e.preventDefault(); goToArticle(item) }} className="read-more-link">
                               Continue reading →
                             </a>
                           </div>
@@ -1254,7 +1262,7 @@ function SearchResults() {
                     </div>
                     <div className="quick-updates-list">
                       {quickUpdates.map((item, i) => (
-                        <a key={i} href="#" onClick={e => { e.preventDefault(); goToArticle(item) }} className="quick-update-item">
+                        <a key={i} href={getStoryHref(item)} onClick={e => { e.preventDefault(); goToArticle(item) }} className="quick-update-item">
                           <span className="quick-update-source">{item.source}</span>
                           <h3 className="quick-update-headline">{truncate(item.title, 88)}</h3>
                           {item.publishedAt && <span className="quick-update-time">{formatDateOnly(item.publishedAt)}</span>}

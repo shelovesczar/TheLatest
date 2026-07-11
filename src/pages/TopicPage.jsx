@@ -124,6 +124,17 @@ function TopicPage() {
     return () => { ignore = true }
   }, [config, topicSlug])
 
+  const sourceCount = useMemo(() => {
+    const sources = [
+      ...topicNews,
+      ...opinions,
+      ...videos,
+      ...podcasts
+    ].map((item) => String(item?.source || item?.author || '').trim()).filter(Boolean)
+
+    return new Set(sources).size
+  }, [opinions, podcasts, topicNews, videos])
+
   if (!config) {
     return (
       <main className="main-content category-page">
@@ -137,16 +148,6 @@ function TopicPage() {
 
   const topicBasePath = `/topic/${topicSlug}`
   const totalStoryCount = topicNews.length + opinions.length + videos.length + podcasts.length
-  const sourceCount = useMemo(() => {
-    const sources = [
-      ...topicNews,
-      ...opinions,
-      ...videos,
-      ...podcasts
-    ].map((item) => String(item?.source || item?.author || '').trim()).filter(Boolean)
-
-    return new Set(sources).size
-  }, [opinions, podcasts, topicNews, videos])
 
   const tabItems = [
     { label: 'All', href: '#topic-top' },

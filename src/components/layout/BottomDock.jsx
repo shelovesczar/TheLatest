@@ -20,7 +20,7 @@ const BottomDock = () => {
     { 
       path: '/news', 
       icon: faPlus, 
-      label: 'News+',
+      label: 'Sections',
       color: '#007AFF'
     },
     { 

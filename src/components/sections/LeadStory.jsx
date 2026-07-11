@@ -2,6 +2,8 @@ import { useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getImageProps } from '../../utils/imageUtils'
 import { recordHistory } from '../../utils/savedArticles'
+import { buildStoryHref } from '../../utils/storyRouting'
+import { getGeneratedContentLabel } from '../../utils/contentLabels'
 import './LeadStory.css'
 
 /**
@@ -15,7 +17,7 @@ function LeadStory({ story, loading }) {
 
   const goToArticle = useCallback((s) => {
     recordHistory(s)
-    navigate('/article', { state: { article: s } })
+    navigate(buildStoryHref(s), { state: { article: s } })
   }, [navigate])
 
   const truncate = (text, max) => {
@@ -47,11 +49,12 @@ function LeadStory({ story, loading }) {
 
   if (!story) return null
 
-  const href         = story.link || story.url || '#'
   const source       = story.source || story.sourceName || ''
   const time         = story.publishedAt || story.timeAgo || story.time || ''
   const description  = truncate(story.description || story.content || '', 280)
   const image        = story.image || story.urlToImage || ''
+  const storyHref    = buildStoryHref(story)
+  const generatedLabel = getGeneratedContentLabel(story)
 
   return (
     <article className="lead-story">
@@ -71,11 +74,12 @@ function LeadStory({ story, loading }) {
         <div className="lead-story__inner">
           <div className="lead-story__kicker">
             {source && <span className="lead-story__source">{source.toUpperCase()}</span>}
+            {generatedLabel && <span className="lead-story__source">{generatedLabel.toUpperCase()}</span>}
             {source && time && <span className="lead-story__sep">·</span>}
             {time && <span className="lead-story__time">{time}</span>}
           </div>
 
-          <a href="#" onClick={e => { e.preventDefault(); goToArticle(story) }} className="lead-story__headline-link">
+          <a href={storyHref} onClick={e => { e.preventDefault(); goToArticle(story) }} className="lead-story__headline-link">
             <h2 className="lead-story__headline">{story.title}</h2>
           </a>
 
@@ -83,7 +87,7 @@ function LeadStory({ story, loading }) {
             <p className="lead-story__description">{description}</p>
           )}
 
-          <a href="#" onClick={e => { e.preventDefault(); goToArticle(story) }} className="lead-story__cta">
+          <a href={storyHref} onClick={e => { e.preventDefault(); goToArticle(story) }} className="lead-story__cta">
             Read full story →
           </a>
         </div>

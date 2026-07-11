@@ -4,7 +4,9 @@ const path = require('path');
 
 const STORE_NAMES = {
   summaries: 'shared-ai-summaries',
+  generated: 'generated-content',
   articles: 'article-snapshots',
+  rateLimits: 'rate-limits',
   feeds: 'feed-health',
   sources: 'feed-sources',
   analytics: 'site-analytics',

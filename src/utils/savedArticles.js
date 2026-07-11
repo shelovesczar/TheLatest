@@ -12,9 +12,12 @@
  * article the user has clicked/opened (capped at 200 items).
  */
 
+import { buildStorySlug } from './storyRouting'
+
 const SAVED_KEY   = 'thelatest_saved_v1'
 const HISTORY_KEY = 'thelatest_history_v1'
 const HISTORY_MAX = 200
+const STORY_SNAPSHOT_ENDPOINT = '/.netlify/functions/storySnapshot'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +49,26 @@ function writeList(key, list) {
   }
 }
 
+function queueStorySnapshot(article) {
+  if (typeof window === 'undefined' || typeof fetch === 'undefined' || !article) return
+
+  const payload = {
+    ...article,
+    storySlug: buildStorySlug(article)
+  }
+
+  window.setTimeout(() => {
+    fetch(STORY_SNAPSHOT_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ article: payload }),
+      keepalive: true
+    }).catch(() => {})
+  }, 0)
+}
+
 // ── Saved articles (bookmarks) ────────────────────────────────────────────────
 
 export function getSavedArticles() {
@@ -59,6 +82,7 @@ export function saveArticle(article) {
   if (list.some(a => a.id === id)) return
   list.unshift({ ...article, id, savedAt: new Date().toISOString() })
   writeList(SAVED_KEY, list)
+  queueStorySnapshot(article)
 }
 
 export function unsaveArticle(article) {
@@ -88,6 +112,7 @@ export function recordHistory(article) {
   list.unshift({ ...article, id, readAt: new Date().toISOString() })
   if (list.length > HISTORY_MAX) list = list.slice(0, HISTORY_MAX)
   writeList(HISTORY_KEY, list)
+  queueStorySnapshot(article)
 }
 
 export function clearHistory() {

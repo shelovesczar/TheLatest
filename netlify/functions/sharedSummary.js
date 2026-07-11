@@ -1,12 +1,13 @@
 const { STORE_NAMES, getJsonWithMetadata, setJson, isBlobConfigurationError } = require('./blobStore');
 const { requireAdminAccess } = require('./adminAccess');
 const rssAggregator = require('./rss-aggregator');
+const { enforceRateLimit } = require('./rateLimit');
 const fs = require('fs');
 const path = require('path');
 
 const SUMMARY_TTL_MS = 60 * 60 * 1000;
 const STALE_TTL_MS = 24 * 60 * 60 * 1000;
-const MAX_SUMMARY_CHARACTERS = 500;
+const MAX_SUMMARY_CHARACTERS = 700;
 
 function jsonHeaders() {
   return {
@@ -114,7 +115,7 @@ function extractAnthropicTextBlocks(payload) {
 function truncateText(value = '', max = 220) {
   const text = cleanText(value);
   if (text.length <= max) return text;
-  return `${text.slice(0, max).trim().replace(/[,:;\-]+$/, '')}...`;
+  return `${text.slice(0, max).trim().replace(/[,:;-]+$/, '')}...`;
 }
 
 function capSummaryText(value = '', max = MAX_SUMMARY_CHARACTERS) {
@@ -122,7 +123,7 @@ function capSummaryText(value = '', max = MAX_SUMMARY_CHARACTERS) {
   if (text.length <= max) return text;
 
   const sliceLength = Math.max(0, max - 3);
-  return `${text.slice(0, sliceLength).trim().replace(/[,:;\-]+$/, '')}...`;
+  return `${text.slice(0, sliceLength).trim().replace(/[,:;-]+$/, '')}...`;
 }
 
 function normalizeSummaryPayload(payload = {}) {
@@ -204,7 +205,7 @@ function buildSummaryPrompt(topic = '', category = '', items = []) {
     'Return JSON only in the form {"headline":"...","summary":"...","suggestedTopics":["...","..."]}.',
     'Constraints:',
     '- headline: under 90 characters',
-    '- summary: 2 to 4 sentences, maximum 500 characters total',
+    '- summary: 2 to 4 sentences, maximum 700 characters total',
     '- suggestedTopics: 5 to 7 short topic labels, each 1 to 3 words, ideal for a homepage topic rail',
     '- neutral, factual tone',
     '- no markdown, no bullets, no preamble',
@@ -318,7 +319,7 @@ async function generateAnthropicSummary({ topic = '', category = '' } = {}) {
     let parsed;
     try {
       parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
-    } catch (error) {
+    } catch {
       logSummaryIssue('Anthropic response was not valid JSON', truncateText(text, 260));
       return null;
     }
@@ -373,6 +374,22 @@ exports.handler = async (event) => {
 
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
+  }
+
+  if (event.httpMethod === 'GET') {
+    const rateLimit = await enforceRateLimit(event, {
+      scope: 'shared-summary',
+      maxRequests: 40,
+      windowMs: 60 * 1000
+    });
+
+    if (!rateLimit.allowed) {
+      return {
+        statusCode: 429,
+        headers: { ...headers, ...rateLimit.headers },
+        body: JSON.stringify({ error: 'Rate limit exceeded' })
+      };
+    }
   }
 
   try {

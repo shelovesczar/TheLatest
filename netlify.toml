@@ -35,6 +35,14 @@
     Cache-Control = "public, max-age=604800, stale-while-revalidate=86400"
 
 # The HTML shell must never be cached — it's what loads the hashed chunks.
+# For an SPA this applies to every route that rewrites to index.html, not just
+# the literal /index.html path. Otherwise deep links like /category/politics can
+# cache old HTML that points at deleted chunk filenames after a new deploy.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
 [[headers]]
   for = "/index.html"
   [headers.values]
@@ -46,6 +54,26 @@
   for = "/.netlify/functions/*"
   [headers.values]
     Cache-Control = "no-cache"
+
+[[redirects]]
+  from = "/@vite/*"
+  to = "/@vite/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/@react-refresh"
+  to = "/@react-refresh"
+  status = 200
+
+[[redirects]]
+  from = "/src/*"
+  to = "/src/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/node_modules/*"
+  to = "/node_modules/:splat"
+  status = 200
 
 [[redirects]]
   from = "/*"

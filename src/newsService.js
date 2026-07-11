@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { 
   fetchRSSNews as getRSSNews, 
   fetchRSSOpinions as getRSSOpinions, 
@@ -10,13 +9,40 @@ import { filterItemsByTopic } from './utils/topicFiltering';
 import { filterContentByCategory } from './utils/categoryFiltering';
 import { isVideoItem, isPodcastItem, dedupeByMediaKey, removeCrossDuplicates } from './utils/mediaClassification';
 
-// Check if running in development mode
-const isDevelopment = import.meta.env.DEV;
-
 // API Configuration
 const NEWS_API_KEY = '0b0041996c424f25850a21dd1d75b810';
 const GNEWS_API_KEY = '03280f741607ebb5d78f02ee71186de4';
 const API_BASE_URL = '/.netlify/functions/fetchNews';
+const GENERATED_CONTENT_API_URL = '/.netlify/functions/generatedContent';
+const GENERATED_FALLBACK_COUNT = {
+  news: 15,
+  opinions: 8,
+  videos: 8,
+  podcasts: 8
+};
+
+const fetchGeneratedContentFallback = async (type, { category = null, topic = '', count } = {}) => {
+  const params = new URLSearchParams({
+    type,
+    count: String(count || GENERATED_FALLBACK_COUNT[type] || 6)
+  });
+
+  if (category) params.append('category', category);
+  if (topic) params.append('topic', topic);
+
+  try {
+    const response = await fetch(`${GENERATED_CONTENT_API_URL}?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`Generated content request failed with status ${response.status}`);
+    }
+
+    const payload = await response.json();
+    return Array.isArray(payload?.items) ? payload.items.filter(Boolean) : [];
+  } catch (error) {
+    console.warn(`[AI Fallback] Unable to fetch generated ${type}:`, error.message);
+    return [];
+  }
+};
 
 // Helper function to format time
 const formatTime = (dateString) => {
@@ -304,7 +330,7 @@ const getFallbackNews = () => {
 };
 
 // Fallback opinions data with diverse topics including Jeff's keywords
-const getFallbackOpinions = () => {
+const _getFallbackOpinions = () => {
   return [
     {
       title: "The Epstein Files: What the Documents Reveal About Justice System",
@@ -530,7 +556,7 @@ const getFallbackOpinions = () => {
 };
 
 // Fallback videos data with diverse topics including Jeff's keywords
-const getFallbackVideos = () => {
+const _getFallbackVideos = () => {
   return [
     {
       title: "Epstein Files: Legal Experts Analyze Newly Released Documents",
@@ -800,7 +826,7 @@ const getFallbackVideos = () => {
 };
 
 // Fallback podcasts/trending content including Jeff's keywords
-const getFallbackTrendingContent = () => {
+const _getFallbackTrendingContent = () => {
   return [
     {
       title: "Epstein Files Investigation Podcast",
@@ -1087,11 +1113,27 @@ export const fetchTopNews = async (category = null, topic = '') => {
       return generalNews;
     }
 
+    const generatedNews = await fetchGeneratedContentFallback('news', {
+      category,
+      topic,
+      count: GENERATED_FALLBACK_COUNT.news
+    });
+    if (generatedNews.length > 0) {
+      console.warn(`No live RSS news available. Using ${generatedNews.length} Claude fallback stories.`);
+      return generatedNews;
+    }
+
     const fallbackNews = getFallbackNewsPool(category, topic)
     console.warn(`No live RSS news available right now. Using ${fallbackNews.length} fallback stories instead.`);
     return fallbackNews;
   } catch (error) {
     console.error('Error fetching news (RSS failed):', error.message);
+    const generatedNews = await fetchGeneratedContentFallback('news', {
+      category,
+      topic,
+      count: GENERATED_FALLBACK_COUNT.news
+    });
+    if (generatedNews.length > 0) return generatedNews;
     return getFallbackNewsPool(category, topic);
   }
 };
@@ -1150,10 +1192,25 @@ export const fetchOpinions = async (category = null, topic = '') => {
       mergedOpinions = mergeUniqueOpinions(mergedOpinions, broaderDerivedOpinions);
     }
 
+    if (mergedOpinions.length < MIN_UNIQUE_OPINIONS) {
+      const generatedOpinions = await fetchGeneratedContentFallback('opinions', {
+        category,
+        topic,
+        count: GENERATED_FALLBACK_COUNT.opinions
+      });
+      mergedOpinions = mergeUniqueOpinions(mergedOpinions, generatedOpinions);
+    }
+
     console.log(`Resolved ${mergedOpinions.length} unique live opinions`);
     return mergedOpinions;
   } catch (error) {
     console.error('Error fetching opinions:', error);
+    const generatedOpinions = await fetchGeneratedContentFallback('opinions', {
+      category,
+      topic,
+      count: GENERATED_FALLBACK_COUNT.opinions
+    });
+    if (generatedOpinions.length > 0) return generatedOpinions;
     return [];
   }
 };
@@ -1209,10 +1266,25 @@ export const fetchVideos = async (category = null, topic = '') => {
       mergedVideos = mergeUniqueVideos(mergedVideos, broaderDerivedVideos);
     }
 
+    if (mergedVideos.length < MIN_UNIQUE_VIDEOS) {
+      const generatedVideos = await fetchGeneratedContentFallback('videos', {
+        category,
+        topic,
+        count: GENERATED_FALLBACK_COUNT.videos
+      });
+      mergedVideos = mergeUniqueVideos(mergedVideos, generatedVideos.map(normalizeVideoItem));
+    }
+
     console.log(`Resolved ${mergedVideos.length} unique live videos`);
     return mergedVideos;
   } catch (error) {
     console.error('Error fetching videos:', error);
+    const generatedVideos = await fetchGeneratedContentFallback('videos', {
+      category,
+      topic,
+      count: GENERATED_FALLBACK_COUNT.videos
+    });
+    if (generatedVideos.length > 0) return generatedVideos;
     return [];
   }
 };
@@ -1264,10 +1336,25 @@ export const fetchTrendingContent = async (category = null, topic = '') => {
       mergedPodcasts = mergeUniquePodcasts(mergedPodcasts, broaderDerivedPodcasts);
     }
 
+    if (mergedPodcasts.length < MIN_UNIQUE_PODCASTS) {
+      const generatedPodcasts = await fetchGeneratedContentFallback('podcasts', {
+        category,
+        topic,
+        count: GENERATED_FALLBACK_COUNT.podcasts
+      });
+      mergedPodcasts = mergeUniquePodcasts(mergedPodcasts, generatedPodcasts);
+    }
+
     console.log(`Resolved ${mergedPodcasts.length} unique live podcasts`);
     return mergedPodcasts;
   } catch (error) {
     console.error('Error fetching podcasts:', error);
+    const generatedPodcasts = await fetchGeneratedContentFallback('podcasts', {
+      category,
+      topic,
+      count: GENERATED_FALLBACK_COUNT.podcasts
+    });
+    if (generatedPodcasts.length > 0) return generatedPodcasts;
     return [];
   }
 };

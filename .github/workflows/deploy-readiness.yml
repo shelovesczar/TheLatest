@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: '0 12 * * *'
   workflow_dispatch:
     inputs:
       smoke_base_url:
@@ -31,8 +33,14 @@ jobs:
       - name: Build app
         run: npm run build
 
-      - name: Run focused header regression
-        run: npm test -- Header.test.jsx
+      - name: Lint repo
+        run: npm run lint
+
+      - name: Audit bundle budgets
+        run: npm run audit:bundle
+
+      - name: Run test suite
+        run: npm test
 
   deploy-env-gate:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -86,3 +94,6 @@ jobs:
 
       - name: Smoke test Netlify deploy
         run: npm run smoke:netlify-preview -- ${{ inputs.smoke_base_url }}
+
+      - name: Audit deploy latency
+        run: npm run audit:latency -- ${{ inputs.smoke_base_url }}

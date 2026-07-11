@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearch } from '../../context/SearchContext'
 import { generateAISummary, getCachedSummary, cacheSummary, getSharedSummary, persistSharedSummary } from '../../services/aiService'
 import { getImageProps } from '../../utils/imageUtils'
@@ -61,7 +61,7 @@ const getSummaryAdDensity = (height = 0) => {
   return 'compact'
 }
 
-const buildCompactSummaryText = (text = '', maxSentences = 2, maxChars = 500) => {
+const buildCompactSummaryText = (text = '', maxSentences = 2, maxChars = 700) => {
   const normalized = String(text || '').replace(/\s+/g, ' ').trim()
   if (!normalized) return ''
 
@@ -73,14 +73,11 @@ const buildCompactSummaryText = (text = '', maxSentences = 2, maxChars = 500) =>
   const clipped = shortened.slice(0, maxChars).trim()
   const lastSpace = clipped.lastIndexOf(' ')
   const safeClip = lastSpace > maxChars * 0.65 ? clipped.slice(0, lastSpace) : clipped
-  return `${safeClip.replace(/[,:;\-]+$/, '')}...`
+  return `${safeClip.replace(/[,:;-]+$/, '')}...`
 }
 
-const getDynamicSummaryLineHeight = (length = 0) => {
-  if (length <= 180) return '1.72'
-  if (length <= 320) return '1.64'
-  if (length <= 440) return '1.56'
-  return '1.48'
+const getDynamicSummaryLineHeight = () => {
+  return '2.6'
 }
 
 const formatSourceList = (sources = []) => {
@@ -102,32 +99,16 @@ const buildSummaryNote = (summaryData) => {
   return `Briefing based on reporting signals from ${formatSourceList(sources)}.`
 }
 
-function AISummary({ category = 'general', description, categoryImage, categoryTitle, ignoreTopic = false }) {
+function AISummary({ category = 'general', description, categoryTitle, ignoreTopic = false }) {
   const { topic, hasActiveTopic } = useSearch()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [summaryData, setSummaryData] = useState(null)
-  const [lastUpdated, setLastUpdated] = useState(new Date())
   const [activeAdIndex, setActiveAdIndex] = useState(0)
   const [adDensity, setAdDensity] = useState('balanced')
   const summaryCardRef = useRef(null)
   
   // Determine if we should use topic or category
   const useTopicFilter = !ignoreTopic && hasActiveTopic
-
-  // Auto-refresh every hour
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refreshSummary()
-    }, 60 * 60 * 1000) // 1 hour
-
-    return () => clearInterval(interval)
-  }, [topic, hasActiveTopic, ignoreTopic, category])
-
-  // Load summary on mount or topic change
-  useEffect(() => {
-    setSummaryData(null)
-    loadSummary()
-  }, [topic, hasActiveTopic, ignoreTopic, category])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -152,14 +133,54 @@ function AISummary({ category = 'general', description, categoryImage, categoryT
     return () => observer.disconnect()
   }, [summaryData, description, topic, category])
 
-  const buildSummaryCacheKey = (searchTopic, contextCategory) => {
+  const buildSummaryCacheKey = useCallback((searchTopic, contextCategory) => {
     const scopedKey = contextCategory && searchTopic
       ? `${searchTopic}_${contextCategory}`
       : searchTopic || (contextCategory || '')
     return `${SUMMARY_CACHE_VERSION}_${scopedKey}`
-  }
+  }, [])
 
-  const loadSummary = async () => {
+  const refreshSummary = useCallback(async ({ force = false } = {}) => {
+    setIsRefreshing(true)
+    try {
+      const searchTopic = useTopicFilter ? topic : ''
+      const contextCategory = category && category !== 'general' ? category : null
+      const summaryRequest = {
+        topic: searchTopic,
+        category: contextCategory,
+        enforceCategory: Boolean(contextCategory)
+      }
+
+      const shared = await getSharedSummary(summaryRequest, { refresh: force })
+      if (shared && !shared.isFallback) {
+        setSummaryData(shared)
+        return
+      }
+      
+      const result = await generateAISummary(summaryRequest)
+      
+      if (result) {
+        setSummaryData(result)
+        
+        if (!result.isFallback) {
+          const cacheKey = buildSummaryCacheKey(searchTopic, contextCategory)
+          const summaryPayload = {
+            ...result,
+            scopeCategory: contextCategory || null
+          }
+
+          cacheSummary(cacheKey, summaryPayload)
+          await persistSharedSummary(summaryRequest, summaryPayload)
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing AI summary:', error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [buildSummaryCacheKey, category, topic, useTopicFilter])
+
+  const loadSummary = useCallback(async () => {
     const searchTopic = useTopicFilter ? topic : ''
     const contextCategory = category && category !== 'general' ? category : null
     const summaryRequest = {
@@ -171,7 +192,6 @@ function AISummary({ category = 'general', description, categoryImage, categoryT
     const shared = await getSharedSummary(summaryRequest)
     if (shared && !shared.isFallback) {
       setSummaryData(shared)
-      setLastUpdated(new Date(shared.timestamp || Date.now()))
 
       const sharedCacheKey = buildSummaryCacheKey(searchTopic, contextCategory)
       cacheSummary(sharedCacheKey, {
@@ -190,56 +210,24 @@ function AISummary({ category = 'general', description, categoryImage, categoryT
 
     if (cached && !cached.isFallback && cacheMatchesScope) {
       setSummaryData(cached)
-      setLastUpdated(new Date(cached.timestamp))
       return
     }
 
-    // Generate new summary
     await refreshSummary()
-  }
+  }, [buildSummaryCacheKey, category, refreshSummary, topic, useTopicFilter])
 
-  const refreshSummary = async ({ force = false } = {}) => {
-    setIsRefreshing(true)
-    try {
-      const searchTopic = useTopicFilter ? topic : ''
-      const contextCategory = category && category !== 'general' ? category : null
-      const summaryRequest = {
-        topic: searchTopic,
-        category: contextCategory,
-        enforceCategory: Boolean(contextCategory)
-      }
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshSummary()
+    }, 60 * 60 * 1000)
 
-      const shared = await getSharedSummary(summaryRequest, { refresh: force })
-      if (shared && !shared.isFallback) {
-        setSummaryData(shared)
-        setLastUpdated(new Date(shared.timestamp || Date.now()))
-        return
-      }
-      
-      const result = await generateAISummary(summaryRequest)
-      
-      if (result) {
-        setSummaryData(result)
-        setLastUpdated(new Date(result.timestamp || Date.now()))
-        
-        // Cache the result with combined key
-        if (!result.isFallback) {
-          const cacheKey = buildSummaryCacheKey(searchTopic, contextCategory)
-          const summaryPayload = {
-            ...result,
-            scopeCategory: contextCategory || null
-          }
+    return () => clearInterval(interval)
+  }, [refreshSummary])
 
-          cacheSummary(cacheKey, summaryPayload)
-          await persistSharedSummary(summaryRequest, summaryPayload)
-        }
-      }
-    } catch (error) {
-      console.error('Error refreshing AI summary:', error)
-    } finally {
-      setIsRefreshing(false)
-    }
-  }
+  useEffect(() => {
+    setSummaryData(null)
+    loadSummary()
+  }, [loadSummary])
 
   const handleRefresh = () => {
     refreshSummary({ force: true })

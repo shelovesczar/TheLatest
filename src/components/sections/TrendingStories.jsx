@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recordHistory } from '../../utils/savedArticles';
 import { getImageProps } from '../../utils/imageUtils';
+import { buildStoryHref } from '../../utils/storyRouting';
+import { getGeneratedContentLabel } from '../../utils/contentLabels';
 import './TrendingStories.css';
 
 /**
@@ -21,7 +23,7 @@ const TrendingStories = memo(({ stories = [], loading: externalLoading, limit = 
 
   const goToArticle = useCallback((story) => {
     recordHistory(story)
-    navigate('/article', { state: { article: story } })
+    navigate(buildStoryHref(story), { state: { article: story } })
   }, [navigate])
 
   // Intersection Observer — start rendering list only when section enters viewport
@@ -49,7 +51,7 @@ const TrendingStories = memo(({ stories = [], loading: externalLoading, limit = 
     return () => observer.disconnect();
   }, []);
 
-  const calculateTimeAgo = (dateString) => {
+  const calculateTimeAgo = useCallback((dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
     if (isNaN(date)) return dateString; // already formatted (e.g. "2h ago")
@@ -60,33 +62,27 @@ const TrendingStories = memo(({ stories = [], loading: externalLoading, limit = 
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     return `${Math.floor(diffHours / 24)}d ago`;
-  };
+  }, []);
 
   // Map a raw news item to the shape TrendingStories needs
-  const mapStory = (story, index) => ({
+  const mapStory = useCallback((story, index) => ({
     rank: index + 1,
     source: story.source || story.sourceName || 'News',
     title: story.title,
     timeAgo: story.timeAgo || story.time || calculateTimeAgo(story.publishedAt || story.pubDate),
     author: story.author || story.creator || '',
     url: story.url || story.link || '#',
-    image: story.image || story.urlToImage || ''
-  });
+    image: story.image || story.urlToImage || '',
+    generatedLabel: getGeneratedContentLabel(story)
+  }), [calculateTimeAgo]);
 
-  useEffect(() => {
-    if (stories && stories.length > 0) {
-      // Use data passed in from parent — no extra fetch needed
-      setTrendingStories(
-        stories.slice(0, limit).map(mapStory)
-      );
-    } else if (externalLoading === false) {
-      // Parent finished loading but returned nothing — do own fetch
-      fetchFallback();
-    }
-    // If externalLoading is still true, wait for parent
-  }, [stories, externalLoading, limit]);
+  const getFallbackTrending = useCallback(() => [
+    { rank: 1, source: 'POPULAR SCIENCE', title: '5 clever iPhone tricks you might not know', timeAgo: '11h ago', author: 'David Nield', url: '#', image: '' },
+    { rank: 2, source: 'HUFFPOST', title: "So THAT'S Why You Can't Smile In Your Passport Photo", timeAgo: '17h ago', author: 'Caroline Bologna', url: '#', image: '' },
+    { rank: 3, source: 'TRAVEL + LEISURE', title: '17 Trips You Need to Take as Soon as You Retire', timeAgo: '1d ago', author: 'Patricia Doherty', url: '#', image: '' }
+  ], []);
 
-  const fetchFallback = async () => {
+  const fetchFallback = useCallback(async () => {
     setInternalLoading(true);
     try {
       const response = await fetch('/.netlify/functions/rss-aggregator?type=news');
@@ -103,13 +99,20 @@ const TrendingStories = memo(({ stories = [], loading: externalLoading, limit = 
     } finally {
       setInternalLoading(false);
     }
-  };
+  }, [getFallbackTrending, limit, mapStory]);
 
-  const getFallbackTrending = () => [
-    { rank: 1, source: 'POPULAR SCIENCE', title: '5 clever iPhone tricks you might not know', timeAgo: '11h ago', author: 'David Nield', url: '#', image: '' },
-    { rank: 2, source: 'HUFFPOST', title: "So THAT'S Why You Can't Smile In Your Passport Photo", timeAgo: '17h ago', author: 'Caroline Bologna', url: '#', image: '' },
-    { rank: 3, source: 'TRAVEL + LEISURE', title: '17 Trips You Need to Take as Soon as You Retire', timeAgo: '1d ago', author: 'Patricia Doherty', url: '#', image: '' }
-  ];
+  useEffect(() => {
+    if (stories && stories.length > 0) {
+      // Use data passed in from parent — no extra fetch needed
+      setTrendingStories(
+        stories.slice(0, limit).map(mapStory)
+      );
+    } else if (externalLoading === false) {
+      // Parent finished loading but returned nothing — do own fetch
+      fetchFallback();
+    }
+    // If externalLoading is still true, wait for parent
+  }, [externalLoading, fetchFallback, limit, mapStory, stories]);
 
   const getNumberColor = (rank) => {
     const colors = [
@@ -175,7 +178,7 @@ const TrendingStories = memo(({ stories = [], loading: externalLoading, limit = 
         {trendingStories.map((story) => (
           <a 
             key={story.rank}
-            href="#"
+            href={buildStoryHref(story)}
             onClick={e => { e.preventDefault(); goToArticle(story) }}
             className="trending-item"
           >
@@ -196,7 +199,7 @@ const TrendingStories = memo(({ stories = [], loading: externalLoading, limit = 
               )}
             </div>
             <div className="trending-content">
-              <div className="trending-source">{story.source}</div>
+              <div className="trending-source">{story.source}{story.generatedLabel ? ` · ${story.generatedLabel}` : ''}</div>
               <h3 className="trending-title">{story.title}</h3>
               <div className="trending-meta">
                 {story.timeAgo} · {story.author || 'Staff'}

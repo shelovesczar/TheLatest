@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import React, { useEffect, useMemo, useState, useCallback } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faArrowLeft,
@@ -12,7 +12,10 @@ import {
 import { isArticleSaved, saveArticle, unsaveArticle, recordHistory } from '../utils/savedArticles'
 import { useConsent } from '../context/ConsentContext'
 import { processImageUrl } from '../utils/imageUtils'
+import { buildStoryHref, parseStoryArticleFromSearch } from '../utils/storyRouting'
 import './ArticleReader.css'
+
+const isGeneratedFallbackUrl = (value = '') => String(value || '').includes('fallback.thelatest.local/generated/')
 
 // ── Reading-time estimate ──────────────────────────────────────────────────────
 function readingTime(text = '') {
@@ -36,16 +39,44 @@ function ArticleBody({ text }) {
 export default function ArticleReader() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { storySlug } = useParams()
   const { allowAnalytics } = useConsent()
 
-  // Article data passed via navigate('/article', { state: { article } })
-  const passedArticle = location.state?.article || null
+  const [storedStory, setStoredStory] = useState(null)
 
-  const [article, setArticle]     = useState(passedArticle)
-  const [fetched, setFetched]     = useState(null)   // data from fetchArticle function
-  const [loading, setLoading]     = useState(false)
-  const [fetchError, setFetchError] = useState(null)
-  const [saved, setSaved]         = useState(false)
+  const derivedArticle = useMemo(() => (
+    location.state?.article || storedStory || parseStoryArticleFromSearch({ search: location.search }) || null
+  ), [location.search, location.state, storedStory])
+
+  useEffect(() => {
+    if (!storySlug) {
+      setStoredStory(null)
+      return
+    }
+
+    let ignore = false
+
+    fetch(`/.netlify/functions/storySnapshot?slug=${encodeURIComponent(storySlug)}`)
+      .then((response) => response.json().then((body) => ({ ok: response.ok, body })))
+      .then(({ ok, body }) => {
+        if (ignore) return
+        setStoredStory(ok && body?.story ? body.story : null)
+      })
+      .catch(() => {
+        if (!ignore) {
+          setStoredStory(null)
+        }
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [storySlug])
+
+  const article = derivedArticle
+  const articleKey = useMemo(() => (article ? buildStoryHref(article) : ''), [article])
+  const [fetchState, setFetchState] = useState({ url: '', data: null, error: null, status: 'idle' })
+  const [savedByKey, setSavedByKey] = useState({ key: '', value: false })
   const [copied, setCopied]       = useState(false)
   const [fontSize, setFontSize]   = useState(18)     // px
 
@@ -80,7 +111,6 @@ export default function ArticleReader() {
   useEffect(() => {
     if (!article) return
     recordHistory(article)
-    setSaved(isArticleSaved(article))
     trackEngagement({
       eventType: 'article-view',
       path: location.pathname,
@@ -91,31 +121,121 @@ export default function ArticleReader() {
 
   // ── Fetch full article content via Netlify function ─────────────────────────
   useEffect(() => {
+    const generatedId = article?.generatedId
     const url = article?.link || article?.url
-    if (!url) return
-
-    setLoading(true)
-    setFetchError(null)
+    if (!generatedId && !url) return
 
     const controller = new AbortController()
-    const endpoint  = `/.netlify/functions/fetchArticle?url=${encodeURIComponent(url)}`
 
-    fetch(endpoint, { signal: controller.signal })
-      .then(r => r.json())
-      .then(data => {
-        if (!data.error) {
-          setFetched(data)
-        } else {
-          setFetchError(data.error)
+    ;(async () => {
+      try {
+        if (generatedId) {
+          const response = await fetch(`/.netlify/functions/generatedContent?id=${encodeURIComponent(generatedId)}`, { signal: controller.signal })
+          const data = await response.json()
+
+          if (response.ok && !data.error) {
+            setFetchState({ url: generatedId, data, error: null, status: 'ready' })
+          } else {
+            setFetchState({ url: generatedId, data: null, error: data?.error || 'Generated content unavailable', status: 'error' })
+          }
+          return
         }
-      })
-      .catch(err => {
-        if (err.name !== 'AbortError') setFetchError(err.message)
-      })
-      .finally(() => setLoading(false))
+
+        const endpoint  = `/.netlify/functions/fetchArticle?url=${encodeURIComponent(url)}`
+        const response = await fetch(endpoint, { signal: controller.signal })
+        const data = await response.json()
+
+        if (!data.error) {
+          setFetchState({ url, data, error: null, status: 'ready' })
+        } else {
+          setFetchState({ url, data: null, error: data.error, status: 'error' })
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          setFetchState({ url, data: null, error: err.message, status: 'error' })
+        }
+      }
+    })()
 
     return () => controller.abort()
   }, [article])
+
+  // ── Derived values ───────────────────────────────────────────────────────────
+  const rawSourceUrl = article?.link || article?.url || ''
+  const isGeneratedArticle = Boolean(article?.generatedId || fetched?.generatedId || article?.isGenerated || fetched?.isGenerated || isGeneratedFallbackUrl(rawSourceUrl))
+  const sourceUrl = isGeneratedArticle ? '' : rawSourceUrl
+  const effectiveFetchState = useMemo(() => {
+    const lookupKey = article?.generatedId || sourceUrl
+
+    if (!lookupKey) {
+      return { url: '', data: null, error: null, status: 'idle' }
+    }
+
+    if (fetchState.url === lookupKey) {
+      return fetchState
+    }
+
+    return { url: lookupKey, data: null, error: null, status: 'loading' }
+  }, [article?.generatedId, fetchState, sourceUrl])
+
+  const fetched = effectiveFetchState.status === 'ready' ? effectiveFetchState.data : null
+  const loading = effectiveFetchState.status === 'loading'
+  const fetchError = effectiveFetchState.status === 'error' ? effectiveFetchState.error : null
+  const saved = article ? (savedByKey.key === articleKey ? savedByKey.value : isArticleSaved(article)) : false
+  const title     = fetched?.title   || article?.title   || 'Untitled'
+  const byline    = fetched?.byline  || article?.author  || article?.source || ''
+  const siteName  = fetched?.siteName || fetched?.source || article?.source || ''
+  const heroImage = fetched?.image   || article?.image   || article?.urlToImage || ''
+  const content   = fetched?.content || article?.content || article?.description || ''
+  const minutes   = readingTime(content)
+  const generatedNote = fetched?.fallbackLabel || article?.fallbackLabel || ''
+  const shareUrl = useMemo(() => {
+    if (typeof window !== 'undefined' && window.location?.pathname.startsWith('/story/')) {
+      return window.location.href
+    }
+
+    if (!article) return sourceUrl
+
+    const storyHref = buildStoryHref(article)
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return `${window.location.origin}${storyHref}`
+    }
+
+    return storyHref || sourceUrl
+  }, [article, sourceUrl])
+
+  // Publish date
+  const pubDate = article.publishedAt || article.pubDate || article.date || ''
+  const dateStr = pubDate
+    ? new Date(pubDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    : ''
+
+  // ── Toggle bookmark ──────────────────────────────────────────────────────────
+  const toggleSave = useCallback(() => {
+    if (!article) return
+
+    if (saved) {
+      unsaveArticle(article)
+      setSavedByKey({ key: articleKey, value: false })
+    } else {
+      saveArticle(article)
+      setSavedByKey({ key: articleKey, value: true })
+    }
+  }, [article, articleKey, saved])
+
+  // ── Share / copy link ────────────────────────────────────────────────────────
+  const handleShare = useCallback(async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, url: shareUrl })
+        return
+      } catch { /* user cancelled */ }
+    }
+    // Fallback: copy to clipboard
+    await navigator.clipboard.writeText(shareUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }, [title, shareUrl])
 
   // ── Handle missing article (direct URL navigation) ──────────────────────────
   if (!article) {
@@ -128,46 +248,6 @@ export default function ArticleReader() {
       </div>
     )
   }
-
-  // ── Derived values ───────────────────────────────────────────────────────────
-  const title     = fetched?.title   || article.title   || 'Untitled'
-  const byline    = fetched?.byline  || article.author  || article.source || ''
-  const siteName  = fetched?.siteName || article.source || ''
-  const heroImage = fetched?.image   || article.image   || article.urlToImage || ''
-  const content   = fetched?.content || article.description || article.content || ''
-  const sourceUrl = article.link     || article.url     || ''
-  const minutes   = readingTime(content)
-
-  // Publish date
-  const pubDate = article.publishedAt || article.pubDate || article.date || ''
-  const dateStr = pubDate
-    ? new Date(pubDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-    : ''
-
-  // ── Toggle bookmark ──────────────────────────────────────────────────────────
-  const toggleSave = useCallback(() => {
-    if (saved) {
-      unsaveArticle(article)
-      setSaved(false)
-    } else {
-      saveArticle(article)
-      setSaved(true)
-    }
-  }, [saved, article])
-
-  // ── Share / copy link ────────────────────────────────────────────────────────
-  const handleShare = useCallback(async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({ title, url: sourceUrl })
-        return
-      } catch { /* user cancelled */ }
-    }
-    // Fallback: copy to clipboard
-    await navigator.clipboard.writeText(sourceUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }, [title, sourceUrl])
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -232,6 +312,12 @@ export default function ArticleReader() {
 
           <h1 className="ar-title">{title}</h1>
 
+          {isGeneratedArticle && (
+            <p className="ar-generated-note">
+              {generatedNote || 'AI-generated fallback briefing built for The Latest when live RSS coverage is temporarily unavailable.'}
+            </p>
+          )}
+
           <div className="ar-meta">
             {byline && <span className="ar-byline">{byline}</span>}
             {dateStr && <span className="ar-date">{dateStr}</span>}
@@ -265,7 +351,7 @@ export default function ArticleReader() {
           )}
 
           {/* Paywall / fetch-error fallback */}
-          {!loading && (fetchError || (!content && sourceUrl)) && (
+          {!loading && !isGeneratedArticle && (fetchError || (!content && sourceUrl)) && (
             <div className="ar-paywall-notice">
               <FontAwesomeIcon icon={faExclamationTriangle} />
               <p>
@@ -286,7 +372,7 @@ export default function ArticleReader() {
         </div>
 
         {/* Footer attribution */}
-        {sourceUrl && (
+        {sourceUrl && !isGeneratedArticle && (
           <div className="ar-attribution">
             <span>Originally published by</span>
             <a href={sourceUrl} target="_blank" rel="noopener noreferrer">

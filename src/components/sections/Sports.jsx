@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import './Sports.css';
 
 /**
@@ -46,14 +46,7 @@ const Sports = () => {
     }
   ];
 
-  useEffect(() => {
-    fetchSportsData();
-    // Refresh every 30 seconds for live scores
-    const interval = setInterval(fetchSportsData, 30000);
-    return () => clearInterval(interval);
-  }, [selectedSport]);
-
-  const fetchSportsData = async () => {
+  const fetchSportsData = useCallback(async () => {
     try {
       // Fetch live games and sports news
       const response = await fetch('/.netlify/functions/rss-aggregator?type=news&category=sports');
@@ -72,7 +65,13 @@ const Sports = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchSportsData();
+    const interval = setInterval(fetchSportsData, 30000);
+    return () => clearInterval(interval);
+  }, [fetchSportsData, selectedSport]);
 
   const getMockLiveGames = () => [
     {

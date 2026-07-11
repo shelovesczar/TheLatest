@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { getSession, loginUser, logoutUser, registerUser } from '../services/authService'
 
 const AUTH_STORAGE_KEY = 'thelatest_auth_session_v1'
@@ -50,25 +50,25 @@ export function AuthProvider({ children }) {
     }
   }, [token])
 
-  const persistAuth = (payload) => {
+  const persistAuth = useCallback((payload) => {
     setToken(payload.token)
     setUser(payload.user)
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token: payload.token, user: payload.user }))
-  }
+  }, [])
 
-  const signIn = async ({ email, password }) => {
+  const signIn = useCallback(async ({ email, password }) => {
     const payload = await loginUser({ email, password })
     persistAuth(payload)
     return payload
-  }
+  }, [persistAuth])
 
-  const signUp = async ({ name, email, password }) => {
+  const signUp = useCallback(async ({ name, email, password }) => {
     const payload = await registerUser({ name, email, password })
     persistAuth(payload)
     return payload
-  }
+  }, [persistAuth])
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     const currentToken = token
     setToken('')
     setUser(null)
@@ -81,7 +81,7 @@ export function AuthProvider({ children }) {
         // Ignore logout failures once local state is cleared.
       }
     }
-  }
+  }, [token])
 
   const value = useMemo(() => ({
     token,
@@ -91,7 +91,7 @@ export function AuthProvider({ children }) {
     signIn,
     signUp,
     signOut
-  }), [token, user, loading])
+  }), [token, user, loading, signIn, signOut, signUp])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -4,7 +4,6 @@ import net from 'node:net'
 import path from 'node:path'
 import process from 'node:process'
 
-const isWindows = process.platform === 'win32'
 const preferredNetlifyPort = 8888
 const preferredTargetPort = 5173
 const shutdownSignals = ['SIGINT', 'SIGTERM', 'SIGHUP']
@@ -51,15 +50,18 @@ function terminateChild(child) {
   }, 2000).unref()
 }
 
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-async function isPortAvailable(port, host = '127.0.0.1') {
+async function isPortAvailableOnHost(port, host) {
   return new Promise((resolve) => {
     const server = net.createServer()
 
-    server.once('error', () => resolve(false))
+    server.once('error', (error) => {
+      if (error?.code === 'EAFNOSUPPORT' || error?.code === 'EADDRNOTAVAIL') {
+        resolve(true)
+        return
+      }
+
+      resolve(false)
+    })
     server.once('listening', () => {
       server.close(() => resolve(true))
     })
@@ -68,11 +70,31 @@ async function isPortAvailable(port, host = '127.0.0.1') {
   })
 }
 
-async function findAvailablePort(startPort, host = '127.0.0.1', attempts = 20) {
+async function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer()
+
+    server.once('error', (error) => {
+      if (error?.code === 'EAFNOSUPPORT' || error?.code === 'EADDRNOTAVAIL') {
+        resolve(true)
+        return
+      }
+
+      resolve(false)
+    })
+
+    server.once('listening', () => {
+      server.close(() => resolve(true))
+    })
+
+    server.listen({ port, exclusive: true })
+  })
+}
+
+async function findAvailablePort(startPort, isAvailable, attempts = 20) {
   for (let offset = 0; offset < attempts; offset += 1) {
     const candidate = startPort + offset
-    // eslint-disable-next-line no-await-in-loop
-    if (await isPortAvailable(candidate, host)) {
+    if (await isAvailable(candidate)) {
       return candidate
     }
   }
@@ -80,35 +102,21 @@ async function findAvailablePort(startPort, host = '127.0.0.1', attempts = 20) {
   throw new Error(`Unable to find an open port starting at ${startPort}.`)
 }
 
-async function waitForPort(port, host = '127.0.0.1', timeoutMs = 45000) {
-  const startedAt = Date.now()
-
-  while (Date.now() - startedAt < timeoutMs) {
-    // eslint-disable-next-line no-await-in-loop
-    const available = await isPortAvailable(port, host)
-    if (!available) {
-      return
-    }
-
-    // eslint-disable-next-line no-await-in-loop
-    await delay(250)
-  }
-
-  throw new Error(`Timed out waiting for port ${port} to accept connections.`)
-}
-
 async function main() {
   const localEnv = loadLocalEnv()
-  const targetPort = await findAvailablePort(preferredTargetPort)
-  const netlifyPort = await findAvailablePort(preferredNetlifyPort)
+  const targetPort = await findAvailablePort(
+    preferredTargetPort,
+    (port) => isPortAvailableOnHost(port, '127.0.0.1')
+  )
+  const netlifyPort = await findAvailablePort(preferredNetlifyPort, isPortAvailable)
 
   console.log(`[dev:netlify] Starting Netlify dev on http://127.0.0.1:${netlifyPort}`)
   if (netlifyPort !== preferredNetlifyPort || targetPort !== preferredTargetPort) {
     console.log(`[dev:netlify] Preferred ports were occupied. Using Netlify port ${netlifyPort} and target port ${targetPort}.`)
   }
 
-  const viteCommand = `npx vite --host 127.0.0.1 --port ${targetPort} --strictPort`
-  const netlifyProcess = spawn(`netlify dev --port ${netlifyPort} --framework vite --target-port ${targetPort} --command "${viteCommand}"`, {
+  const viteCommand = `npx vite --host 0.0.0.0 --port ${targetPort} --strictPort`
+  const netlifyProcess = spawn(`netlify dev --port ${netlifyPort} --target-port ${targetPort} --command "${viteCommand}"`, {
     stdio: 'inherit',
     env: {
       ...process.env,

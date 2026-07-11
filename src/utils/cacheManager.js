@@ -191,7 +191,6 @@ class CacheManager {
   async cleanupOldCache() {
     try {
       const keys = await this.getAllKeys();
-      const now = Date.now();
       
       for (const key of keys) {
         const item = await this.get(key);
