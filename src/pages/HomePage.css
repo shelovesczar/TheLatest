@@ -1,9 +1,5 @@
 /* ─── Topic Filter Strip ─────────────────────────────────────── */
 
-.home-main-content {
-  /* padding-bottom: var(--spacing-lg); */
-}
-
 /* Each home section gets the same breathing room as All pages */
 .home-main-content .section {
   padding-top: var(--spacing-md);
@@ -19,7 +15,8 @@
   scrollbar-width: none;
   -ms-overflow-style: none;
   flex-wrap: nowrap;
-  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle, #dde3ee) 78%, transparent);
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--border-subtle, #dde3ee) 78%, transparent);
 }
 
 .topic-filter-strip::-webkit-scrollbar {
@@ -65,9 +62,18 @@
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
-  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-  border: 1px solid color-mix(in srgb, var(--border-subtle, #c5d0e0) 80%, transparent);
-  background: color-mix(in srgb, var(--surface-elevated, #ffffff) 90%, transparent);
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+  border: 1px solid
+    color-mix(in srgb, var(--border-subtle, #c5d0e0) 80%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--surface-elevated, #ffffff) 90%,
+    transparent
+  );
   color: color-mix(in srgb, var(--text-muted, #5d568d) 92%, transparent);
   flex-shrink: 0;
   display: inline-flex;
@@ -79,14 +85,26 @@
 .topic-chip:hover {
   color: var(--text-primary, #1a2f50);
   border-color: color-mix(in srgb, var(--brand-primary, #284b63) 32%, #dbe3ef);
-  background: color-mix(in srgb, var(--surface-elevated, #ffffff) 80%, var(--brand-primary, #284b63) 20%);
+  background: color-mix(
+    in srgb,
+    var(--surface-elevated, #ffffff) 80%,
+    var(--brand-primary, #284b63) 20%
+  );
   transform: translateY(-1px);
 }
 
 .topic-chip.active {
   color: #f8fbff;
-  border-color: color-mix(in srgb, var(--brand-primary, #284b63) 86%, transparent);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-primary, #284b63) 84%, #10263b), color-mix(in srgb, var(--brand-secondary, #5d568d) 70%, #18243a));
+  border-color: color-mix(
+    in srgb,
+    var(--brand-primary, #284b63) 86%,
+    transparent
+  );
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--brand-primary, #284b63) 84%, #10263b),
+    color-mix(in srgb, var(--brand-secondary, #5d568d) 70%, #18243a)
+  );
   box-shadow: 0 16px 34px rgba(17, 24, 39, 0.18);
 }
 
@@ -126,22 +144,23 @@
 }
 
 [data-theme="dark"] .topic-chip {
-  background: rgba(15, 23, 42, 0.44);
-  border-color: rgba(148, 163, 184, 0.26);
-  color: rgba(216, 180, 254, 0.78);
-  box-shadow: none;
+  background: rgba(12, 21, 36, 0.82);
+  border-color: rgba(104, 139, 201, 0.34);
+  color: #d7e6ff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
 [data-theme="dark"] .topic-chip:hover {
   color: #f8fafc;
-  border-color: rgba(226, 232, 240, 0.34);
-  background: rgba(30, 41, 59, 0.78);
+  border-color: rgba(161, 204, 255, 0.54);
+  background: rgba(27, 45, 74, 0.96);
 }
 
 [data-theme="dark"] .topic-chip.active {
   color: #f8fafc;
-  border-color: rgba(248, 250, 252, 0.62);
-  background: linear-gradient(135deg, rgba(55, 65, 81, 0.96), rgba(30, 41, 59, 0.96));
+  border-color: rgba(189, 223, 255, 0.84);
+  background: linear-gradient(135deg, #2f5e9a 0%, #1c3f71 56%, #152d54 100%);
+  box-shadow: 0 14px 28px rgba(5, 15, 32, 0.34);
 }
 
 [data-theme="dark"] .topic-chip-divider {
@@ -149,9 +168,6 @@
 }
 
 @media (max-width: 768px) {
-  .home-main-content {
-  }
-
   .home-main-content .section {
     padding-top: var(--spacing-sm);
   }

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useSearch } from '../context/SearchContext'
-import { Link } from 'react-router-dom'
 import { getRandomTrendingPosts } from '../socialMediaService'
 import { getRandomCategoryPosts } from '../socialMediaPosts'
 import SocialMediaBundle from '../components/sections/SocialMediaBundle'
+import PageBackBar from '../components/common/PageBackBar'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faXTwitter, faInstagram, faTiktok, faReddit } from '@fortawesome/free-brands-svg-icons'
 import { getImageProps } from '../utils/imageUtils'
@@ -62,9 +62,18 @@ function SocialPage() {
 
   return (
     <div className="category-page">
+      <PageBackBar
+        shellClassName="topic-page-shell"
+        fallbackTo="/"
+        breadcrumbs={[
+          { label: 'Home', to: '/' },
+          { label: hasActiveTopic ? `${topic} Social` : 'Social' }
+        ]}
+        meta={`${filteredPosts.length} posts across ${Math.max(platforms.length - 1, 0)} platforms`}
+      />
+
       <div className="category-hero">
         <div className="category-hero-content">
-          <Link to="/" className="back-link">← Back to Home</Link>
           <h1 className="category-title">
             {hasActiveTopic ? `${topic} on Social Media` : 'Trending Social Media'}
           </h1>

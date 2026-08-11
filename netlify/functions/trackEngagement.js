@@ -1,25 +1,30 @@
-const { STORE_NAMES, getJson, setJson, isBlobConfigurationError } = require('./blobStore');
+const {
+  STORE_NAMES,
+  getJson,
+  setJson,
+  isBlobConfigurationError,
+} = require("./blobStore");
 
 function jsonHeaders() {
   return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Content-Type': 'application/json'
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Content-Type": "application/json",
   };
 }
 
-function normalizePart(value = '') {
-  return String(value || '')
+function normalizePart(value = "") {
+  return String(value || "")
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
     .slice(0, 120);
 }
 
-function stableHash(value = '') {
-  const source = String(value || '');
+function stableHash(value = "") {
+  const source = String(value || "");
   let hash = 0;
   for (let index = 0; index < source.length; index += 1) {
     hash = (Math.imul(31, hash) + source.charCodeAt(index)) | 0;
@@ -38,13 +43,13 @@ async function incrementAggregate(prefix, id, seed = {}) {
     ...seed,
     ...(existing || {}),
     views: Number(existing?.views || 0) + 1,
-    lastViewedAt: new Date().toISOString()
+    lastViewedAt: new Date().toISOString(),
   };
   await setJson(STORE_NAMES.analytics, key, nextValue, {
     metadata: {
-      kind: prefix.split('/')[0],
-      updatedAt: nextValue.lastViewedAt
-    }
+      kind: prefix.split("/")[0],
+      updatedAt: nextValue.lastViewedAt,
+    },
   });
   return nextValue;
 }
@@ -52,37 +57,42 @@ async function incrementAggregate(prefix, id, seed = {}) {
 exports.handler = async (event) => {
   const headers = jsonHeaders();
 
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 200, headers, body: "" };
   }
 
-  if (event.httpMethod !== 'POST') {
+  if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
       headers,
-      body: JSON.stringify({ error: 'Method not allowed' })
+      body: JSON.stringify({ error: "Method not allowed" }),
     };
   }
 
   try {
-    const body = JSON.parse(event.body || '{}');
-    const eventType = normalizePart(body.eventType || 'page-view') || 'page-view';
-    const path = body.path || '/';
+    const body = JSON.parse(event.body || "{}");
+    const eventType =
+      normalizePart(body.eventType || "page-view") || "page-view";
+    const path = body.path || "/";
     const article = body.article || null;
-    const source = article?.source || body.source || '';
-    const title = article?.title || body.title || '';
+    const source = article?.source || body.source || "";
+    const title = article?.title || body.title || "";
     const canonicalUrl = article?.link || article?.url || body.url || path;
     const dayKey = buildDateKey();
     const pageId = stableHash(path);
     const articleId = stableHash(canonicalUrl);
-    const sourceId = normalizePart(source) || 'unknown-source';
+    const sourceId = normalizePart(source) || "unknown-source";
+    const section = normalizePart(body.section || body.sectionKey || "");
+    const sectionEventId = section
+      ? stableHash(`${canonicalUrl}|${path}|${section}|${eventType}`)
+      : "";
 
     const writes = [
       incrementAggregate(`pages/${dayKey}`, pageId, {
         eventType,
         path,
-        title: body.pageTitle || title || path
-      })
+        title: body.pageTitle || title || path,
+      }),
     ];
 
     if (title || canonicalUrl !== path) {
@@ -92,8 +102,8 @@ exports.handler = async (event) => {
           title,
           source,
           url: canonicalUrl,
-          category: article?.category || body.category || ''
-        })
+          category: article?.category || body.category || "",
+        }),
       );
     }
 
@@ -102,8 +112,26 @@ exports.handler = async (event) => {
         incrementAggregate(`sources/${dayKey}`, sourceId, {
           eventType,
           source,
-          category: article?.category || body.category || ''
-        })
+          category: article?.category || body.category || "",
+        }),
+      );
+    }
+
+    if (section && sectionEventId) {
+      writes.push(
+        incrementAggregate(`sections/${dayKey}`, sectionEventId, {
+          eventType,
+          path,
+          title,
+          source,
+          url: canonicalUrl,
+          section,
+          query: body.query || "",
+          itemCount: Number(body.itemCount || 0),
+          itemTitle: body.itemTitle || "",
+          itemSource: body.itemSource || "",
+          itemType: body.itemType || "",
+        }),
       );
     }
 
@@ -112,21 +140,21 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ tracked: true, eventType, dayKey })
+      body: JSON.stringify({ tracked: true, eventType, dayKey }),
     };
   } catch (error) {
     if (isBlobConfigurationError(error)) {
       return {
         statusCode: 202,
         headers,
-        body: JSON.stringify({ tracked: false, unavailable: true })
+        body: JSON.stringify({ tracked: false, unavailable: true }),
       };
     }
 
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: error.message || 'Unknown error' })
+      body: JSON.stringify({ error: error.message || "Unknown error" }),
     };
   }
 };

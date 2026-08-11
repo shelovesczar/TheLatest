@@ -6,7 +6,7 @@ on:
     branches:
       - main
   schedule:
-    - cron: '0 12 * * *'
+    - cron: "0 12 * * *"
   workflow_dispatch:
     inputs:
       smoke_base_url:
@@ -51,6 +51,9 @@ jobs:
       RSSHUB_BASE_URL: ${{ secrets.RSSHUB_BASE_URL }}
       RSS_APP_BUNDLE_FEED_URL: ${{ secrets.RSS_APP_BUNDLE_FEED_URL }}
       RSS_APP_BUNDLE_SOURCE: ${{ secrets.RSS_APP_BUNDLE_SOURCE }}
+      RSS_APP_AUTH_TOKEN: ${{ secrets.RSS_APP_AUTH_TOKEN }}
+      RSS_APP_API_KEY: ${{ secrets.RSS_APP_API_KEY }}
+      RSS_APP_API_SECRET: ${{ secrets.RSS_APP_API_SECRET }}
       NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
       GNEWS_API_KEY: ${{ secrets.GNEWS_API_KEY }}
       SOCIAL_RSS_FEEDS: ${{ secrets.SOCIAL_RSS_FEEDS }}

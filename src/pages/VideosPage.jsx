@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearch } from '../context/SearchContext'
-import { Link } from 'react-router-dom'
 import Videos from '../components/sections/Videos'
+import PageBackBar from '../components/common/PageBackBar'
 import { fetchVideos } from '../newsService'
 import './CategoryPage.css'
 
@@ -29,9 +29,18 @@ function VideosPage() {
 
   return (
     <div className="category-page">
+      <PageBackBar
+        shellClassName="topic-page-shell"
+        fallbackTo="/"
+        breadcrumbs={[
+          { label: 'Home', to: '/' },
+          { label: hasActiveTopic ? `${topic} Videos` : 'Videos' }
+        ]}
+        meta={`${videos.length} videos loaded`}
+      />
+
       <div className="category-hero">
         <div className="category-hero-content">
-          <Link to="/" className="back-link">← Back to Home</Link>
           <h1 className="category-title">
             {hasActiveTopic ? `${topic} Videos` : 'All Videos'}
           </h1>

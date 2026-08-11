@@ -36,6 +36,20 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
   const [flyoutPosition, setFlyoutPosition] = useState({ left: 0 })
   const useUnifiedHeader = true
 
+  const emitSearchSubmit = (query) => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.dispatchEvent(new CustomEvent('thelatest:search-submit', {
+      detail: {
+        query,
+        source: 'header',
+        submittedAt: Date.now()
+      }
+    }))
+  }
+
   useEffect(() => {
     const handlePointerDown = (event) => {
       if (!navRef.current) return
@@ -126,15 +140,33 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
   const handleSearch = (event) => {
     event.preventDefault()
 
-    if (!searchQuery.trim()) {
+    const normalizedQuery = searchQuery.trim()
+
+    if (!normalizedQuery) {
       return
     }
 
-    navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`)
+    const currentQuery = new URLSearchParams(location.search).get('q')?.trim() || ''
+    const isSameSearchRoute = location.pathname === '/search' && currentQuery === normalizedQuery
+
+    emitSearchSubmit(normalizedQuery)
+
+    if (!isSameSearchRoute) {
+      navigate(`/search?q=${encodeURIComponent(normalizedQuery)}`)
+    }
+
     clearTopic({ navigateHome: false })
     setOpenDropdown(null)
     setProfileMenuOpen(false)
     setMenuOpen(false)
+  }
+
+  const handleSearchKeyDown = (event) => {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent?.isComposing) {
+      return
+    }
+
+    event.currentTarget.form?.requestSubmit()
   }
 
   const handleNavClick = (path) => {
@@ -267,12 +299,14 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
               <div className="header-utilities">
                 <form className={`header-search-form ${useUnifiedHeader ? 'header-search-form--landing' : ''}`} onSubmit={handleSearch}>
                   <input
-                    type="text"
+                    type="search"
                     className={`header-search-input ${useUnifiedHeader ? 'header-search-input--landing' : ''}`}
                     placeholder="Search"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
+                    onKeyDown={handleSearchKeyDown}
                     aria-label="Search news"
+                    enterKeyHint="search"
                   />
                   <button type="submit" className={`header-search-btn ${useUnifiedHeader ? 'header-search-btn--landing' : ''}`} aria-label="Search">
                     <FontAwesomeIcon icon={faSearch} />

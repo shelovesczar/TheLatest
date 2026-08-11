@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 const CACHE_TTL_MS = 30 * 60 * 1000;
+const inFlightGeneratedRefreshes = new Map();
 const DEFAULT_COUNT_BY_TYPE = {
   news: 12,
   opinions: 8,
@@ -39,6 +40,29 @@ function jsonHeaders() {
 
 function cleanText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function tokenizeTopic(value = '') {
+  return cleanText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((token) => token.length > 2)
+}
+
+function itemMatchesTopic(item = {}, topic = '') {
+  const tokens = tokenizeTopic(topic)
+  if (tokens.length === 0) return true
+
+  const searchableText = cleanText([
+    item?.title,
+    item?.description,
+    item?.content,
+    item?.source,
+    item?.category
+  ].filter(Boolean).join(' ')).toLowerCase()
+
+  return tokens.every((token) => searchableText.includes(token))
 }
 
 function normalizePart(value = '') {
@@ -208,19 +232,18 @@ async function fetchAggregatorItems(params = {}) {
 
 async function getCoverageItems({ type, topic, category }) {
   const requestSets = [
-    { type, ...(category ? { category } : {}), ...(topic ? { search: topic, strictSearch: '0', relaxSearchFallback: '1', minStrictResults: '4' } : {}) }
+    { type, ...(category ? { category } : {}) }
   ];
 
   if (type !== 'news') {
     requestSets.push({
       type: 'news',
-      ...(category ? { category } : {}),
-      ...(topic ? { search: topic, strictSearch: '0', relaxSearchFallback: '1', minStrictResults: '4' } : {}) }
+      ...(category ? { category } : {}) }
     );
   }
 
   if (topic) {
-    requestSets.push({ type, ...(category ? { category } : {}) });
+    requestSets.push({ type: 'news' });
   }
 
   const settled = await Promise.allSettled(requestSets.map((params) => fetchAggregatorItems(params)));
@@ -230,12 +253,14 @@ async function getCoverageItems({ type, topic, category }) {
   settled.forEach((result) => {
     if (result.status !== 'fulfilled') return;
 
-    result.value.forEach((item) => {
+    result.value
+      .filter((item) => item && itemMatchesTopic(item, topic))
+      .forEach((item) => {
       const key = cleanText(item?.link || item?.url || `${item?.source || ''}|${item?.title || ''}`).toLowerCase();
       if (!key || seen.has(key)) return;
       seen.add(key);
       merged.push(item);
-    });
+      });
   });
 
   return merged.slice(0, 8);
@@ -465,10 +490,35 @@ async function resolveGeneratedItems(request = {}) {
   const cacheKey = buildRequestKey(request);
   const cached = await readCachedRequestPayload(cacheKey);
 
-  if (cached && isFresh(cached.timestamp)) {
+  if (cached && isFresh(cached.timestamp) && cached.provider !== 'Editorial fallback') {
     return cached;
   }
 
+  if (cached && Array.isArray(cached.items) && cached.items.length > 0) {
+    scheduleGeneratedRefresh(request);
+    return {
+      ...cached,
+      stale: !isFresh(cached.timestamp),
+      refreshing: true
+    };
+  }
+
+  const fallbackPayload = {
+    request,
+    provider: 'Editorial fallback',
+    timestamp: new Date().toISOString(),
+    refreshing: true,
+    items: buildStaticFallbackItems(request)
+  };
+
+  await writeCachedPayload(cacheKey, fallbackPayload);
+  scheduleGeneratedRefresh(request);
+  return fallbackPayload;
+
+}
+
+async function generateAndCachePayload(request = {}) {
+  const cacheKey = buildRequestKey(request);
   const generated = await generateWithAnthropic(request);
   const items = generated.items.length > 0 ? generated.items : buildStaticFallbackItems(request);
   const payload = {
@@ -480,6 +530,25 @@ async function resolveGeneratedItems(request = {}) {
 
   await writeCachedPayload(cacheKey, payload);
   return payload;
+}
+
+function scheduleGeneratedRefresh(request = {}) {
+  const cacheKey = buildRequestKey(request);
+  if (inFlightGeneratedRefreshes.has(cacheKey)) {
+    return inFlightGeneratedRefreshes.get(cacheKey);
+  }
+
+  const refreshPromise = generateAndCachePayload(request)
+    .catch((error) => {
+      console.warn('[generatedContent] background refresh failed:', error?.message || 'Unknown error');
+      return null;
+    })
+    .finally(() => {
+      inFlightGeneratedRefreshes.delete(cacheKey);
+    });
+
+  inFlightGeneratedRefreshes.set(cacheKey, refreshPromise);
+  return refreshPromise;
 }
 
 exports.handler = async (event) => {

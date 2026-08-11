@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useSearch } from '../context/SearchContext'
-import { Link } from 'react-router-dom'
 import Podcasts from '../components/sections/Podcasts'
 import Videos from '../components/sections/Videos'
+import PageBackBar from '../components/common/PageBackBar'
 import { fetchVideos, fetchTrendingContent } from '../newsService'
 import { fetchRSSPodcasts } from '../rssService'
 import { dedupeContentItems } from '../utils/contentDeduplication'
@@ -56,9 +56,18 @@ function PodcastsPage() {
 
   return (
     <div className="category-page">
+      <PageBackBar
+        shellClassName="topic-page-shell"
+        fallbackTo="/"
+        breadcrumbs={[
+          { label: 'Home', to: '/' },
+          { label: 'Videos & Podcasts' }
+        ]}
+        meta={`${videos.length} videos and ${podcasts.length} podcasts loaded`}
+      />
+
       <div className="category-hero">
         <div className="category-hero-content">
-          <Link to="/" className="back-link">← Back to Home</Link>
           <h1 className="category-title">Videos &amp; Podcasts</h1>
           <p className="category-description">Latest videos and podcast episodes</p>
         </div>

@@ -1,73 +1,79 @@
-import { getImageProps } from '../../utils/imageUtils'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faXTwitter, faTiktok } from '@fortawesome/free-brands-svg-icons'
-import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import './SocialMedia.css'
+import { getImageProps } from "../../utils/imageUtils";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faXTwitter, faTiktok } from "@fortawesome/free-brands-svg-icons";
+import {
+  faChevronLeft,
+  faChevronRight,
+} from "@fortawesome/free-solid-svg-icons";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import "./SocialMedia.css";
 
 // Placeholder for Truth Social icon (using a generic social icon)
-const faTruthSocial = faXTwitter
+const faTruthSocial = faXTwitter;
 
 function SocialMedia({ socialPosts, loadingSocial }) {
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const itemsPerPage = 3
-  const safeSocialPosts = Array.isArray(socialPosts) ? socialPosts.filter(Boolean) : []
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const itemsPerPage = 3;
+  const safeSocialPosts = Array.isArray(socialPosts)
+    ? socialPosts.filter(Boolean)
+    : [];
 
   const nextSlide = () => {
-    if (safeSocialPosts.length === 0) return
+    if (safeSocialPosts.length === 0) return;
     setCurrentIndex((prev) => {
-      const next = prev + itemsPerPage
-      return next >= safeSocialPosts.length ? 0 : next
-    })
-  }
+      const next = prev + itemsPerPage;
+      return next >= safeSocialPosts.length ? 0 : next;
+    });
+  };
 
   const prevSlide = () => {
-    if (safeSocialPosts.length === 0) return
+    if (safeSocialPosts.length === 0) return;
     setCurrentIndex((prev) => {
       if (prev === 0) {
-        const lastPageStart = Math.floor((safeSocialPosts.length - 1) / itemsPerPage) * itemsPerPage
-        return lastPageStart
+        const lastPageStart =
+          Math.floor((safeSocialPosts.length - 1) / itemsPerPage) *
+          itemsPerPage;
+        return lastPageStart;
       }
-      return prev - itemsPerPage
-    })
-  }
+      return prev - itemsPerPage;
+    });
+  };
 
   // Create circular array view - wrap around if needed
   const getVisiblePosts = () => {
-    if (safeSocialPosts.length === 0) return []
-    const posts = []
+    if (safeSocialPosts.length === 0) return [];
+    const posts = [];
     for (let i = 0; i < itemsPerPage; i++) {
-      const index = (currentIndex + i) % safeSocialPosts.length
+      const index = (currentIndex + i) % safeSocialPosts.length;
       if (safeSocialPosts[index]) {
-        posts.push(safeSocialPosts[index])
+        posts.push(safeSocialPosts[index]);
       }
     }
-    return posts
-  }
+    return posts;
+  };
 
-  const visiblePosts = safeSocialPosts.length > 0 ? getVisiblePosts() : []
+  const visiblePosts = safeSocialPosts.length > 0 ? getVisiblePosts() : [];
   const getIcon = (platform) => {
     switch (platform) {
-      case 'X':
-        return faXTwitter
-      case 'Instagram':
-      case 'Truth Social':
-        return faTruthSocial
-      case 'TikTok':
-        return faTiktok
+      case "X":
+        return faXTwitter;
+      case "Instagram":
+      case "Truth Social":
+        return faTruthSocial;
+      case "TikTok":
+        return faTiktok;
       default:
-        return faXTwitter
+        return faXTwitter;
     }
-  }
+  };
 
   return (
     <section id="social-media" className="section social-media">
       <div className="section-hdr">
         <h2>Social Media</h2>
-        <Link to="/social" className="see-more">See more posts →</Link>
       </div>
-      
+
       {loadingSocial ? (
         <div className="loading-container">
           <p className="loading-text">Loading trending content...</p>
@@ -75,8 +81,8 @@ function SocialMedia({ socialPosts, loadingSocial }) {
       ) : safeSocialPosts.length > 0 ? (
         <>
           <div className="social-slider-container">
-            <button 
-              className="slider-btn social-slider-btn" 
+            <button
+              className="slider-btn social-slider-btn"
               onClick={prevSlide}
               aria-label="Previous posts"
             >
@@ -85,51 +91,59 @@ function SocialMedia({ socialPosts, loadingSocial }) {
 
             <div className="social-slider">
               {visiblePosts.map((post, index) => (
-              <a 
-                key={currentIndex + index} 
-                href={post.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="social-card"
-                style={{ textDecoration: 'none', color: 'inherit' }}
-              >
-                <div className="social-header">
-                  <div className="social-logo">
-                    <FontAwesomeIcon icon={getIcon(post.platform)} />
+                <a
+                  key={currentIndex + index}
+                  href={post.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="social-card"
+                  style={{ textDecoration: "none", color: "inherit" }}
+                >
+                  <div className="social-header">
+                    <div className="social-logo">
+                      <FontAwesomeIcon icon={getIcon(post.platform)} />
+                    </div>
+                    <span className="social-platform">{post.platform}</span>
+                    <div className="social-author">{post.author}</div>
                   </div>
-                  <span className="social-platform">{post.platform}</span>
-                  <div className="social-author">{post.author}</div>
-                </div>
-                {post.image && (
-                  <div className="social-media-image">
-                    <img {...getImageProps(post.image, post.author, 'general')} />
+                  {post.image && (
+                    <div className="social-media-image">
+                      <img
+                        {...getImageProps(post.image, post.author, "general")}
+                      />
+                    </div>
+                  )}
+                  <div className="social-body">
+                    <p className="social-content">{post.content}</p>
                   </div>
-                )}
-                <div className="social-body">
-                  <p className="social-content">{post.content}</p>
-                </div>
-                <div className="social-footer">
-                  <span className="social-engagement">{post.engagement}</span>
-                </div>
-              </a>
-          ))}
+                  <div className="social-footer">
+                    <span className="social-engagement">{post.engagement}</span>
+                  </div>
+                </a>
+              ))}
             </div>
 
-            <button 
-              className="slider-btn social-slider-btn" 
+            <button
+              className="slider-btn social-slider-btn"
               onClick={nextSlide}
               aria-label="Next posts"
             >
               <FontAwesomeIcon icon={faChevronRight} />
             </button>
           </div>
+          <div className="section-see-more-row">
+            <Link to="/social" className="see-more">
+              See more posts →
+            </Link>
+          </div>
         </>
       ) : (
-        <p className="no-content">No trending content available at this time.</p>
+        <p className="no-content">
+          No trending content available at this time.
+        </p>
       )}
-      
     </section>
-  )
+  );
 }
 
-export default SocialMedia
+export default SocialMedia;
