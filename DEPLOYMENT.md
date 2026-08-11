@@ -5,6 +5,7 @@
 This app can deploy cleanly to Netlify, but successful local development does not automatically prove production readiness.
 
 The live deployment depends on:
+
 - Netlify Functions
 - Netlify-managed Blob storage
 - auth/session environment configuration
@@ -19,26 +20,31 @@ Netlify preview or production is still required to validate Netlify-specific ser
 ## Recommended release flow
 
 1. Install dependencies.
+
 ```bash
 npm install
 ```
 
 2. Verify the deployment environment.
+
 ```bash
 npm run verify:deploy-env
 ```
 
 3. Build the production bundle.
+
 ```bash
 npm run build
 ```
 
 4. Validate with the Netlify local runtime.
+
 ```bash
 npm run dev:netlify
 ```
 
 5. Smoke test a preview or production deploy.
+
 ```bash
 npm run smoke:netlify-preview -- https://your-site.netlify.app
 ```
@@ -50,13 +56,16 @@ npm run smoke:netlify-preview -- https://your-site.netlify.app
 ## Environment expectations
 
 Required:
+
 - `SESSION_TOKEN_PEPPER`
 
 Recommended for full feature coverage:
+
 - `ADMIN_EMAILS`
 - `RSSHUB_BASE_URL`
 - `RSS_APP_BUNDLE_FEED_URL`
 - `RSS_APP_BUNDLE_SOURCE`
+- `RSS_APP_AUTH_TOKEN` or `RSS_APP_API_KEY` / `RSS_APP_API_SECRET` if your RSS.app feeds are private or authenticated
 - `NEWS_API_KEY`
 - `GNEWS_API_KEY`
 - `SOCIAL_RSS_FEEDS`
@@ -64,6 +73,7 @@ Recommended for full feature coverage:
 - `ANTHROPIC_API_KEY`
 
 Optional for Docker, CI, or other non-Netlify runtimes that still need Blob access:
+
 - `NETLIFY_BLOBS_SITE_ID`
 - `NETLIFY_BLOBS_TOKEN`
 
@@ -74,23 +84,27 @@ Netlify production normally injects Blob access automatically, so the manual Blo
 ## What Docker proves
 
 Docker is useful for:
+
 - consistent Node version behavior
 - reproducible dependency installation
 - reproducible frontend production builds
 - repeatable static output validation
 
 Docker does not prove by itself:
+
 - Netlify Function routing
 - Netlify Blob access
 - Netlify environment injection
 - deploy-time site permissions or admin access
 
 Build the image:
+
 ```bash
 docker build -t thelatest .
 ```
 
 Run the image:
+
 ```bash
 docker run --rm -p 8080:80 thelatest
 ```
@@ -100,6 +114,7 @@ docker run --rm -p 8080:80 thelatest
 ## Live deployment checklist
 
 Before calling the app finished, verify:
+
 1. `npm run verify:deploy-env` passes for the target environment.
 2. `npm run build` passes.
 3. `npm run smoke:netlify-preview -- <deploy-url>` passes.
@@ -116,6 +131,7 @@ Before calling the app finished, verify:
 The repo now includes a workflow at `.github/workflows/deploy-readiness.yml`.
 
 It provides:
+
 - build and focused regression coverage on PRs and main pushes
 - a deploy environment gate on main pushes and manual runs
 - a manual smoke-test entry point for a supplied Netlify preview or production URL

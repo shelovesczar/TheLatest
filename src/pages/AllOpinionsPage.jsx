@@ -1,60 +1,69 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { useSearch } from '../context/SearchContext'
-import { useParams } from 'react-router-dom'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
-import AdBreak from '../components/common/AdBreak'
-import { fetchOpinions } from '../newsService'
-import { searchRSSContent, fetchRSSOpinions } from '../rssService'
-import { getImageProps } from '../utils/imageUtils'
-import { getCategoryConfig } from '../utils/categoryConfig'
-import { filterContentByCategory } from '../utils/categoryFiltering'
-import { dedupeContentItems } from '../utils/contentDeduplication'
-import { deriveMediaOutlet } from '../utils/sourceUtils'
-import { matchesTopicQuery } from '../utils/topicFiltering'
-import { getTopicPageConfig } from '../utils/navigationConfig'
-import { formatDateOnly } from '../utils/dateUtils'
-import { resolveContentHref } from '../utils/storyRouting'
-import { getGeneratedContentLabel } from '../utils/contentLabels'
-import './AllNewsPage.css'
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useSearch } from "../context/SearchContext";
+import { useParams } from "react-router-dom";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faChevronLeft,
+  faChevronRight,
+} from "@fortawesome/free-solid-svg-icons";
+import AdBreak from "../components/common/AdBreak";
+import { fetchOpinions } from "../newsService";
+import { searchRSSContent, fetchRSSOpinions } from "../rssService";
+import { getImageProps } from "../utils/imageUtils";
+import { getCategoryConfig } from "../utils/categoryConfig";
+import { filterContentByCategory } from "../utils/categoryFiltering";
+import { dedupeContentItems } from "../utils/contentDeduplication";
+import { deriveMediaOutlet } from "../utils/sourceUtils";
+import { matchesTopicQuery } from "../utils/topicFiltering";
+import { getTopicPageConfig } from "../utils/navigationConfig";
+import { formatDateOnly } from "../utils/dateUtils";
+import { resolveContentHref } from "../utils/storyRouting";
+import { getGeneratedContentLabel } from "../utils/contentLabels";
+import PageBackBar from "../components/common/PageBackBar";
+import "./AllNewsPage.css";
 
 function toTextValue(value) {
-  if (value === null || value === undefined) return ''
-  if (typeof value === 'string') return value
-  if (typeof value === 'number') return String(value)
-  if (Array.isArray(value)) return value.map(toTextValue).filter(Boolean).join(', ')
-  if (typeof value === 'object' && typeof value._ === 'string') return value._
-  return ''
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  if (Array.isArray(value))
+    return value.map(toTextValue).filter(Boolean).join(", ");
+  if (typeof value === "object" && typeof value._ === "string") return value._;
+  return "";
 }
 
 function AllOpinionsPage({ category = null }) {
-  const { categoryName, topicSlug } = useParams()
-  const { topic, hasActiveTopic } = useSearch()
-  const [opinions, setOpinions] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [selectedSource, setSelectedSource] = useState('ALL')
-  const [visibleCount, setVisibleCount] = useState(8)
-  const LOAD_MORE_SIZE = 8
-  const sourceTickerRef = useRef(null)
+  const { categoryName, topicSlug } = useParams();
+  const { topic, hasActiveTopic } = useSearch();
+  const [opinions, setOpinions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedSource, setSelectedSource] = useState("ALL");
+  const [visibleCount, setVisibleCount] = useState(8);
+  const LOAD_MORE_SIZE = 8;
+  const sourceTickerRef = useRef(null);
 
   const truncateText = (text, maxLength) => {
-    if (!text) return ''
-    if (text.length <= maxLength) return text
-    return `${text.substring(0, maxLength).trim()}...`
-  }
+    if (!text) return "";
+    if (text.length <= maxLength) return text;
+    return `${text.substring(0, maxLength).trim()}...`;
+  };
 
-  const topicConfig = getTopicPageConfig(topicSlug)
-  const activeTopicQuery = topicConfig?.query || (hasActiveTopic ? topic : null)
-  const filterContext = categoryName || category || topicConfig?.slug || activeTopicQuery
-  const categoryConfig = topicConfig ? {
-    title: topicConfig.title,
-    newsTitle: `${topicConfig.title} Opinions`,
-    subtitle: topicConfig.subtitle,
-    image: topicConfig.image
-  } : getCategoryConfig(filterContext)
+  const topicConfig = getTopicPageConfig(topicSlug);
+  const activeTopicQuery =
+    topicConfig?.query || (hasActiveTopic ? topic : null);
+  const filterContext =
+    categoryName || category || topicConfig?.slug || activeTopicQuery;
+  const categoryConfig = topicConfig
+    ? {
+        title: topicConfig.title,
+        newsTitle: `${topicConfig.title} Opinions`,
+        subtitle: topicConfig.subtitle,
+        image: topicConfig.image,
+      }
+    : getCategoryConfig(filterContext);
 
   const loadOpinions = useCallback(async () => {
-    setLoading(true)
+    setLoading(true);
     try {
       const normalizeOpinionItem = (item) => ({
         ...item,
@@ -63,105 +72,157 @@ function AllOpinionsPage({ category = null }) {
         content: toTextValue(item?.content),
         type: toTextValue(item?.type),
         author: toTextValue(item?.author),
-        source: deriveMediaOutlet({ source: toTextValue(item?.source), url: toTextValue(item?.link || item?.url) }) || 'Opinion Desk',
+        source:
+          deriveMediaOutlet({
+            source: toTextValue(item?.source),
+            url: toTextValue(item?.link || item?.url),
+          }) || "Opinion Desk",
         category: toTextValue(item?.category),
         publishedAt: toTextValue(item?.publishedAt || item?.time),
         link: toTextValue(item?.link || item?.url),
         image: toTextValue(item?.image) || toTextValue(item?.thumbnail),
-      })
+      });
 
       if (activeTopicQuery && activeTopicQuery.trim().length > 0) {
-        const searchResults = await searchRSSContent(activeTopicQuery)
-        const normalizedResults = (Array.isArray(searchResults) ? searchResults : []).map(normalizeOpinionItem)
-        let topicOpinions = dedupeContentItems(normalizedResults.filter((item) => {
-          const typeText = toTextValue(item?.type).toLowerCase()
-          const categoryText = toTextValue(item?.category).toLowerCase()
-          const sourceText = toTextValue(item?.source).toLowerCase()
-          return (
-            typeText === 'opinion' ||
-            categoryText.includes('opinion') ||
-            categoryText.includes('commentary') ||
-            categoryText.includes('editorial') ||
-            sourceText.includes('opinion')
-          )
-        }))
+        const searchResults = await searchRSSContent(activeTopicQuery);
+        const normalizedResults = (
+          Array.isArray(searchResults) ? searchResults : []
+        ).map(normalizeOpinionItem);
+        let topicOpinions = dedupeContentItems(
+          normalizedResults.filter((item) => {
+            const typeText = toTextValue(item?.type).toLowerCase();
+            const categoryText = toTextValue(item?.category).toLowerCase();
+            const sourceText = toTextValue(item?.source).toLowerCase();
+            return (
+              typeText === "opinion" ||
+              categoryText.includes("opinion") ||
+              categoryText.includes("commentary") ||
+              categoryText.includes("editorial") ||
+              sourceText.includes("opinion")
+            );
+          }),
+        );
 
-        const MIN_TOPIC_OPINIONS = 20
+        const MIN_TOPIC_OPINIONS = 20;
         if (topicOpinions.length < MIN_TOPIC_OPINIONS) {
-          const opinionsPool = await fetchRSSOpinions()
+          const opinionsPool = await fetchRSSOpinions();
           const supplemental = (Array.isArray(opinionsPool) ? opinionsPool : [])
             .map(normalizeOpinionItem)
-            .filter((item) => matchesTopicQuery(item, activeTopicQuery))
-          topicOpinions = dedupeContentItems([...topicOpinions, ...supplemental])
+            .filter((item) => matchesTopicQuery(item, activeTopicQuery));
+          topicOpinions = dedupeContentItems([
+            ...topicOpinions,
+            ...supplemental,
+          ]);
         }
 
         if (topicOpinions.length < MIN_TOPIC_OPINIONS) {
-          const generatedFallback = await fetchOpinions(null, activeTopicQuery)
-          topicOpinions = dedupeContentItems([...topicOpinions, ...(Array.isArray(generatedFallback) ? generatedFallback : []).map(normalizeOpinionItem)])
+          const generatedFallback = await fetchOpinions(null, activeTopicQuery);
+          topicOpinions = dedupeContentItems([
+            ...topicOpinions,
+            ...(Array.isArray(generatedFallback) ? generatedFallback : []).map(
+              normalizeOpinionItem,
+            ),
+          ]);
         }
 
-        setOpinions(dedupeContentItems(topicOpinions))
+        setOpinions(dedupeContentItems(topicOpinions));
       } else {
-        const opinionsData = await fetchOpinions(filterContext)
-        const normalizedOpinions = (Array.isArray(opinionsData) ? opinionsData : []).map(normalizeOpinionItem)
+        const opinionsData = await fetchOpinions(filterContext);
+        const normalizedOpinions = (
+          Array.isArray(opinionsData) ? opinionsData : []
+        ).map(normalizeOpinionItem);
 
-        let filtered = normalizedOpinions
+        let filtered = normalizedOpinions;
         if (filterContext) {
-          filtered = filterContentByCategory(normalizedOpinions, filterContext, 1, { strict: true })
+          filtered = filterContentByCategory(
+            normalizedOpinions,
+            filterContext,
+            1,
+            { strict: true },
+          );
         }
 
-        setOpinions(dedupeContentItems(filtered))
+        setOpinions(dedupeContentItems(filtered));
       }
     } catch (error) {
-      console.error('Error loading opinions:', error)
-      setOpinions([])
+      console.error("Error loading opinions:", error);
+      setOpinions([]);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [activeTopicQuery, filterContext])
+  }, [activeTopicQuery, filterContext]);
 
   useEffect(() => {
-    loadOpinions()
-  }, [loadOpinions])
+    loadOpinions();
+  }, [loadOpinions]);
 
   useEffect(() => {
-    if (selectedSource !== 'ALL' && !opinions.some((item) => item.source === selectedSource)) {
-      setSelectedSource('ALL')
+    if (
+      selectedSource !== "ALL" &&
+      !opinions.some((item) => item.source === selectedSource)
+    ) {
+      setSelectedSource("ALL");
     }
-  }, [opinions, selectedSource])
+  }, [opinions, selectedSource]);
 
-  const sources = ['ALL', ...new Set(opinions.map((item) => item.source).filter(Boolean))]
-  const filteredOpinions = selectedSource === 'ALL'
-    ? opinions
-    : opinions.filter((item) => item.source === selectedSource)
+  const sources = [
+    "ALL",
+    ...new Set(opinions.map((item) => item.source).filter(Boolean)),
+  ];
+  const filteredOpinions =
+    selectedSource === "ALL"
+      ? opinions
+      : opinions.filter((item) => item.source === selectedSource);
 
   const handleSourceClick = (source) => {
-    setSelectedSource(source)
-    setVisibleCount(8)
-  }
+    setSelectedSource(source);
+    setVisibleCount(8);
+  };
 
   const scrollTickerLeft = () => {
-    sourceTickerRef.current?.scrollBy({ left: -240, behavior: 'smooth' })
-  }
+    sourceTickerRef.current?.scrollBy({ left: -240, behavior: "smooth" });
+  };
 
   const scrollTickerRight = () => {
-    sourceTickerRef.current?.scrollBy({ left: 240, behavior: 'smooth' })
-  }
+    sourceTickerRef.current?.scrollBy({ left: 240, behavior: "smooth" });
+  };
 
-  const leadStory = filteredOpinions[0]
-  const leadStoryHref = leadStory ? resolveContentHref(leadStory) : ''
-  const featuredStories = filteredOpinions.slice(1, 4)
-  const latestStoriesAll = filteredOpinions.slice(4)
-  const latestStories = latestStoriesAll.slice(0, visibleCount)
-  const hasMore = visibleCount < latestStoriesAll.length
-  const remaining = latestStoriesAll.length - visibleCount
-  const quickUpdates = filteredOpinions.slice(0, 8)
+  const leadStory = filteredOpinions[0];
+  const leadStoryHref = leadStory ? resolveContentHref(leadStory) : "";
+  const featuredStories = filteredOpinions.slice(1, 4);
+  const latestStoriesAll = filteredOpinions.slice(4);
+  const latestStories = latestStoriesAll.slice(0, visibleCount);
+  const hasMore = visibleCount < latestStoriesAll.length;
+  const remaining = latestStoriesAll.length - visibleCount;
+  const quickUpdates = filteredOpinions.slice(0, 8);
+  const topicRoute = topicSlug ? `/topic/${topicSlug}` : "";
+  const categoryRoute =
+    categoryName || category ? `/category/${categoryName || category}` : "";
+  const fallbackTo = topicRoute || categoryRoute || "/opinions";
+  const breadcrumbs = [
+    { label: "Home", to: "/" },
+    topicRoute
+      ? { label: categoryConfig.title, to: topicRoute }
+      : categoryRoute
+        ? { label: categoryConfig.title, to: categoryRoute }
+        : { label: "Opinions", to: "/opinions" },
+    { label: "All Opinions" },
+  ];
 
   return (
     <div className="all-news-page">
+      <PageBackBar
+        shellClassName="all-news-hero-inner"
+        fallbackTo={fallbackTo}
+        breadcrumbs={breadcrumbs}
+        meta={`${filteredOpinions.length} opinions in this feed`}
+      />
+
       <div className="all-news-hero">
         <div className="all-news-hero-inner">
-          <h1 className="all-news-title">Top {categoryConfig.title} Opinions</h1>
+          <h1 className="all-news-title">
+            Top {categoryConfig.title} Opinions
+          </h1>
           <p className="all-news-subtitle">Select Source(s)</p>
           <div className="all-news-hero-stats">
             <div className="hero-stat">
@@ -169,11 +230,15 @@ function AllOpinionsPage({ category = null }) {
               <span className="hero-stat-label">Opinions</span>
             </div>
             <div className="hero-stat">
-              <span className="hero-stat-value">{Math.max(sources.length - 1, 0)}</span>
+              <span className="hero-stat-value">
+                {Math.max(sources.length - 1, 0)}
+              </span>
               <span className="hero-stat-label">Voices</span>
             </div>
             <div className="hero-stat">
-              <span className="hero-stat-value">{selectedSource === 'ALL' ? 'Live' : selectedSource}</span>
+              <span className="hero-stat-value">
+                {selectedSource === "ALL" ? "Live" : selectedSource}
+              </span>
               <span className="hero-stat-label">Feed</span>
             </div>
           </div>
@@ -184,25 +249,35 @@ function AllOpinionsPage({ category = null }) {
         <div className="source-filter-header">
           <h2 className="source-filter-title">Author / Source Ticker</h2>
           <span className="source-filter-count">
-            {selectedSource === 'ALL' ? 'All voices active' : `${filteredOpinions.length} opinions from ${selectedSource}`}
+            {selectedSource === "ALL"
+              ? "All voices active"
+              : `${filteredOpinions.length} opinions from ${selectedSource}`}
           </span>
         </div>
         <div className="source-ticker-row">
-          <button className="slider-btn ticker-btn" onClick={scrollTickerLeft} aria-label="Scroll sources left">
+          <button
+            className="slider-btn ticker-btn"
+            onClick={scrollTickerLeft}
+            aria-label="Scroll sources left"
+          >
             <FontAwesomeIcon icon={faChevronLeft} />
           </button>
           <div className="source-pills" ref={sourceTickerRef}>
             {sources.map((source) => (
               <button
                 key={source}
-                className={`source-pill ${selectedSource === source ? 'active' : ''}`}
+                className={`source-pill ${selectedSource === source ? "active" : ""}`}
                 onClick={() => handleSourceClick(source)}
               >
                 {source}
               </button>
             ))}
           </div>
-          <button className="slider-btn ticker-btn" onClick={scrollTickerRight} aria-label="Scroll sources right">
+          <button
+            className="slider-btn ticker-btn"
+            onClick={scrollTickerRight}
+            aria-label="Scroll sources right"
+          >
             <FontAwesomeIcon icon={faChevronRight} />
           </button>
         </div>
@@ -213,7 +288,10 @@ function AllOpinionsPage({ category = null }) {
           <div className="loading-state">Loading opinions...</div>
         ) : filteredOpinions.length === 0 ? (
           <div className="no-results">
-            <p>No opinion pieces found{filterContext ? ` for "${filterContext}"` : ''}.</p>
+            <p>
+              No opinion pieces found
+              {filterContext ? ` for "${filterContext}"` : ""}.
+            </p>
           </div>
         ) : (
           <>
@@ -221,25 +299,61 @@ function AllOpinionsPage({ category = null }) {
               {leadStory && (
                 <article className="lead-story-card">
                   {leadStory.image && (
-                    <a href={leadStoryHref} target="_blank" rel="noopener noreferrer" className="lead-story-image">
-                      <img {...getImageProps(leadStory.image, leadStory.title, 'opinions')} />
+                    <a
+                      href={leadStoryHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="lead-story-image"
+                    >
+                      <img
+                        {...getImageProps(
+                          leadStory.image,
+                          leadStory.title,
+                          "opinions",
+                        )}
+                      />
                     </a>
                   )}
                   <div className="lead-story-content">
                     <div className="news-card-meta lead-story-meta">
-                      <span className="news-card-source">{leadStory.category || leadStory.source}</span>
-                      {getGeneratedContentLabel(leadStory) && <span className="news-card-time">{getGeneratedContentLabel(leadStory)}</span>}
-                      {leadStory.publishedAt && <span className="news-card-time">{formatDateOnly(leadStory.publishedAt)}</span>}
+                      <span className="news-card-source">
+                        {leadStory.category || leadStory.source}
+                      </span>
+                      {getGeneratedContentLabel(leadStory) && (
+                        <span className="news-card-time">
+                          {getGeneratedContentLabel(leadStory)}
+                        </span>
+                      )}
+                      {leadStory.publishedAt && (
+                        <span className="news-card-time">
+                          {formatDateOnly(leadStory.publishedAt)}
+                        </span>
+                      )}
                     </div>
-                    <a href={leadStoryHref} target="_blank" rel="noopener noreferrer" className="lead-story-headline-link">
+                    <a
+                      href={leadStoryHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="lead-story-headline-link"
+                    >
                       <h2 className="lead-story-headline">{leadStory.title}</h2>
                     </a>
                     <p className="lead-story-description">
-                      {truncateText(leadStory.description || leadStory.content || '', 260)}
+                      {truncateText(
+                        leadStory.description || leadStory.content || "",
+                        260,
+                      )}
                     </p>
                     <div className="lead-story-footer">
-                      <span className="lead-story-source">By {leadStory.author || leadStory.source}</span>
-                      <a href={leadStoryHref} target="_blank" rel="noopener noreferrer" className="read-more-link">
+                      <span className="lead-story-source">
+                        By {leadStory.author || leadStory.source}
+                      </span>
+                      <a
+                        href={leadStoryHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="read-more-link"
+                      >
                         Read opinion →
                       </a>
                     </div>
@@ -252,11 +366,6 @@ function AllOpinionsPage({ category = null }) {
                   slot="article-sidebar"
                   campaignIndex={1}
                   variationKey="all-opinions-top"
-                  sizes={{
-                    desktop: { width: 320, height: 350 },
-                    tablet: { width: 320, height: 250 },
-                    mobile: { width: 320, height: 100 }
-                  }}
                 />
               </aside>
             </section>
@@ -264,20 +373,47 @@ function AllOpinionsPage({ category = null }) {
             {featuredStories.length > 0 && (
               <section className="secondary-stories-grid">
                 {featuredStories.map((item, index) => (
-                  <article key={`${item.link || item.title}-${index}`} className="secondary-story-card">
+                  <article
+                    key={`${item.link || item.title}-${index}`}
+                    className="secondary-story-card"
+                  >
                     {item.image && (
-                      <a href={resolveContentHref(item)} target="_blank" rel="noopener noreferrer" className="secondary-story-image">
-                        <img {...getImageProps(item.image, item.title, 'opinions')} />
+                      <a
+                        href={resolveContentHref(item)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="secondary-story-image"
+                      >
+                        <img
+                          {...getImageProps(item.image, item.title, "opinions")}
+                        />
                       </a>
                     )}
                     <div className="secondary-story-content">
                       <div className="news-card-meta">
-                        <span className="news-card-source">{item.author || item.source}</span>
-                        {getGeneratedContentLabel(item) && <span className="news-card-time">{getGeneratedContentLabel(item)}</span>}
-                        {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
+                        <span className="news-card-source">
+                          {item.author || item.source}
+                        </span>
+                        {getGeneratedContentLabel(item) && (
+                          <span className="news-card-time">
+                            {getGeneratedContentLabel(item)}
+                          </span>
+                        )}
+                        {item.publishedAt && (
+                          <span className="news-card-time">
+                            {formatDateOnly(item.publishedAt)}
+                          </span>
+                        )}
                       </div>
-                      <a href={resolveContentHref(item)} target="_blank" rel="noopener noreferrer" className="secondary-story-link">
-                        <h3 className="secondary-story-headline">{item.title}</h3>
+                      <a
+                        href={resolveContentHref(item)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="secondary-story-link"
+                      >
+                        <h3 className="secondary-story-headline">
+                          {item.title}
+                        </h3>
                       </a>
                     </div>
                   </article>
@@ -293,44 +429,89 @@ function AllOpinionsPage({ category = null }) {
                 </div>
 
                 <div className="latest-news-list">
-                  {(latestStories.length > 0 ? latestStories : filteredOpinions.slice(1)).map((item, index) => {
-                    const isLast = index === latestStories.length - 1 && hasMore
-                    const href = resolveContentHref(item)
+                  {(latestStories.length > 0
+                    ? latestStories
+                    : filteredOpinions.slice(1)
+                  ).map((item, index) => {
+                    const isLast =
+                      index === latestStories.length - 1 && hasMore;
+                    const href = resolveContentHref(item);
                     return (
-                    <article key={`${item.link || item.title}-${index}`} className={`latest-story-card${isLast ? ' latest-story-card--fade' : ''}`}>
-                      {item.image && (
-                        <a href={href} target="_blank" rel="noopener noreferrer" className="latest-story-image">
-                          <img {...getImageProps(item.image, item.title, 'opinions')} />
-                        </a>
-                      )}
-                      <div className="latest-story-content">
-                        <div className="news-card-meta">
-                          <span className="news-card-source">{item.author || item.source}</span>
-                          {getGeneratedContentLabel(item) && <span className="news-card-time">{getGeneratedContentLabel(item)}</span>}
-                          {item.publishedAt && <span className="news-card-time">{formatDateOnly(item.publishedAt)}</span>}
-                        </div>
-                        <a href={href} target="_blank" rel="noopener noreferrer" className="latest-story-link">
-                          <h3 className="latest-story-headline">{item.title}</h3>
-                        </a>
-                        {item.description && (
-                          <p className="latest-story-description">
-                            {truncateText(item.description, 180)}
-                          </p>
+                      <article
+                        key={`${item.link || item.title}-${index}`}
+                        className={`latest-story-card${isLast ? " latest-story-card--fade" : ""}`}
+                      >
+                        {item.image && (
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="latest-story-image"
+                          >
+                            <img
+                              {...getImageProps(
+                                item.image,
+                                item.title,
+                                "opinions",
+                              )}
+                            />
+                          </a>
                         )}
-                        <a href={href} target="_blank" rel="noopener noreferrer" className="read-more-link">
-                          Continue reading →
-                        </a>
-                      </div>
-                    </article>
-                    )
+                        <div className="latest-story-content">
+                          <div className="news-card-meta">
+                            <span className="news-card-source">
+                              {item.author || item.source}
+                            </span>
+                            {getGeneratedContentLabel(item) && (
+                              <span className="news-card-time">
+                                {getGeneratedContentLabel(item)}
+                              </span>
+                            )}
+                            {item.publishedAt && (
+                              <span className="news-card-time">
+                                {formatDateOnly(item.publishedAt)}
+                              </span>
+                            )}
+                          </div>
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="latest-story-link"
+                          >
+                            <h3 className="latest-story-headline">
+                              {item.title}
+                            </h3>
+                          </a>
+                          {item.description && (
+                            <p className="latest-story-description">
+                              {truncateText(item.description, 180)}
+                            </p>
+                          )}
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="read-more-link"
+                          >
+                            Continue reading →
+                          </a>
+                        </div>
+                      </article>
+                    );
                   })}
                 </div>
 
                 {hasMore && (
                   <div className="load-more-container">
-                    <button className="load-more-btn" onClick={() => setVisibleCount(c => c + LOAD_MORE_SIZE)}>
+                    <button
+                      className="load-more-btn"
+                      onClick={() => setVisibleCount((c) => c + LOAD_MORE_SIZE)}
+                    >
                       Show {Math.min(remaining, LOAD_MORE_SIZE)} more
-                      <span className="load-more-total">({remaining} remaining)</span>
+                      <span className="load-more-total">
+                        ({remaining} remaining)
+                      </span>
                     </button>
                   </div>
                 )}
@@ -351,9 +532,17 @@ function AllOpinionsPage({ category = null }) {
                       rel="noopener noreferrer"
                       className="quick-update-item"
                     >
-                      <span className="quick-update-source">{item.author || item.source}</span>
-                      <h3 className="quick-update-headline">{truncateText(item.title, 88)}</h3>
-                      {item.publishedAt && <span className="quick-update-time">{formatDateOnly(item.publishedAt)}</span>}
+                      <span className="quick-update-source">
+                        {item.author || item.source}
+                      </span>
+                      <h3 className="quick-update-headline">
+                        {truncateText(item.title, 88)}
+                      </h3>
+                      {item.publishedAt && (
+                        <span className="quick-update-time">
+                          {formatDateOnly(item.publishedAt)}
+                        </span>
+                      )}
                     </a>
                   ))}
                 </div>
@@ -363,7 +552,7 @@ function AllOpinionsPage({ category = null }) {
         )}
       </div>
     </div>
-  )
+  );
 }
 
-export default AllOpinionsPage
+export default AllOpinionsPage;

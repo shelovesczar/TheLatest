@@ -1,380 +1,221 @@
-# TheLatest
+# The Latest
 
-A modern news app that pulls stories from many trusted publishers into one place.
+The Latest is a React and Netlify-powered news platform that aggregates live coverage, opinions, videos, podcasts, and social signals into a single editorial experience. It combines multi-source discovery, AI-assisted context, trust metadata, user follows, and serverless feed orchestration so readers can move from headlines to deeper context without bouncing across multiple products.
 
-## 2026 update highlights
+Created by Cesar Hernandez  
+Contributors: Ritik Patani and Lanna Hu
 
-Recent work in this repo now includes:
+## What the project does
 
-- A redesigned editorial homepage and section layout with stronger Apple News style structure.
-- A rebuilt desktop header with scrollable navigation, working dropdown flyouts, a profile menu, integrated date treatment, and tighter utility spacing.
-- A desktop header utility refinement that keeps the theme toggle adjacent to the profile/login icon.
-- A tighter 390px mobile shell with simplified top chrome, smaller section typography, a shared route-persistent mobile header, and a native-app-style mobile footer removal in favor of the bottom dock.
-- Dedicated topic destinations from navigation dropdowns, plus topic-specific all-news, all-opinions, all-videos, and all-podcasts pages.
-- Shared Jeff-style ad treatments through the reusable ad component, including rotating creative variations so placements do not feel static.
-- Netlify-backed auth, session persistence, following, dashboard flows, shared summaries, feed health endpoints, story snapshot persistence, trending analytics, engagement tracking, and Claude-assisted search support.
-- Graceful Netlify Blob fallbacks outside managed Netlify runtimes, plus optional manual Blob credentials for Docker, CI, and other non-Netlify environments.
-- Stable story routes backed by persisted article snapshots so saved items, generated content, and direct story links are more reliable.
-- Shared backend rate limiting across expensive RSS and AI function paths to reduce abuse and cold-path churn.
-- Trust and editorial transparency pages for about, editorial standards, corrections, and contact.
-- Generated-content labeling across key story surfaces so fallback AI content is clearly identified in the UI.
-- Route-aware SEO metadata, structured data, sitemap generation, robots generation, and canonical handling.
-- Privacy and terms pages, cookie consent controls, and analytics gating tied to consent state.
-- Broader caching and resilience improvements across RSS aggregation, topic/search loading, stale-cache fallback, repeat-query performance, cached backend search snapshots, normalized news cache keys, and lighter fast-path feed selection.
-- Advanced search improvements including faster repeat queries, source filters, query view pills, and research shortcuts.
-- Claude-powered shared summaries now carry provider/source context and enforce a concise 700-character summary cap.
-- Backend story clustering and perspective labeling for side-by-side editorial comparisons.
-- Deployment hardening through Docker, environment verification, smoke-test automation, bundle audits, latency audits, and deploy-readiness workflow checks.
+The app is built to unify several layers of news consumption in one place:
 
-## What this app does
+- Live news aggregation from multiple sources through RSS and server-side feed orchestration.
+- Opinion, video, podcast, and social surfaces alongside standard news coverage.
+- Topic-aware search and discovery across content types.
+- AI-generated summary and search-assist flows for faster scanning and follow-up research.
+- Source trust context, perspective labels, and source-profile pages.
+- Story clustering and side-by-side perspective comparison for major stories.
+- User accounts, session persistence, follows, dashboard, and personalized recommendation rails.
+- Saved/history-style browsing and stable article routes backed by story snapshots.
+- Analytics and engagement tracking for content interaction and operational monitoring.
+- SEO, sitemap, structured metadata, privacy controls, and deploy-readiness tooling.
 
-TheLatest combines:
+## Core features
 
-- Top news stories
-- Opinion pieces
-- Videos
-- Podcasts
-- Social media headlines
+### Reader experience
 
-Instead of opening 10+ websites, you can browse everything in one feed.
+- Editorial homepage with hero, top stories, AI briefing, trending, and topic-driven sections.
+- Dedicated pages for news, opinions, videos, podcasts, social, following, dashboard, search, article reading, and source profiles.
+- Route-persistent desktop and mobile navigation, including desktop flyouts and mobile dock patterns.
+- Advanced search with content-type views, source filters, archive/history support, and research shortcuts.
+- Stable story URLs and article hydration via persisted story snapshots.
 
----
+### Trust and context
 
-## What was recently fixed and improved
+- Source profiles with ownership, funding, perspective, factuality shorthand, and methodology notes.
+- Source-level truth score context on key surfaces.
+- Perspective labeling using server-side classification with source-map fallback.
+- Typed story dossier sections and engagement measurement in the article reader.
 
-### 0) Design structure and navigation were overhauled
+### Personalization and accounts
 
-The app now follows a more structured editorial design system across the homepage, category pages, topic pages, and shared content sections.
+- Netlify-backed authentication with register, login, logout, and session hydration.
+- Following and dashboard flows for categories, topics, and sources.
+- Personalized `For You` recommendations that blend follows with AI-assisted related-topic discovery.
 
-This includes:
+### Platform and operations
 
-- A stronger hero, summary, section, and card hierarchy.
-- Desktop nav dropdowns that remain accessible even with a scrollable tab lane.
-- A combined desktop profile menu for dashboard, following, and auth actions.
-- Topic-aware routes from navigation dropdown items instead of generic search-only destinations.
-- Topic collection routes such as `/topic/:topicSlug/all-news` and companion media pages.
-
-### 0.1) Shared ads now use richer creative variations
-
-The shared ad component was rewritten so existing placements inherit a more polished leaderboard/sidebar treatment automatically.
-
-What changed:
-
-- Shared slot presets now render richer placeholder creatives.
-- Creative variations rotate by slot and time key so ad surfaces feel less repetitive.
-- Category pages, homepage placements, and sidebar ad surfaces now stay visually consistent through one component.
-
-### 0) RSS bundle is now centralized and prioritized
-
-The RSS aggregator can now prepend one RSS.app bundle feed across key feed groups (news, opinions, videos, podcasts, and category feeds) without duplicating URLs.
-
-Environment variables:
-
-- `RSS_APP_BUNDLE_FEED_URL`
-- `RSS_APP_BUNDLE_SOURCE`
-
-### 0) Videos and podcasts can now run from one RSS feed
-
-The aggregator now supports using a single RSS source as the sole feed for both Videos and Podcasts.
-
-Current configured feed:
-
-- https://rss.app/feeds/_D52QE16IQULFQQkk.xml
-
-### 0.1) Image URL filtering in RSS fetch was removed
-
-Image extraction now accepts all discovered image URLs from feed fields and embedded HTML image tags, instead of filtering by tracking/size keywords.
-
-### 1) Topic filtering now works across the whole app
-
-When you select a topic (not `ALL`), sections now properly load topic-related content.
-
-This includes:
-
-- Top Stories
-- Opinions
-- Videos
-- Podcasts
-- Social
-
-### 2) Top Stories no longer go empty on topic changes
-
-If a topic has too little content, the app now safely backfills from broader live feeds so sections stay populated.
-
-### 3) Social feed now uses real RSS-backed data
-
-Topic mode in social now requests real feed data (with fallback broadening) instead of relying on mock-only paths.
-
-### 4) Better duplicate removal
-
-Content is deduplicated more consistently across news, opinions, videos, podcasts, and search.
-
-### 5) Better image reliability and quality
-
-- YouTube thumbnails prefer higher-quality sources when available.
-- Feed/article images are handled more robustly.
-
-### 6) More resilient fetch behavior
-
-The app now leans on:
-
-- Retry logic for temporary failures
-- Fresh cache for normal performance
-- Stale cache reuse for short outages
-
-This helps prevent blank sections during feed instability.
-
-### 7) Source contribution diagnostics for feed quality
-
-You can now inspect which outlets are actually contributing items.
-
-Use:
-
-- `/.netlify/functions/rss-aggregator?type=news&sourceStats=1`
-- `/.netlify/functions/rss-aggregator?type=news&category=business&sourceStats=1`
-- `/.netlify/functions/rss-aggregator?search=giuliani&sourceStats=1`
-
-Responses include:
-
-- `sourceStats.totalItems`
-- `sourceStats.uniqueSources`
-- `sourceStats.topSources` (source + count)
-
-### 8) Strict video vs podcast separation and de-duplication
-
-Media classification is now shared across service and page layers so users do not see video/podcast duplicates.
-
-Rules applied:
-
-- Video and podcast items are classified from URL/type/category/source/title/description signals.
-- Items are de-duplicated within each section by stable media keys.
-- Cross-duplicates are removed between video and podcast candidate pools before rendering.
-- Bundle-driven topic searches now preserve this separation on both Videos and Podcasts pages.
-
-### 9) Major performance upgrade for smoother scrolling and faster loading
-
-The app now includes a full performance pass focused on low-power devices and long news feeds.
-
-What changed:
-
-- Virtualized rendering for heavy lists so only a small visible window is kept in the DOM.
-- Progressive section loading using reusable in-view observers.
-- Shared responsive image component with `srcset`/`sizes` for smaller image payloads.
-- Skeleton card placeholders to reduce layout shifts while content is loading.
-- Search result caching improvements for faster repeat queries.
-- Critical preload hints for first font, first image, and first feed request.
-- Lighter visual effects in hot paths to reduce scroll jank on weak GPUs.
-
-Expected user-facing impact:
-
-- Faster initial page responsiveness.
-- Smoother scrolling in long result pages.
-- Reduced layout jumping during asynchronous loads.
-- Better performance consistency on older phones and budget laptops.
-
-### 10) Auth, follows, summaries, persistence, and operational endpoints were added
-
-The app now supports a fuller logged-in experience and more backend operational tooling.
-
-This includes:
-
-- Session-backed authentication.
-- Following and dashboard pages.
-- Shared summary storage.
-- Story snapshot persistence for stable story-reader hydration and durable story links.
-- Shared rate limiting for expensive AI and feed endpoints.
-- Feed health and warm-content endpoints.
-- Engagement tracking and trending data collection.
-
-### 11) Search, SEO, trust, and compliance work were added
-
-The app now has a more production-ready search/discovery layer and stronger launch-readiness basics.
-
-This includes:
-
-- Route-level SEO metadata with Open Graph, Twitter tags, canonicals, and JSON-LD.
-- Build-time `sitemap.xml` and `robots.txt` generation.
-- About, editorial standards, corrections, and contact routes linked from the shared footer.
-- Privacy and terms routes linked from the shared footer.
-- Cookie consent state with analytics opt-in gating.
-- Advanced search view filters, source filters, and research links.
-- Cached backend search snapshots so repeated searches avoid redoing the full feed fan-out.
-- Generated-content labeling on major content surfaces so fallback content stays transparent.
-
-### 12) Local Netlify development on Windows was hardened
-
-The local Netlify launcher was reworked to be more reliable on Windows.
-
-This includes:
-
-- Safer process spawning through `cmd.exe`.
-- Port readiness checks before starting the Netlify layer.
-- Better handling of occupied default ports.
-- Cleaner coordination between Vite and Netlify local dev.
-
-### 13) Mobile shell and deployment guardrails were tightened
-
-The mobile experience and deployment story were both hardened further.
-
-This includes:
-
-- Smaller mobile section headings for Top Stories, AI Summary, Opinions, Podcasts, and Advanced Search.
-- Mobile footer removal so the bottom dock remains the single persistent navigation surface on app-like mobile layouts.
-- Docker support for reproducible production builds.
-- Deployment environment verification through `npm run verify:deploy-env`.
-- A Netlify smoke-test script for checking deployed function endpoints.
-
-### 14) Desktop header hover access was repaired
-
-Desktop navigation dropdowns now remain reachable on hover, and the shared header regression suite covers that interaction.
-
-This includes:
-
-- fixing the dropdown state reset logic so opening a menu does not immediately close it
-- tightening the hover path between the top-level tab and flyout
-- adding a focused desktop hover regression test
-
-### 15) Claude summaries, search, and feed routing were tightened
-
-The AI and feed layers were refined so shared summaries are clearer, repeat searches are lighter, and generic news requests avoid redundant cold paths.
-
-This includes:
-
-- Claude-backed shared summaries that return provider/source context and stay capped at 700 characters.
-- Claude-assisted search endpoint support for smarter search guidance and article discovery.
-- Normalized `category=news` handling so generic news requests share the same cache and snapshot path.
-- Faster generic news and opinions fast paths by preferring the healthiest feed set first.
-- A lighter `fetchOpinions()` client wrapper so it avoids unnecessary sequential fallback work.
-
-### 17) Launch-readiness guardrails were expanded
-
-The repo now has stronger operational checks around deploys, feed health, and generated fallback behavior.
-
-This includes:
-
-- A site health endpoint for feed, analytics, and generated-content visibility.
-- Bundle and latency audit scripts for release checks.
-- A deploy-readiness workflow and stronger predeploy verification paths.
-- Additional repo cleanup so lint, tests, and production builds are easier to keep green.
-
-### 16) The mobile header and section chrome were unified further
-
-The shared mobile shell was tightened so the header stays consistent across routes and section headers behave more predictably on smaller screens.
-
-This includes:
-
-- One persistent mobile header treatment across homepage, news, category, topic, and search routes.
-- A mobile search control beside the theme toggle in the shared header.
-- Tighter section spacing and header alignment updates for mobile Top Stories and category layouts.
-
----
+- Netlify Functions for RSS aggregation, social fetches, auth, story snapshots, shared summaries, trending, analytics, and health endpoints.
+- Graceful Blob-storage fallbacks outside managed Netlify runtimes.
+- Build-time sitemap generation and prerender steps.
+- Smoke tests, deploy-env verification, bundle audits, and latency audits.
 
 ## Tech stack
 
-- React + Vite
+### Frontend
+
+- React 19
+- Vite
+- React Router
+- Font Awesome
+- `@tanstack/react-virtual`
+
+### Backend and platform
+
 - Netlify Functions
-- RSS aggregation
-- IndexedDB caching
+- Netlify Blobs
+- RSS Parser
+- Axios
 
----
+### Quality and tooling
 
-## Quick start (local)
+- Vitest
+- Testing Library
+- ESLint
+- Docker
+- Netlify CLI workflow via local scripts
 
-### 1) Install dependencies
+## High-level architecture
+
+```text
+src/
+  components/    Shared UI, layout, and section-level presentation
+  context/       Auth, consent, and search state
+  hooks/         Shared viewport and scrolling hooks
+  pages/         Route-level page components
+  services/      Client-side API wrappers and orchestration
+  utils/         Trust, routing, filtering, dedupe, persistence, SEO helpers
+
+netlify/functions/
+  auth.js                Session auth endpoints
+  rss-aggregator.js      Main feed aggregation and search backend
+  fetchSocialFeeds.js    Social source aggregation
+  perspective.js         Server-side perspective labeling
+  sharedSummary.js       Shared AI summary persistence
+  storySnapshot.js       Durable story route hydration
+  trackEngagement.js     Engagement analytics
+  trending.js            Trending/behavior signals
+  siteHealth.js          Operational health endpoint
+```
+
+## Local setup
+
+### Prerequisites
+
+- Node.js `>=20 <23`
+- npm
+- Netlify account if you want full hosted-function parity
+- Optional API/provider credentials for richer AI, feed, and social behavior
+
+### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 2) Run the app
+### 2. Create local environment configuration
+
+Use the repo's env template as your starting point and add the values you actually need for your workflow.
+
+Minimum useful local setup:
+
+- `SESSION_TOKEN_PEPPER`
+
+Recommended server/runtime variables for fuller behavior:
+
+- `ADMIN_EMAILS`
+- `RSSHUB_BASE_URL`
+- `RSS_APP_BUNDLE_FEED_URL`
+- `RSS_APP_BUNDLE_SOURCE`
+- `RSS_APP_AUTH_TOKEN` or `RSS_APP_API_KEY` / `RSS_APP_API_SECRET`
+- `NEWS_API_KEY`
+- `GNEWS_API_KEY`
+- `SOCIAL_RSS_FEEDS`
+- `ANTHROPIC_API_KEY`
+
+Optional browser-exposed AI keys, depending on which frontend provider path you want active:
+
+- `VITE_OPENAI_API_KEY`
+- `VITE_ANTHROPIC_API_KEY`
+- `VITE_PERPLEXITY_API_KEY`
+
+Optional for Blob-backed persistence outside managed Netlify runtimes:
+
+- `NETLIFY_BLOBS_SITE_ID`
+- `NETLIFY_BLOBS_TOKEN`
+
+For the complete environment walkthrough, see [SECRETS_SETUP.md](SECRETS_SETUP.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
+
+### 3. Start local development
+
+Frontend-only dev server:
 
 ```bash
 npm run dev
 ```
 
-If you need Netlify Functions locally, use:
+Frontend plus local Netlify Functions:
 
 ```bash
 npm run dev:netlify
 ```
 
-On Windows, the Netlify launcher now starts Vite first and then attaches Netlify dev using a safer spawn path.
+The Netlify dev helper is the better choice if you are working on auth, serverless feed logic, analytics, shared summaries, or Blob-backed features.
 
-### 3) Build for production
+## Build, test, and verification
+
+Run the standard checks from the repo root:
 
 ```bash
+npm run lint
+npm test
 npm run build
 ```
 
-### 3.1) Verify deployment environment
+Additional project scripts:
 
 ```bash
 npm run verify:deploy-env
-```
-
-Run this before deploying to Netlify or wiring up CI.
-It checks the current environment for the values the backend and auth flows expect.
-
-For a stricter manual release check:
-
-```bash
 npm run verify:deploy-env:strict
+npm run verify:deploy-env:blobs
+npm run audit:bundle
+npm run audit:latency
+npm run smoke:netlify-preview -- https://your-site.netlify.app
 ```
 
-### 4) Run tests
+What they are for:
+
+- `verify:deploy-env`: checks required and recommended deployment variables.
+- `verify:deploy-env:strict`: stricter gate for release readiness.
+- `verify:deploy-env:blobs`: confirms non-Netlify Blob credentials when needed.
+- `audit:bundle`: inspects production bundle weight.
+- `audit:latency`: checks latency-sensitive surfaces.
+- `smoke:netlify-preview`: validates a deployed Netlify URL.
+
+## Deployment
+
+The app is configured for Netlify.
+
+- Build output: `dist`
+- Functions directory: `netlify/functions`
+- SPA rewrites are handled in `netlify.toml`
+- The production build also generates sitemap output and prerendered routes
+
+Recommended deployment flow:
 
 ```bash
-npm test
+npm install
+npm run verify:deploy-env
+npm run build
+npm run dev:netlify
+npm run smoke:netlify-preview -- https://your-site.netlify.app
 ```
 
-For the shared header regression check specifically:
+Use Netlify preview or production to validate function routing, Blob persistence, auth/session behavior, and environment injection. Docker is useful for consistent build/runtime parity, but it does not by itself prove Netlify-specific behavior.
 
-```bash
-npm test -- Header.test.jsx
-```
+## Docker
 
----
-
-## Environment notes
-
-Copy `.env.example` to `.env` and set keys as needed.
-
-If you are wiring RSS.app credentials, put them in the root `.env` file, not in `.env.example`.
-
-Use these exact variable names:
-
-- `RSS_APP_API_KEY`
-- `RSS_APP_API_SECRET`
-- `RSS_APP_API_KEY_HEADER=X-API-Key`
-- `RSS_APP_API_SECRET_HEADER=X-API-Secret`
-
-Leave `RSS_APP_AUTH_TOKEN` empty unless RSS.app gives you a separate bearer token.
-
-For a minimal RSS-first local setup with no paid AI provider, start from:
-
-- `.env.rss-first.example`
-
-That template keeps the app on the built-in RSS feed lists, uses the editorial summary path, and only requires `SESSION_TOKEN_PEPPER`.
-
-If you use social RSS route resolution, set:
-
-- `RSSHUB_BASE_URL` (for example: `https://rsshub.app`)
-
-If you need Blob-backed storage outside Netlify itself, set both:
-
-- `NETLIFY_BLOBS_SITE_ID`
-- `NETLIFY_BLOBS_TOKEN`
-
-Without those manual Blob credentials, non-Netlify runtimes now degrade gracefully instead of crashing.
-
----
-
-## Docker parity
-
-Docker is useful here for reproducible install/build behavior and consistent Node runtime parity.
-It does not replace Netlify-specific behavior such as Functions routing or managed Blob access.
-
-Build the image:
+Build the container:
 
 ```bash
 docker build -t thelatest .
@@ -386,111 +227,39 @@ Run the built app:
 docker run --rm -p 8080:80 thelatest
 ```
 
-Use Docker to verify:
+## Contributing
 
-- dependency install consistency
-- Node version consistency
-- production build output consistency
+If you want to contribute, use this workflow:
 
-Smoke test a deployed Netlify preview or production URL:
+1. Install dependencies and configure `.env` values needed for your area of work.
+2. Run `npm run dev` or `npm run dev:netlify` depending on whether your change touches functions.
+3. Make focused changes that preserve existing route, trust, and feed behavior.
+4. Run the narrowest relevant tests first, then broader lint/build checks before opening a PR.
+5. Update docs when behavior, commands, or environment expectations change.
 
-```bash
-npm run smoke:netlify-preview -- https://your-site.netlify.app
-```
+Areas contributors commonly touch:
 
-For the full production rollout sequence, see:
+- `src/components` for UI and shared presentation
+- `src/pages` for route-level behavior
+- `src/utils/sourceProfiles.js` for source trust metadata
+- `netlify/functions/rss-aggregator.js` for feed selection and search
+- `netlify/functions/fetchSocialFeeds.js` for topic-aware social sourcing
+- `src/context/AuthContext.jsx` and auth functions for account/session flows
 
-- `RELEASE_CHECKLIST.md`
+Contributor docs:
 
-For secret and environment setup, see:
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [contributors.md](contributors.md)
+- [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)
+- [SECRETS_SETUP.md](SECRETS_SETUP.md)
+- [DEPLOYMENT.md](DEPLOYMENT.md)
 
-- `SECRETS_SETUP.md`
+## Notes for future contributors
 
-Use Netlify preview or production to verify:
-
-- function routing
-- Blob-backed persistence
-- environment variable injection
-- deploy-time permissions and site linkage
-
----
-
-## RSS feed configuration (videos + podcasts)
-
-For an RSS-first startup, the app already uses all currently configured feeds in `RSS_FEEDS` and then prepends the shared bundle feed for the eligible groups.
-
-That means:
-
-- you do not need to enumerate feeds in `.env`
-- leaving `RSS_APP_BUNDLE_FEED_URL` unset still uses the built-in bundle default
-- adding more feeds to the existing RSS.app bundle automatically flows into the app without code changes
-- adding brand-new direct feeds still happens in `netlify/functions/rss-aggregator.js`
-
-If your RSS.app bundle or provider feed requires authentication, set the credentials as server-side env vars in the project root `.env`, Netlify site env settings, or CI secrets:
-
-- `RSS_APP_AUTH_TOKEN` for bearer-token style auth
-- `RSS_APP_API_KEY` and `RSS_APP_API_SECRET` for header-based auth
-- optional `RSS_APP_API_KEY_HEADER` and `RSS_APP_API_SECRET_HEADER` if your provider uses header names other than `X-API-Key` and `X-API-Secret`
-
-These values are only read by Netlify functions and are not exposed to the browser bundle.
-
-To change the single RSS feed used by both Videos and Podcasts:
-
-1. Open `netlify/functions/rss-aggregator.js`
-2. Locate `RSS_FEEDS.videos` and `RSS_FEEDS.podcasts`
-3. Replace the `url` value in both entries with your new RSS feed
-
-Current setup points both to:
-
-- `https://rss.app/feeds/_D52QE16IQULFQQkk.xml`
-
-Tip: keep the two URLs identical if you want one shared feed for both sections.
-
-If you want the broadest RSS-first setup, keep the current configured `RSS_FEEDS` lists and continue adding sources into the shared bundle where it makes sense. That gives you both:
-
-- the direct curated feeds already in code
-- the aggregated bundle feed layered on top
-
----
-
-## Project structure (high level)
-
-- `src/pages` → full pages
-- `src/components` → reusable UI sections
-- `src/utils` → shared helpers (filtering, dedupe, image tools)
-- `src/services` + `src/*Service.js` → data fetching and formatting
-- `netlify/functions` → serverless RSS and social feed aggregation
-
----
-
-## Social feed setup (simple)
-
-You can configure social feeds in:
-
-- `netlify/functions/social-feed-config.cjs`
-
-Each feed can be route-based or URL-based, with topic tags.
-
----
-
-## Current todo
-
-- [ ] Implement full side-by-side UI parity on top of the clustering and perspective backend.
-- [ ] Continue backend caching work for slower secondary query surfaces and feed fan-out paths.
-- [ ] Harden production auth flows with email verification and password reset.
-- [ ] Expand monitoring from the health endpoint into alerting and frontend/function error reporting.
-- [ ] Review and clean dependency audit issues.
-
----
-
-## Contribution links
-
-- Contributor quick guide: `contributors.md`
-- Developer workflow guide: `CONTRIBUTING.md`
-- Release checklist: `RELEASE_CHECKLIST.md`
-- Secrets setup: `SECRETS_SETUP.md`
-
----
+- Netlify Functions are part of the real application surface, not just deployment glue.
+- Some local feed and AI behavior can degrade gracefully when provider credentials are absent.
+- Blob-backed features work best in Netlify-hosted environments unless manual Blob credentials are supplied locally.
+- Upstream feed quality can vary; local emptiness does not always indicate a code regression.
 
 ## License
 

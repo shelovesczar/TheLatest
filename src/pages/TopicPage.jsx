@@ -7,6 +7,7 @@ import SocialMedia from '../components/sections/SocialMedia'
 import Videos from '../components/sections/Videos'
 import Podcasts from '../components/sections/Podcasts'
 import AdBreak from '../components/common/AdBreak'
+import PageBackBar from '../components/common/PageBackBar'
 import { searchRSSContent } from '../rssService'
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
 import { cacheSocialPosts, fetchAllSocialPosts, getCachedSocialPosts } from '../services/socialMediaApiService'
@@ -159,20 +160,20 @@ function TopicPage() {
     { label: 'Podcasts', href: '#podcasts' }
   ]
 
+  const sectionHref = sectionLabel === 'News' ? '/category/top-stories' : `/category/${sectionLabel.toLowerCase()}`
+
   return (
     <main className="main-content category-page topic-page" id="topic-top">
-      <div className="topic-page-back-bar">
-        <div className="topic-page-shell topic-page-back-inner">
-          <div className="topic-page-breadcrumbs">
-            <Link to="/">Home</Link>
-            <span>/</span>
-            <Link to={sectionLabel === 'News' ? '/category/top-stories' : `/category/${sectionLabel.toLowerCase()}`}>{sectionLabel}</Link>
-            <span>/</span>
-            <span>{config.title}</span>
-          </div>
-          <span className="topic-page-result-count">{totalStoryCount} pieces across all sections</span>
-        </div>
-      </div>
+      <PageBackBar
+        shellClassName="topic-page-shell"
+        fallbackTo={sectionHref}
+        breadcrumbs={[
+          { label: 'Home', to: '/' },
+          { label: sectionLabel, to: sectionHref },
+          { label: config.title }
+        ]}
+        meta={`${totalStoryCount} pieces across all sections`}
+      />
 
       <section className="topic-hero-shell">
         <div className="topic-page-shell topic-hero-inner-shell">

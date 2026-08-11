@@ -10,8 +10,6 @@ import { filterContentByCategory } from './utils/categoryFiltering';
 import { isVideoItem, isPodcastItem, dedupeByMediaKey, removeCrossDuplicates } from './utils/mediaClassification';
 
 // API Configuration
-const NEWS_API_KEY = '0b0041996c424f25850a21dd1d75b810';
-const GNEWS_API_KEY = '03280f741607ebb5d78f02ee71186de4';
 const API_BASE_URL = '/.netlify/functions/fetchNews';
 const GENERATED_CONTENT_API_URL = '/.netlify/functions/generatedContent';
 const GENERATED_FALLBACK_COUNT = {

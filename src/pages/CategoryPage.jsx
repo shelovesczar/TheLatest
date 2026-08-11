@@ -6,6 +6,7 @@ import Opinions from '../components/sections/Opinions'
 import Videos from '../components/sections/Videos'
 import Podcasts from '../components/sections/Podcasts'
 import AdBreak from '../components/common/AdBreak'
+import PageBackBar from '../components/common/PageBackBar'
 
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
 import { fetchStoryClusters } from '../services/clusterService'
@@ -220,6 +221,7 @@ function CategoryPage({ category }) {
   ) || null
   const categoryNavItems = Array.isArray(categoryNavGroup?.items) ? categoryNavGroup.items : []
   const categorySectionLabel = categoryNavGroup?.label || config.title
+  const totalStoryCount = categoryNews.length + opinions.length + videos.length + podcasts.length
 
   useEffect(() => {
     let ignore = false
@@ -351,6 +353,16 @@ function CategoryPage({ category }) {
 
   return (
     <main className="main-content category-page">
+      <PageBackBar
+        shellClassName="topic-page-shell"
+        fallbackTo="/news"
+        breadcrumbs={[
+          { label: 'Home', to: '/' },
+          { label: config.title }
+        ]}
+        meta={`${totalStoryCount} pieces across all sections`}
+      />
+
       <div className="category-hero">
         <div className="topic-page-shell category-hero-inner">
           <div className="category-hero-copy">

@@ -41,6 +41,7 @@ const AdvertisePage   = lazy(() => import('./pages/AdvertisePage'))
 const EditorialStandardsPage = lazy(() => import('./pages/EditorialStandardsPage'))
 const CorrectionsPage = lazy(() => import('./pages/CorrectionsPage'))
 const ContactPage     = lazy(() => import('./pages/ContactPage'))
+const SourceProfilePage = lazy(() => import('./pages/SourceProfilePage'))
 
 // Minimal spinner shown while a route chunk is downloading
 const RouteLoader = () => (
@@ -235,6 +236,7 @@ function App() {
             <Route path="/editorial-standards" element={<EditorialStandardsPage />} />
             <Route path="/corrections" element={<CorrectionsPage />} />
             <Route path="/contact" element={<ContactPage />} />
+            <Route path="/sources/:sourceSlug" element={<SourceProfilePage />} />
 
             {/* On-site article reader */}
             <Route path="/article" element={<ArticleReader />} />

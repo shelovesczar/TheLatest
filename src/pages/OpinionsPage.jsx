@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearch } from '../context/SearchContext'
-import { Link } from 'react-router-dom'
 import Opinions from '../components/sections/Opinions'
+import PageBackBar from '../components/common/PageBackBar'
 import { fetchOpinions } from '../newsService'
 import './CategoryPage.css'
 
@@ -29,9 +29,18 @@ function OpinionsPage() {
 
   return (
     <div className="category-page">
+      <PageBackBar
+        shellClassName="topic-page-shell"
+        fallbackTo="/"
+        breadcrumbs={[
+          { label: 'Home', to: '/' },
+          { label: hasActiveTopic ? `${topic} Opinions` : 'Opinions' }
+        ]}
+        meta={`${opinions.length} opinion pieces loaded`}
+      />
+
       <div className="category-hero">
         <div className="category-hero-content">
-          <Link to="/" className="back-link">← Back to Home</Link>
           <h1 className="category-title">
             {hasActiveTopic ? `${topic} Opinions` : 'All Opinions'}
           </h1>

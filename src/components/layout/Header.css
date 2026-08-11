@@ -13,7 +13,9 @@
   max-width: 100vw;
   box-sizing: border-box;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease;
 }
 
 .header--landing {
@@ -47,14 +49,14 @@
   z-index: 1001;
   position: relative;
   flex-shrink: 0;
-  font-family: 'Arial', 'Orbito', 'RCL Monoskrn', 'Reactive', sans-serif;
+  font-family: "Arial", "Orbito", "RCL Monoskrn", "Reactive", sans-serif;
   text-decoration: none;
   cursor: pointer;
 }
 
 .logo-accent {
   font-size: 1.65rem;
-  font-family: 'Arial Black', Arial, sans-serif;
+  font-family: "Arial Black", Arial, sans-serif;
   background-color: #4a72a8;
   color: white;
   padding: 0.06em 0.3em;
@@ -68,7 +70,7 @@
 .logo-main {
   color: #1a2f50;
   font-size: 1.65rem;
-  font-family: 'Arial Black', Arial, sans-serif;
+  font-family: "Arial Black", Arial, sans-serif;
   line-height: 1;
   letter-spacing: -1px;
   text-transform: uppercase;
@@ -84,7 +86,8 @@
 .logo-accent--landing {
   background: #3f78b6;
   color: #ffffff;
-  padding-inline: 0.44em;
+  margin-left: 0em;
+  padding: 0.1em 0.16em;
   font-size: 1.4rem;
 }
 
@@ -112,7 +115,9 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: color 0.15s ease, transform 0.15s ease;
+  transition:
+    color 0.15s ease,
+    transform 0.15s ease;
 }
 
 .header-theme-toggle:hover,
@@ -157,7 +162,10 @@
   font-size: 1.15rem;
   color: var(--text-primary);
   z-index: 1001;
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease;
 }
 
 .mobile-theme-toggle:hover {
@@ -202,6 +210,7 @@
   overflow: visible;
   padding: 0 0 10px;
   margin-bottom: -10px;
+  margin-left: -0.5rem;
 }
 
 .header-nav-scroll {
@@ -252,7 +261,9 @@
   border-radius: 4px;
   text-decoration: none;
   cursor: pointer;
-  transition: color 0.15s ease, background-color 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
   white-space: nowrap;
   border-bottom: none;
 }
@@ -317,7 +328,10 @@
   opacity: 0;
   visibility: hidden;
   transform: translateY(-4px);
-  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    visibility 0.15s ease;
   z-index: 1200;
 }
 
@@ -344,7 +358,9 @@
   font-weight: 600;
   text-transform: none;
   letter-spacing: 0;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
   white-space: nowrap;
 }
 
@@ -365,7 +381,7 @@
   align-items: center;
   gap: 0.95rem;
   flex-shrink: 0;
-  min-width: auto;
+  min-width: 0;
   margin-left: auto;
 }
 
@@ -377,13 +393,19 @@
   border-radius: 20px;
   padding: 0.32rem 0.36rem 0.32rem 0.9rem;
   min-width: 0;
-  width: 280px;
-  flex: 0 0 auto;
-  transition: border-color 0.18s ease;
+  width: clamp(280px, 24vw, 380px);
+  max-width: 100%;
+  flex: 1 1 clamp(280px, 24vw, 380px);
+  transition:
+    border-color 0.18s ease,
+    width 0.18s ease,
+    flex-basis 0.18s ease;
 }
 
 .header-search-form--landing {
-  width: 228px;
+  width: clamp(240px, 22vw, 390px);
+  flex-basis: clamp(240px, 22vw, 390px);
+  max-width: min(100%, 460px);
   height: 52px;
   background: transparent;
   border: 4px solid #2d71b8;
@@ -394,10 +416,14 @@
 .header-search-form:focus-within {
   border-color: #4a72a8;
   box-shadow: none;
+  width: clamp(320px, 30vw, 520px);
+  flex-basis: clamp(320px, 30vw, 520px);
 }
 
 .header-search-form--landing:focus-within {
   border-color: #5ea3e2;
+  width: clamp(300px, 28vw, 500px);
+  flex-basis: clamp(300px, 28vw, 500px);
 }
 
 .header-search-input {
@@ -439,7 +465,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.16s ease, color 0.16s ease;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
 }
 
 .header-search-btn:hover {
@@ -511,7 +539,10 @@
   opacity: 0;
   visibility: hidden;
   transform: translateY(-4px);
-  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    visibility 0.16s ease;
   z-index: 1200;
 }
 
@@ -560,7 +591,9 @@
   letter-spacing: 0;
   text-align: left;
   cursor: pointer;
-  transition: background-color 0.14s ease, color 0.14s ease;
+  transition:
+    background-color 0.14s ease,
+    color 0.14s ease;
 }
 
 .header-profile-link:hover,
@@ -571,7 +604,7 @@
 }
 
 .header-profile-action {
-  font-family: 'Arial', sans-serif;
+  font-family: "Arial", sans-serif;
 }
 
 @media (max-width: 768px) {
@@ -645,6 +678,7 @@
 
   .header-search-form {
     width: min(100%, 460px);
+    flex-basis: min(100%, 460px);
     height: 46px;
     padding: 0.12rem 0.16rem 0.12rem 1rem;
     border-width: 4px;
@@ -654,6 +688,12 @@
 
   .header-search-input--landing {
     font-size: 0.94rem;
+  }
+
+  .header-search-form:focus-within,
+  .header-search-form--landing:focus-within {
+    width: min(100%, 460px);
+    flex-basis: min(100%, 460px);
   }
 
   .header-search-btn--landing {
@@ -713,7 +753,8 @@
   }
 
   .header-search-form {
-    width: 250px;
+    width: clamp(250px, 22vw, 340px);
+    flex-basis: clamp(250px, 22vw, 340px);
   }
 }
 
@@ -727,7 +768,8 @@
   }
 
   .header-search-form--landing {
-    width: 204px;
+    width: clamp(220px, 18vw, 320px);
+    flex-basis: clamp(220px, 18vw, 320px);
   }
 
   .header-nav-button,
@@ -739,7 +781,8 @@
 
 @media (max-width: 1180px) {
   .header-search-form {
-    width: 220px;
+    width: clamp(220px, 20vw, 300px);
+    flex-basis: clamp(220px, 20vw, 300px);
   }
 
   .nav {
@@ -838,11 +881,11 @@
   .logo-main {
     font-size: clamp(1rem, 4vw, 1.3rem);
   }
-  
+
   .logo-accent {
     padding: 0.3rem 0.6rem;
   }
-  
+
   .header {
     padding: 0.95rem clamp(0.75rem, 2.1vw, 1rem);
     min-height: 58px;
