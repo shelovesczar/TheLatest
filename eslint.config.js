@@ -61,6 +61,14 @@ export default defineConfig([
     },
   },
   {
+    files: ['netlify/functions/rss-aggregator.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: globals.node,
+    },
+  },
+  {
     files: ['scripts/**/*.mjs', 'vite.config.js', 'eslint.config.js'],
     extends: [js.configs.recommended],
     languageOptions: {
