@@ -34,3 +34,6 @@ dist-ssr
 # Local demo artifacts
 jeffhall/
 jeffhall.zip
+
+# Temporary local RSS packaging bundle
+.tmp-rss-bundle/
