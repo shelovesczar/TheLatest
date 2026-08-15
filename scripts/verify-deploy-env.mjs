@@ -21,14 +21,6 @@ const RECOMMENDED = [
       "Keeps social-feed route resolution explicit instead of relying on the default public RSSHub host.",
   },
   {
-    key: "RSS_APP_BUNDLE_FEED_URL",
-    reason: "Pins the editorial RSS bundle feed used across key sections.",
-  },
-  {
-    key: "RSS_APP_BUNDLE_SOURCE",
-    reason: "Provides a stable label for the editorial RSS bundle feed.",
-  },
-  {
     key: "RSS_APP_AUTH_TOKEN",
     reason:
       "Allows server-side authenticated RSS.app feed requests when your RSS bundle is private.",
@@ -62,11 +54,6 @@ const RECOMMENDED = [
     key: "ANTHROPIC_SUMMARY_MODEL",
     reason:
       "Pins the summary model used for shared AI briefings instead of relying on code defaults.",
-  },
-  {
-    key: "ANTHROPIC_CONTENT_FALLBACK_MODEL",
-    reason:
-      "Pins the generated-content fallback model used when RSS coverage is thin.",
   },
 ];
 
@@ -138,10 +125,66 @@ function looksLikePlaceholder(value) {
     .toLowerCase();
   return (
     !normalized ||
+    normalized.includes("replace-with") ||
     normalized.includes("your_") ||
     normalized.includes("replace_me") ||
     normalized.includes("example")
   );
+}
+
+function validateSessionPepper(messages) {
+  const pepper = getValue("SESSION_TOKEN_PEPPER");
+  if (!pepper) {
+    return;
+  }
+
+  if (looksLikePlaceholder(pepper)) {
+    messages.errors.push(
+      "SESSION_TOKEN_PEPPER still looks like a placeholder. Generate a random deployment-specific secret before release.",
+    );
+  }
+
+  if (pepper.length < 32) {
+    messages.errors.push(
+      "SESSION_TOKEN_PEPPER is too short. Use at least 32 random characters.",
+    );
+  }
+
+  if (/\s/.test(pepper)) {
+    messages.warnings.push(
+      "SESSION_TOKEN_PEPPER contains whitespace. Prefer a single random token with no spaces.",
+    );
+  }
+}
+
+function validateOptionalFeatureDefaults(messages) {
+  if (!hasValue("RSS_APP_BUNDLE_FEED_URL")) {
+    messages.info.push(
+      "RSS_APP_BUNDLE_FEED_URL is not set. The app will use the built-in default RSS.app bundle feed URL.",
+    );
+  }
+
+  if (!hasValue("RSS_APP_BUNDLE_SOURCE")) {
+    messages.info.push(
+      "RSS_APP_BUNDLE_SOURCE is not set. The app will use the built-in default bundle source label.",
+    );
+  }
+
+  if (!hasValue("ANTHROPIC_CONTENT_FALLBACK_MODEL")) {
+    messages.info.push(
+      "ANTHROPIC_CONTENT_FALLBACK_MODEL is not set. generatedContent will fall back to ANTHROPIC_SUMMARY_MODEL or its code default.",
+    );
+  }
+
+  const hasRssAppCredentialPath =
+    hasValue("RSS_APP_AUTH_TOKEN") ||
+    (hasValue("RSS_APP_API_KEY") && hasValue("RSS_APP_API_SECRET"));
+
+  if (!hasRssAppCredentialPath) {
+    messages.warnings.push(
+      "No authenticated RSS.app credential path is configured (RSS_APP_AUTH_TOKEN or RSS_APP_API_KEY/RSS_APP_API_SECRET). Private bundle feeds would fail until one is set.",
+    );
+  }
 }
 
 function validateAnthropicConfig(messages) {
@@ -224,6 +267,16 @@ function main() {
   });
 
   AI_GROUPS.forEach(({ label, keys, reason }) => {
+    if (
+      label === "client AI summary provider" &&
+      String(getValue("VITE_AI_PROVIDER")).toLowerCase() === "editorial"
+    ) {
+      messages.info.push(
+        "Client AI summary provider keys are unset, but VITE_AI_PROVIDER=editorial keeps the browser on the server-backed editorial path.",
+      );
+      return;
+    }
+
     if (!keys.some(hasValue)) {
       messages.warnings.push(
         `No ${label} credentials found (${keys.join(", ")}). ${reason}`,
@@ -231,7 +284,9 @@ function main() {
     }
   });
 
+  validateSessionPepper(messages);
   validateAnthropicConfig(messages);
+  validateOptionalFeatureDefaults(messages);
   validateBlobPair(messages);
 
   if (requireBlobs) {

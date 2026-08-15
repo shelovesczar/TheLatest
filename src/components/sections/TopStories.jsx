@@ -3,7 +3,7 @@ import {
   faChevronLeft,
   faChevronRight,
 } from "@fortawesome/free-solid-svg-icons";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getImageProps } from "../../utils/imageUtils";
 import { recordHistory } from "../../utils/savedArticles";
@@ -12,9 +12,16 @@ import { getGeneratedContentLabel } from "../../utils/contentLabels";
 import {
   getSourceProfile,
   getSourceProfileHref,
-  getTrustDescriptor,
+  getTrustDescriptorForProfile,
 } from "../../utils/sourceProfiles";
 import { deriveMediaOutlet } from "../../utils/sourceUtils";
+import { formatPublishedDate } from "../../utils/dateUtils";
+import { useConsent } from "../../context/ConsentContext";
+import {
+  findRegistryRecord,
+  getSourceRegistry,
+  mergeSourceProfileWithRegistry,
+} from "../../services/sourceRegistryService";
 import "./TopStories.css";
 
 const PERSPECTIVE_MAP = [
@@ -65,6 +72,12 @@ function TopStories({
   seeMoreLabel,
   sideBySideTitle,
 }) {
+  const navigate = useNavigate();
+  const { consent } = useConsent();
+  const [sourceRegistryRecords, setSourceRegistryRecords] = useState([]);
+  const comparisonViewRef = useRef(null);
+  const trackedComparisonRef = useRef("");
+
   const resolvePerspective = useCallback((story) => {
     const explicitKey = String(story?.perspectiveKey || "")
       .trim()
@@ -92,6 +105,75 @@ function TopStories({
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+
+    getSourceRegistry()
+      .then((records) => {
+        if (active) {
+          setSourceRegistryRecords(records);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSourceRegistryRecords([]);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const allowAnalytics = consent?.analytics !== false;
+
+  const trackComparisonEngagement = useCallback(
+    async ({
+      eventType,
+      article,
+      section = "top-stories",
+      itemType = "comparison",
+      itemTitle,
+      itemSource,
+    }) => {
+      if (!allowAnalytics) {
+        return;
+      }
+
+      try {
+        await fetch("/.netlify/functions/trackEngagement", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventType,
+            articleId: article?.id || article?.storyId || article?.link,
+            articleTitle: article?.title || itemTitle,
+            articleSource: article?.source || itemSource,
+            section,
+            itemType,
+            itemTitle: itemTitle || article?.title,
+            itemSource: itemSource || article?.source,
+            pageTitle: "Top Stories",
+            path: "/",
+          }),
+          keepalive: true,
+        });
+      } catch {
+        // Ignore analytics failures.
+      }
+    },
+    [allowAnalytics],
+  );
+
+  const resolveManagedSourceProfile = useCallback(
+    (story = {}) => {
+      const baseProfile = getSourceProfile(story);
+      const record = findRegistryRecord(sourceRegistryRecords, baseProfile);
+      return mergeSourceProfileWithRegistry(baseProfile, record);
+    },
+    [sourceRegistryRecords],
+  );
+
   const resolveStoryPerspective = useCallback(
     (story) => {
       const resolved = resolvePerspective(story);
@@ -99,7 +181,7 @@ function TopStories({
         return resolved;
       }
 
-      const sourceProfile = getSourceProfile(story);
+      const sourceProfile = resolveManagedSourceProfile(story);
       const fallbackKey = String(sourceProfile?.perspectiveKey || "")
         .trim()
         .toLowerCase();
@@ -122,11 +204,8 @@ function TopStories({
 
       return resolved;
     },
-    [resolvePerspective],
+    [resolveManagedSourceProfile, resolvePerspective],
   );
-
-  const navigate = useNavigate();
-  const [nowTimestamp] = useState(() => Date.now());
   const [showPerspectivesRequested, setShowPerspectivesRequested] = useState(
     defaultPerspectiveView,
   );
@@ -191,23 +270,7 @@ function TopStories({
     return truncateText(combined, maxLength);
   };
 
-  const getStoryTime = (story) => {
-    const directTime = String(story?.time || "").trim();
-    if (directTime) return directTime;
-
-    const candidate = story?.date || story?.pubDate || story?.isoDate;
-    if (!candidate) return "Latest";
-
-    const parsed = new Date(candidate);
-    if (Number.isNaN(parsed.getTime())) return "Latest";
-
-    const diffMs = nowTimestamp - parsed.getTime();
-    const diffHours = Math.max(1, Math.round(diffMs / (1000 * 60 * 60)));
-    if (diffHours < 24) return `${diffHours}h ago`;
-
-    const diffDays = Math.round(diffHours / 24);
-    return `${diffDays}d ago`;
-  };
+  const getStoryTime = (story) => formatPublishedDate(story) || "";
 
   const goToArticle = useCallback(
     (article) => {
@@ -306,6 +369,75 @@ function TopStories({
 
   const activePerspectiveItem =
     visiblePerspectiveStories[resolvedPerspectiveSourceIndex] || null;
+  const secondaryPerspectiveItem = useMemo(() => {
+    if (visiblePerspectiveStories.length < 2) return null;
+
+    return (
+      visiblePerspectiveStories.find((_, index) => {
+        return index !== resolvedPerspectiveSourceIndex;
+      }) || null
+    );
+  }, [resolvedPerspectiveSourceIndex, visiblePerspectiveStories]);
+
+  useEffect(() => {
+    if (!isPerspectiveMode || !activePerspectiveItem?.story) {
+      trackedComparisonRef.current = "";
+      return;
+    }
+
+    const article = activePerspectiveItem.story;
+    const trackingKey = [
+      perspectiveGroupIndex,
+      perspectiveFilter,
+      resolvedPerspectiveSourceIndex,
+      article.url || article.link || article.title,
+    ].join("|");
+
+    if (trackedComparisonRef.current === trackingKey) {
+      return;
+    }
+
+    trackedComparisonRef.current = trackingKey;
+    trackComparisonEngagement({
+      eventType: "comparison-view",
+      article,
+      section: "side-by-side",
+      itemTitle: article.title,
+      itemSource: article.source,
+    });
+  }, [
+    activePerspectiveItem,
+    isPerspectiveMode,
+    perspectiveFilter,
+    perspectiveGroupIndex,
+    resolvedPerspectiveSourceIndex,
+    trackComparisonEngagement,
+  ]);
+
+  const selectPerspectiveSource = useCallback(
+    (index) => {
+      const item = visiblePerspectiveStories[index];
+      setPerspectiveSelection({
+        key: perspectiveSelectionKey,
+        index,
+      });
+
+      if (item?.story) {
+        trackComparisonEngagement({
+          eventType: "comparison-source-select",
+          article: item.story,
+          section: "side-by-side",
+          itemTitle: item.story.title,
+          itemSource: item.story.source,
+        });
+      }
+    },
+    [
+      perspectiveSelectionKey,
+      trackComparisonEngagement,
+      visiblePerspectiveStories,
+    ],
+  );
 
   const nextStory = () => {
     if (topStories.length === 0) return;
@@ -441,7 +573,10 @@ function TopStories({
                         {(() => {
                           const storyPerspective =
                             resolveStoryPerspective(story);
-                          const trust = getTrustDescriptor(story);
+                          const sourceProfile =
+                            resolveManagedSourceProfile(story);
+                          const trust =
+                            getTrustDescriptorForProfile(sourceProfile);
                           return (
                             <div className="card-source-row">
                               <div className="card-source-group">
@@ -469,6 +604,16 @@ function TopStories({
                                 <Link
                                   className="card-source-profile-link"
                                   to={getSourceProfileHref(story)}
+                                  onClick={() => {
+                                    trackComparisonEngagement({
+                                      eventType: "comparison-source-select",
+                                      article: story,
+                                      section: "top-stories",
+                                      itemType: "source-profile",
+                                      itemTitle: story.title,
+                                      itemSource: story.source,
+                                    });
+                                  }}
                                 >
                                   Source profile
                                 </Link>
@@ -489,6 +634,13 @@ function TopStories({
                             href={buildStoryHref(story)}
                             onClick={(event) => {
                               event.preventDefault();
+                              trackComparisonEngagement({
+                                eventType: "comparison-story-click",
+                                article: story,
+                                section: "top-stories",
+                                itemTitle: story.title,
+                                itemSource: story.source,
+                              });
                               goToArticle(story);
                             }}
                           >
@@ -519,7 +671,7 @@ function TopStories({
               </div>
             </div>
           ) : (
-            <div id="storiesSBS">
+            <div id="storiesSBS" ref={comparisonViewRef}>
               <div className="top-stories-nav-row">
                 <div className="sbs-filter-row">
                   <span className="sbs-filter-label">Filter:</span>
@@ -600,12 +752,7 @@ function TopStories({
                           key={`${story.url || story.title || "source"}-${index}`}
                           type="button"
                           className={`sbs-source-tab${index === resolvedPerspectiveSourceIndex ? " active" : ""}`}
-                          onClick={() =>
-                            setPerspectiveSelection({
-                              key: perspectiveSelectionKey,
-                              index,
-                            })
-                          }
+                          onClick={() => selectPerspectiveSource(index)}
                         >
                           {getMediaOutlet(story)}
                           <span className="sbs-source-tab-perspective">
@@ -642,104 +789,141 @@ function TopStories({
                   </button>
 
                   <div className="sbs-feature-shell">
-                    {activePerspectiveItem && (
-                      <article
-                        className="sbs-feature-card"
-                        data-persp={activePerspectiveItem.perspective.key}
-                      >
-                        <div className="sbs-feature-media">
-                          <img
-                            {...getImageProps(
-                              activePerspectiveItem.story.image,
-                              activePerspectiveItem.story.title,
-                              "news",
-                            )}
-                          />
-                        </div>
-                        <div className="sbs-feature-body">
-                          <div className="sbs-source-row">
-                            <span
-                              className="sbs-source-badge"
-                              style={
-                                activePerspectiveItem.perspective.sourceStyle
-                              }
-                            >
-                              ● {getMediaOutlet(activePerspectiveItem.story)}
-                            </span>
-                            <Link
-                              className="sbs-source-profile-link"
-                              to={getSourceProfileHref(
-                                activePerspectiveItem.story,
-                              )}
-                            >
-                              Source profile
-                            </Link>
-                            {getGeneratedContentLabel(
-                              activePerspectiveItem.story,
-                            ) && (
-                              <span className="sbs-persp-meta">
-                                {getGeneratedContentLabel(
-                                  activePerspectiveItem.story,
-                                )}
-                              </span>
-                            )}
-                            <span
-                              className="sbs-persp-label"
-                              style={
-                                activePerspectiveItem.perspective.sourceStyle
-                              }
-                            >
-                              {activePerspectiveItem.perspective.label}
-                            </span>
-                            <span className="sbs-persp-meta">
-                              {getPerspectiveMethodLabel(
-                                activePerspectiveItem.perspective,
-                              )}{" "}
-                              ·{" "}
-                              {getPerspectiveConfidenceLabel(
-                                activePerspectiveItem.perspective,
-                              )}
-                            </span>
-                            <span className="sbs-time">
-                              {getStoryTime(activePerspectiveItem.story)}
-                            </span>
-                          </div>
-                          <div className="sbs-headline sbs-headline-feature">
-                            <a
-                              href={buildStoryHref(activePerspectiveItem.story)}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                goToArticle(activePerspectiveItem.story);
-                              }}
-                            >
-                              {activePerspectiveItem.story.title}
-                            </a>
-                          </div>
-                          <div className="sbs-excerpt sbs-excerpt-feature">
-                            {getStoryDescription(
-                              activePerspectiveItem.story,
-                              240,
-                            )}
-                          </div>
-                          <div className="sbs-footer">
-                            <span className="sbs-author">
-                              {activePerspectiveItem.story.author ||
-                                getMediaOutlet(activePerspectiveItem.story)}
-                            </span>
-                            <a
-                              href={buildStoryHref(activePerspectiveItem.story)}
-                              className="sbs-read"
-                              onClick={(event) => {
-                                event.preventDefault();
-                                goToArticle(activePerspectiveItem.story);
-                              }}
-                            >
-                              Read full story →
-                            </a>
-                          </div>
-                        </div>
-                      </article>
-                    )}
+                    <div className="sbs-feature-stack">
+                      {[activePerspectiveItem, secondaryPerspectiveItem]
+                        .filter(Boolean)
+                        .map((item, index) =>
+                          (() => {
+                            const sourceProfile = resolveManagedSourceProfile(
+                              item.story,
+                            );
+                            const trust =
+                              getTrustDescriptorForProfile(sourceProfile);
+
+                            return (
+                              <article
+                                key={`${item.story.url || item.story.title || "feature"}-${index}`}
+                                className={`sbs-feature-card${index > 0 ? " sbs-feature-card-secondary" : ""}`}
+                                data-persp={item.perspective.key}
+                              >
+                                <div className="sbs-feature-media">
+                                  <img
+                                    {...getImageProps(
+                                      item.story.image,
+                                      item.story.title,
+                                      "news",
+                                    )}
+                                  />
+                                </div>
+                                <div className="sbs-feature-body">
+                                  <div className="sbs-source-row">
+                                    <span
+                                      className="sbs-source-badge"
+                                      style={item.perspective.sourceStyle}
+                                    >
+                                      ● {getMediaOutlet(item.story)}
+                                    </span>
+                                    <Link
+                                      className="sbs-source-profile-link"
+                                      to={getSourceProfileHref(item.story)}
+                                      onClick={() => {
+                                        trackComparisonEngagement({
+                                          eventType: "comparison-source-select",
+                                          article: item.story,
+                                          section: "side-by-side",
+                                          itemType: "source-profile",
+                                          itemTitle: item.story.title,
+                                          itemSource: item.story.source,
+                                        });
+                                      }}
+                                    >
+                                      Source profile
+                                    </Link>
+                                    {getGeneratedContentLabel(item.story) && (
+                                      <span className="sbs-persp-meta">
+                                        {getGeneratedContentLabel(item.story)}
+                                      </span>
+                                    )}
+                                    <span
+                                      className="sbs-persp-label"
+                                      style={item.perspective.sourceStyle}
+                                    >
+                                      {item.perspective.label}
+                                    </span>
+                                    <span
+                                      className={`card-trust-pill card-trust-pill--${trust.band}`}
+                                      title={trust.rationale}
+                                    >
+                                      {trust.shortLabel}
+                                    </span>
+                                    <span className="sbs-persp-meta">
+                                      {getPerspectiveMethodLabel(
+                                        item.perspective,
+                                      )}{" "}
+                                      ·{" "}
+                                      {getPerspectiveConfidenceLabel(
+                                        item.perspective,
+                                      )}
+                                    </span>
+                                    {getStoryTime(item.story) && (
+                                      <span className="sbs-time">
+                                        {getStoryTime(item.story)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="sbs-headline sbs-headline-feature">
+                                    <a
+                                      href={buildStoryHref(item.story)}
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        trackComparisonEngagement({
+                                          eventType: "comparison-story-click",
+                                          article: item.story,
+                                          section: "side-by-side",
+                                          itemTitle: item.story.title,
+                                          itemSource: item.story.source,
+                                        });
+                                        goToArticle(item.story);
+                                      }}
+                                    >
+                                      {item.story.title}
+                                    </a>
+                                  </div>
+                                  <div className="sbs-excerpt sbs-excerpt-feature">
+                                    {getStoryDescription(
+                                      item.story,
+                                      index > 0 ? 160 : 240,
+                                    )}
+                                  </div>
+                                  <div className="sbs-footer">
+                                    <span className="sbs-author">
+                                      {item.story.author ||
+                                        getMediaOutlet(item.story)}
+                                    </span>
+                                    <a
+                                      href={buildStoryHref(item.story)}
+                                      className="sbs-read"
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        trackComparisonEngagement({
+                                          eventType: "comparison-story-click",
+                                          article: item.story,
+                                          section: "side-by-side",
+                                          itemTitle: item.story.title,
+                                          itemSource: item.story.source,
+                                        });
+                                        goToArticle(item.story);
+                                      }}
+                                    >
+                                      Read full story →
+                                    </a>
+                                  </div>
+                                </div>
+                              </article>
+                            );
+                          })(),
+                        )}
+                    </div>
 
                     <aside
                       className="sbs-rail"
@@ -753,12 +937,7 @@ function TopStories({
                               key={`${story.url || story.title || "rail"}-${index}`}
                               type="button"
                               className={`sbs-rail-item${index === resolvedPerspectiveSourceIndex ? " active" : ""}`}
-                              onClick={() =>
-                                setPerspectiveSelection({
-                                  key: perspectiveSelectionKey,
-                                  index,
-                                })
-                              }
+                              onClick={() => selectPerspectiveSource(index)}
                             >
                               <span
                                 className="sbs-rail-source"
@@ -770,7 +949,10 @@ function TopStories({
                                 {truncateText(story.title, 88)}
                               </span>
                               <span className="sbs-rail-meta">
-                                {perspective.label} · {getStoryTime(story)}
+                                {perspective.label}
+                                {getStoryTime(story)
+                                  ? ` · ${getStoryTime(story)}`
+                                  : ""}
                               </span>
                             </button>
                           ),

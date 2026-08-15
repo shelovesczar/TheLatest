@@ -106,6 +106,12 @@
   display: block;
 }
 
+.social-date {
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  display: block;
+}
+
 .social-media-image {
   width: 100%;
   aspect-ratio: 16 / 9;
@@ -219,16 +225,16 @@
     font-size: 0.9rem;
     line-height: 1.5;
   }
-  
+
   .social-engagement {
     font-size: 0.8rem;
   }
-  
+
   .social-card {
     padding: 0.85rem;
     min-height: auto;
   }
-  
+
   .social-slider {
     grid-template-columns: 1fr;
     gap: 1rem;

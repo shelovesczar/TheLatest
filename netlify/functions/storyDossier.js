@@ -1,4 +1,4 @@
-const rssAggregator = require("./rss-aggregator");
+const rssAggregator = require("./rss-aggregator.cjs");
 const clusters = require("./clusters");
 const socialFeeds = require("./fetchSocialFeeds");
 

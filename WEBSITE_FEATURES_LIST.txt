@@ -1,0 +1,141 @@
+The Latest - Website Feature Inventory
+
+This file lists the main end-user features currently implemented on the site, with a short description of what each feature does.
+
+1. Homepage editorial layout
+Presents the main editorial landing experience with hero content, top stories, AI briefing content, and curated content sections.
+
+2. Live news aggregation
+Pulls in live news from multiple external feeds and surfaces them as a single browsable news experience.
+
+3. All News browsing
+Provides a larger browse view for news articles beyond the homepage highlights.
+
+4. Opinions section
+Surfaces editorial, commentary, and opinion-driven content in a dedicated section.
+
+5. Videos section
+Collects and displays video content from supported publishers and feeds.
+
+6. Podcasts section
+Collects and displays podcast episodes from supported publishers and shows.
+
+7. Social feed aggregation
+Shows social posts and platform content alongside traditional news content.
+
+8. Section and category browsing
+Lets readers browse by major coverage areas such as politics, business, tech, sports, culture, and lifestyle.
+
+9. Topic pages
+Builds topic-specific views that group related content across multiple content types.
+
+10. Search
+Allows users to search across site content and discover articles, media, and related topics.
+
+11. Advanced search shortcuts
+Provides quick research links and deeper discovery paths for searching beyond the site.
+
+12. AI summary briefing
+Generates short AI-assisted summaries of major topics and fast-moving stories.
+
+13. Story clustering
+Groups related coverage together so overlapping reporting can be viewed as part of the same story.
+
+14. Perspective comparison
+Lets users compare how different outlets are framing the same topic or cluster of stories.
+
+15. Article reader
+Provides a dedicated reading view for articles with source context and supporting content.
+
+16. Stable story routes
+Creates durable story URLs so articles and story snapshots can be linked and revisited reliably.
+
+17. Saved articles
+Lets users bookmark and revisit articles later from a dedicated saved-content view.
+
+18. Reading history
+Tracks previously opened articles so readers can return to content they already viewed.
+
+19. Social sharing tools
+Makes it easier to share stories externally or copy story links.
+
+20. Source profiles
+Provides dedicated profile pages for publishers with ownership, funding, and editorial context.
+
+21. Truth score display
+Shows source-level trust context so readers can quickly understand outlet reliability signals.
+
+22. Perspective labels (COMPASS)
+Displays editorial-position context such as left-center, center, right-center, or unclassified.
+
+23. User authentication
+Supports account sign-in and persistent session-based access to personalized features.
+
+24. Following system
+Lets users follow topics, categories, or sources to personalize what they see.
+
+25. Following feed
+Builds a personalized feed from the topics and sources a user has chosen to follow.
+
+26. For You recommendations
+Surfaces recommendation-style content tailored to a user's follows and behavior.
+
+27. Dashboard
+Provides a user or account hub and site-status overview for personalized or administrative workflows.
+
+28. Category filtering
+Lets users narrow visible content within major sections and topical collections.
+
+29. Infinite scrolling and large-list browsing
+Supports smoother browsing of longer result sets and larger content libraries.
+
+30. Responsive navigation
+Includes navigation patterns that work across desktop and mobile layouts.
+
+31. Bottom dock navigation
+Provides a mobile-friendly persistent navigation control for key site destinations.
+
+32. Theme toggle
+Supports light and dark theme switching for the reading experience.
+
+33. Cookie consent controls
+Allows visitors to choose analytics permissions and manage privacy-related consent.
+
+34. Privacy page
+Explains data handling, tracking, and privacy practices.
+
+35. Terms of use page
+Explains the legal terms that govern use of the site.
+
+36. Editorial standards page
+Explains how the site approaches sourcing, labeling, and editorial methodology.
+
+37. Corrections page
+Explains how corrections and updates are handled.
+
+38. About page
+Introduces the product and its mission.
+
+39. Contact page
+Provides readers with a way to contact the team.
+
+40. Advertise page
+Provides sponsorship and advertising information.
+
+41. SEO and metadata management
+Adds structured metadata, social preview tags, and search-friendly page information.
+
+42. Sitemap and crawler support
+Generates sitemap and robots assets to help search engines discover the site.
+
+43. Image optimization
+Serves optimized images and fallbacks to improve media performance and reliability.
+
+44. Engagement tracking
+Records page and interaction events for analytics when consent allows it.
+
+45. Error boundaries and graceful fallbacks
+Prevents isolated UI failures from breaking the full application experience.
+
+46. Date and time utilities
+Formats publication times and supports time-aware story presentation throughout the site.

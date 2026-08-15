@@ -66,6 +66,13 @@
   font-weight: 600;
 }
 
+.social-post-meta .post-date {
+  font-size: 0.76rem;
+  color: var(--text-tertiary);
+  margin-top: 0.22rem;
+  letter-spacing: 0.02rem;
+}
+
 .social-post-media {
   width: 100%;
   background: var(--bg-tertiary);

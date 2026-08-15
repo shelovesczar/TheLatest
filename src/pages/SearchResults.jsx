@@ -11,7 +11,10 @@ import {
 import { recordHistory, searchArchive } from "../utils/savedArticles";
 import { buildStoryHref } from "../utils/storyRouting";
 import { getGeneratedContentLabel } from "../utils/contentLabels";
-import { getSourceProfile, getTrustDescriptor } from "../utils/sourceProfiles";
+import {
+  getSourceProfile,
+  getTrustDescriptorForProfile,
+} from "../utils/sourceProfiles";
 import DateTicker from "../components/layout/DateTicker";
 import TopStories from "../components/sections/TopStories";
 import AISummary from "../components/sections/AISummary";
@@ -38,6 +41,12 @@ import {
 import OptimizedImage from "../components/common/OptimizedImage";
 import CardSkeleton from "../components/common/CardSkeleton";
 import PageBackBar from "../components/common/PageBackBar";
+import { useConsent } from "../context/ConsentContext";
+import {
+  findRegistryRecord,
+  getSourceRegistry,
+  mergeSourceProfileWithRegistry,
+} from "../services/sourceRegistryService";
 import "./AllNewsPage.css";
 import "./SearchResults.css";
 
@@ -84,13 +93,36 @@ const RESEARCH_TOOLS = [
   },
 ];
 
+const SEARCH_STARTERS = [
+  {
+    title: "Start With A Storyline",
+    query: "Trump tariffs impact on consumers",
+    body: "Use a concrete event or policy phrase when you want the cleanest cross-outlet coverage.",
+  },
+  {
+    title: "Search By Institution",
+    query: "Federal Reserve inflation outlook",
+    body: "This is the fastest way to compare framing around agencies, courts, parties, and companies.",
+  },
+  {
+    title: "Search For Format",
+    query: "AI regulation podcast",
+    body: "Add words like podcast, interview, or explainer when you want multi-format results instead of headlines only.",
+  },
+  {
+    title: "Search For Perspective",
+    query: "immigration border opinion",
+    body: "Opinion-oriented queries surface columns, analysis, and commentary rather than pure straight-news hits.",
+  },
+];
+
 const PERSPECTIVE_METHOD_LABELS = {
   'ai-headline': 'AI estimate from headline and summary framing',
   'source-map': 'Source map estimate from outlet profile',
   unclassified: 'Perspective not classified with enough confidence'
 }
 
-const resolveSearchCardPerspective = (article = {}) => {
+const resolveSearchCardPerspective = (article = {}, fallbackProfile = null) => {
   const explicitKey = String(article?.perspectiveKey || '').trim().toLowerCase()
   if (explicitKey && explicitKey !== 'unknown') {
     return {
@@ -100,7 +132,7 @@ const resolveSearchCardPerspective = (article = {}) => {
     }
   }
 
-  const profile = getSourceProfile(article)
+  const profile = fallbackProfile || getSourceProfile(article)
   if (profile?.perspectiveKey && profile.perspectiveKey !== 'unknown') {
     return {
       key: profile.perspectiveKey,
@@ -255,6 +287,7 @@ const getSearchResultKey = (item) =>
 function SearchResults() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { allowAnalytics } = useConsent();
   const query = searchParams.get("q") || "";
 
   // Local controlled input — initialise from URL so back/forward works
@@ -290,12 +323,14 @@ function SearchResults() {
   const [selectedSource, setSelectedSource] = useState("ALL");
   const [selectedQuerySource, setSelectedQuerySource] = useState("ALL");
   const [activeQueryView, setActiveQueryView] = useState("all");
+  const [sourceRegistryRecords, setSourceRegistryRecords] = useState([]);
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth : 1280,
   );
   const [activeStory, setActiveStory] = useState(0);
   const virtualResultsRef = useRef(null);
   const searchAssistRequestedQueryRef = useRef("");
+  const trackedSearchViewRef = useRef("");
   const { ref: opinionsRef, isInView: opinionsInView } = useInView({
     rootMargin: "260px",
   });
@@ -316,6 +351,56 @@ function SearchResults() {
   useEffect(() => {
     setInputValue(query);
   }, [query]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    getSourceRegistry()
+      .then((records) => {
+        if (!ignore) {
+          setSourceRegistryRecords(Array.isArray(records) ? records : []);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setSourceRegistryRecords([]);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const trackEngagement = useCallback(
+    (payload) => {
+      if (!allowAnalytics) {
+        return;
+      }
+
+      try {
+        const body = JSON.stringify(payload);
+
+        if (navigator.sendBeacon) {
+          const blob = new Blob([body], { type: "application/json" });
+          navigator.sendBeacon("/.netlify/functions/trackEngagement", blob);
+          return;
+        }
+
+        fetch("/.netlify/functions/trackEngagement", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body,
+          keepalive: true,
+        }).catch(() => {});
+      } catch {
+        // Ignore analytics failures.
+      }
+    },
+    [allowAnalytics],
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -839,6 +924,15 @@ function SearchResults() {
     inputRef.current?.focus();
   };
 
+  const resolveManagedSourceProfile = useCallback(
+    (article = {}) => {
+      const baseProfile = getSourceProfile(article);
+      const record = findRegistryRecord(sourceRegistryRecords, baseProfile);
+      return mergeSourceProfileWithRegistry(baseProfile, record);
+    },
+    [sourceRegistryRecords],
+  );
+
   const descriptionLimit = useMemo(() => {
     if (viewportWidth >= 1500) return 320;
     if (viewportWidth >= 1280) return 260;
@@ -979,6 +1073,96 @@ function SearchResults() {
     hasArchiveMatches;
   const noResults =
     hasQuery && !loading && !anySectionLoading && !hasSectionContent;
+  const liveSourceCount = Math.max(0, liveSourceOptions.length - 1);
+  const activeFormatCount = [
+    searchStoryPool.length > 0,
+    queryOpinions.length > 0,
+    queryVideos.length > 0,
+    queryPodcasts.length > 0,
+    querySocialPosts.length > 0,
+  ].filter(Boolean).length;
+
+  const searchOverviewCards = hasQuery
+    ? [
+        {
+          label: "Live coverage",
+          value: `${results.length}`,
+          detail:
+            results.length > 0
+              ? `${liveSourceCount} source${liveSourceCount === 1 ? "" : "s"} in play`
+              : "Waiting on live matches",
+        },
+        {
+          label: "Formats found",
+          value: `${activeFormatCount}`,
+          detail: `${queryOpinions.length} opinion · ${queryVideos.length} video · ${queryPodcasts.length} podcast`,
+        },
+        {
+          label: "Archive recall",
+          value: `${archiveResults.length}`,
+          detail:
+            archiveResults.length > 0
+              ? "Saved and history matches available"
+              : "No archive matches yet",
+        },
+        {
+          label: "Search lens",
+          value: searchAssist?.normalizedQuery ? "Refined" : "Direct",
+          detail:
+            searchAssist?.topicBrief ||
+            "Use the best-starting-point cards to jump into the strongest coverage first.",
+        },
+      ]
+    : [];
+
+  const exactMatchCards = useMemo(
+    () =>
+      mergedFeaturedStories.slice(0, 3).map((article) => {
+        const sourceProfile = resolveManagedSourceProfile(article);
+        return {
+          article,
+          sourceProfile,
+          perspective: resolveSearchCardPerspective(article, sourceProfile),
+          trust: getTrustDescriptorForProfile(sourceProfile),
+        };
+      }),
+    [mergedFeaturedStories, resolveManagedSourceProfile],
+  );
+
+  useEffect(() => {
+    if (!hasQuery || loading) {
+      trackedSearchViewRef.current = "";
+      return;
+    }
+
+    const trackingKey = `${query.trim().toLowerCase()}|${activeQueryView}|${results.length}|${archiveResults.length}`;
+    if (trackedSearchViewRef.current === trackingKey) {
+      return;
+    }
+
+    trackedSearchViewRef.current = trackingKey;
+    trackEngagement({
+      eventType: "search-results-view",
+      path: `/search?q=${encodeURIComponent(query)}`,
+      pageTitle: `Search: ${query}`,
+      title: query,
+      section: activeQueryView,
+      itemCount: results.length,
+      query,
+      category: activeQueryView,
+      itemType: "search-results",
+      itemSource: `${liveSourceCount} sources`,
+    });
+  }, [
+    activeQueryView,
+    archiveResults.length,
+    hasQuery,
+    liveSourceCount,
+    loading,
+    query,
+    results.length,
+    trackEngagement,
+  ]);
 
   useEffect(() => {
     if (
@@ -1156,6 +1340,39 @@ function SearchResults() {
               ))}
             </div>
           )}
+
+          {hasQuery ? (
+            <div className="sr-overview-grid" aria-label="Search overview">
+              {searchOverviewCards.map((card) => (
+                <article key={card.label} className="sr-overview-card">
+                  <span className="sr-overview-label">{card.label}</span>
+                  <strong className="sr-overview-value">{card.value}</strong>
+                  <p className="sr-overview-detail">{card.detail}</p>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div
+              className="sr-starter-grid"
+              aria-label="Suggested search starting points"
+            >
+              {SEARCH_STARTERS.map((starter) => (
+                <button
+                  key={starter.query}
+                  type="button"
+                  className="sr-starter-card"
+                  onClick={() =>
+                    navigate(`/search?q=${encodeURIComponent(starter.query)}`)
+                  }
+                >
+                  <span className="sr-starter-kicker">Try this search</span>
+                  <strong className="sr-starter-title">{starter.title}</strong>
+                  <span className="sr-starter-query">{starter.query}</span>
+                  <p className="sr-starter-copy">{starter.body}</p>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1177,6 +1394,88 @@ function SearchResults() {
             </div>
           ) : (
             <>
+              {showNewsSection && exactMatchCards.length > 0 && (
+                <section className="sr-exact-section">
+                  <div className="section-hdr">
+                    <h2>Best Starting Points</h2>
+                    <span className="see-more">
+                      Exact and high-signal matches
+                    </span>
+                  </div>
+                  <div className="sr-exact-grid">
+                    {exactMatchCards.map(
+                      ({ article, perspective, trust, sourceProfile }) => (
+                        <a
+                          key={getSearchResultKey(article)}
+                          href={getStoryHref(article)}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            trackEngagement({
+                              eventType: "search-result-click",
+                              path: `/search?q=${encodeURIComponent(query)}`,
+                              pageTitle: `Search: ${query}`,
+                              article,
+                              section: "best-starting-points",
+                              itemTitle: article.title,
+                              itemSource: article.source,
+                              itemType: "search-result",
+                              query,
+                            });
+                            goToArticle(article);
+                          }}
+                          className="sr-exact-card result-card"
+                        >
+                          <div className="result-content">
+                            <div className="result-content-body">
+                              <span className="sr-exact-badge">Start here</span>
+                              <div className="result-trust-row">
+                                {perspective ? (
+                                  <span
+                                    className={`result-perspective-pill result-perspective-pill--${perspective.key}`}
+                                    title={
+                                      PERSPECTIVE_METHOD_LABELS[
+                                        perspective.method
+                                      ] || PERSPECTIVE_METHOD_LABELS["source-map"]
+                                    }
+                                  >
+                                    {perspective.label}
+                                  </span>
+                                ) : null}
+                                <span
+                                  className={`result-trust-pill result-trust-pill--${trust.band}`}
+                                  title={trust.rationale}
+                                >
+                                  {trust.shortLabel}
+                                </span>
+                              </div>
+                              <h3 className="result-title">{article.title}</h3>
+                              <p className="result-description">
+                                {truncate(
+                                  article.description || article.content,
+                                  140,
+                                )}
+                              </p>
+                            </div>
+                            <div className="result-content-footer">
+                              <div className="result-meta">
+                                <span className="result-source">
+                                  {sourceProfile.displayName}
+                                </span>
+                                <span className="result-date">
+                                  {formatPublishedDate(
+                                    article.publishedAt || article.date,
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </a>
+                      ),
+                    )}
+                  </div>
+                </section>
+              )}
+
               <AISummary
                 category={query}
                 categoryTitle={query}
@@ -1354,8 +1653,14 @@ function SearchResults() {
                           .map((virtualRow) => {
                             const article = sourceList[virtualRow.index];
                             if (!article) return null;
-                            const perspective = resolveSearchCardPerspective(article)
-                            const trust = getTrustDescriptor(article)
+                            const sourceProfile =
+                              resolveManagedSourceProfile(article);
+                            const perspective = resolveSearchCardPerspective(
+                              article,
+                              sourceProfile,
+                            );
+                            const trust =
+                              getTrustDescriptorForProfile(sourceProfile);
 
                             return (
                               <div
@@ -1371,6 +1676,17 @@ function SearchResults() {
                                   href={getStoryHref(article)}
                                   onClick={(e) => {
                                     e.preventDefault();
+                                    trackEngagement({
+                                      eventType: "search-result-click",
+                                      path: `/search?q=${encodeURIComponent(query)}`,
+                                      pageTitle: `Search: ${query}`,
+                                      article,
+                                      section: activeQueryView,
+                                      itemTitle: article.title,
+                                      itemSource: article.source,
+                                      itemType: "search-result",
+                                      query,
+                                    });
                                     goToArticle(article);
                                   }}
                                   className="result-card"
@@ -1444,8 +1760,12 @@ function SearchResults() {
                   </div>
                   <div className="results-grid">
                     {archiveResults.map((article, i) => {
-                      const perspective = resolveSearchCardPerspective(article)
-                      const trust = getTrustDescriptor(article)
+                      const sourceProfile = resolveManagedSourceProfile(article)
+                      const perspective = resolveSearchCardPerspective(
+                        article,
+                        sourceProfile,
+                      )
+                      const trust = getTrustDescriptorForProfile(sourceProfile)
 
                       return (
                         <a
@@ -1453,6 +1773,17 @@ function SearchResults() {
                           href={getStoryHref(article)}
                           onClick={(e) => {
                             e.preventDefault();
+                            trackEngagement({
+                              eventType: "search-result-click",
+                              path: `/search?q=${encodeURIComponent(query)}`,
+                              pageTitle: `Search: ${query}`,
+                              article,
+                              section: "archive",
+                              itemTitle: article.title,
+                              itemSource: article.source,
+                              itemType: "search-result",
+                              query,
+                            });
                             goToArticle(article);
                           }}
                           className="result-card result-card--archive"

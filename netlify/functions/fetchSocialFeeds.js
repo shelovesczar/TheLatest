@@ -189,11 +189,71 @@ const parseEnvFeeds = () => {
   }
 };
 
+const uniqueFeeds = (feeds = []) => {
+  const seen = new Set();
+
+  return (Array.isArray(feeds) ? feeds : []).filter((feed) => {
+    if (!feed || typeof feed !== "object") return false;
+
+    const key = String(
+      feed?.url || feed?.fallbackUrl || feed?.route || feed?.source || "",
+    )
+      .trim()
+      .toLowerCase();
+
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 const normalizeRoute = (route = "") => {
   const value = String(route || "").trim();
   if (!value) return null;
   return value.startsWith("/") ? value : `/${value}`;
 };
+
+const normalizePublishedAt = (value = "") => {
+  const text = stripHtml(value || "").trim();
+  if (!text) return "";
+
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString();
+  }
+
+  return "";
+};
+
+const toPublishedAtEpoch = (value = "") => {
+  const normalized = normalizePublishedAt(value);
+  if (!normalized) return 0;
+  const epoch = Date.parse(normalized);
+  return Number.isNaN(epoch) ? 0 : epoch;
+};
+
+const normalizeKeyPart = (value = "") =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
+
+const stableHash = (value = "") => {
+  const source = String(value || "");
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (Math.imul(31, hash) + source.charCodeAt(index)) | 0;
+  }
+  return String(Math.abs(hash));
+};
+
+const buildManagedSourceId = (feed = {}) =>
+  `social:${stableHash(`${String(feed?.source || "").trim()}|${String(feed?.url || "").trim()}|${String(feed?.platform || "").trim()}`)}`;
+
+const buildManagedSourceKey = (sourceId = "") =>
+  `sources/${String(sourceId || "").trim()}`;
 
 const resolveFeedUrl = (feed) => {
   if (feed?.url && /^https?:\/\//i.test(feed.url)) return feed.url;
@@ -210,7 +270,7 @@ const resolveFallbackUrl = (feed) => {
 
 const getConfiguredFeeds = () => {
   const envFeeds = parseEnvFeeds();
-  const feedList = envFeeds.length > 0 ? envFeeds : localSocialFeeds;
+  const feedList = uniqueFeeds([...localSocialFeeds, ...envFeeds]);
 
   return feedList
     .map((feed) => {
@@ -319,12 +379,21 @@ const normalizeFeedItem = (item, feed) => {
     platform: feed?.platform || "Social",
     author: getAuthorFromItem(item, feed),
     source: feed?.source || feed?.platform || "Social",
+    sourceId: buildManagedSourceId(feed),
+    sourceKey: buildManagedSourceKey(buildManagedSourceId(feed)),
+    sourceSlug:
+      normalizeKeyPart(feed?.source || feed?.platform || "Social") || "social",
     category: feed?.category || "social",
     tags: feed?.tags || [],
     content,
     title,
     url: item?.link || item?.guid || feed?.url,
-    timestamp: item?.isoDate || item?.pubDate || null,
+    canonicalUrl: item?.link || item?.guid || feed?.url,
+    timestamp: normalizePublishedAt(item?.isoDate || item?.pubDate || null),
+    publishedAt: normalizePublishedAt(item?.isoDate || item?.pubDate || null),
+    publishedAtEpoch: toPublishedAtEpoch(
+      item?.isoDate || item?.pubDate || null,
+    ),
     image: getImageFromItem(item),
     engagement: "",
     html: null,
@@ -384,18 +453,6 @@ const scoreFeedRelevance = (feed = {}, topic = "") => {
   });
 
   return score;
-};
-
-const uniqueFeeds = (feeds = []) => {
-  const seen = new Set();
-  return feeds.filter((feed) => {
-    const key = String(feed?.url || feed?.fallbackUrl || feed?.source || "")
-      .trim()
-      .toLowerCase();
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 };
 
 const matchesTopic = (post, topic) => {
@@ -529,7 +586,10 @@ exports.handler = async (event) => {
 
     const filtered = uniqueByUrl(allPosts)
       .filter((post) => matchesTopic(post, topic))
-      .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
+      .sort(
+        (a, b) =>
+          (Number(b.publishedAtEpoch) || 0) - (Number(a.publishedAtEpoch) || 0),
+      )
       .slice(0, maxItems);
 
     if (filtered.length > 0) {

@@ -10,7 +10,7 @@ import {
 import { getImageProps } from "../../utils/imageUtils";
 import "./AISummary.css";
 
-const SUMMARY_CACHE_VERSION = "v5";
+const SUMMARY_CACHE_VERSION = "v6";
 const SUMMARY_AD_ROTATE_MS = 12000;
 
 const SUMMARY_ADS = [
@@ -205,12 +205,22 @@ function AISummary({
           return;
         }
 
+        if (!force) {
+          const refreshedShared = await getSharedSummary(summaryRequest, {
+            refresh: true,
+          });
+          if (refreshedShared && !refreshedShared.isFallback) {
+            setSummaryData(refreshedShared);
+            return;
+          }
+        }
+
         const result = await generateAISummary(summaryRequest);
 
         if (result) {
           setSummaryData(result);
 
-          if (!result.isFallback) {
+          if (!result.isFallback && !result.modelFree) {
             const cacheKey = buildSummaryCacheKey(searchTopic, contextCategory);
             const summaryPayload = {
               ...result,
@@ -247,8 +257,10 @@ function AISummary({
     const cached = getCachedSummary(cacheKey);
     const cacheMatchesScope =
       !contextCategory || cached?.scopeCategory === contextCategory;
+    const hasStrongCachedSummary =
+      cached && !cached.isFallback && !cached.modelFree && cacheMatchesScope;
 
-    if (cached && !cached.isFallback && cacheMatchesScope) {
+    if (hasStrongCachedSummary) {
       setSummaryData(cached);
     }
 
@@ -263,11 +275,11 @@ function AISummary({
       return;
     }
 
-    if (cached && !cached.isFallback && cacheMatchesScope) {
+    if (hasStrongCachedSummary) {
       return;
     }
 
-    await refreshSummary();
+    await refreshSummary({ force: true });
   }, [buildSummaryCacheKey, category, refreshSummary, topic, useTopicFilter]);
 
   useEffect(() => {

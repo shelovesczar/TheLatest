@@ -7,6 +7,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { formatPublishedDate } from "../../utils/dateUtils";
 import "./SocialMedia.css";
 
 // Placeholder for Truth Social icon (using a generic social icon)
@@ -105,6 +106,11 @@ function SocialMedia({ socialPosts, loadingSocial }) {
                     </div>
                     <span className="social-platform">{post.platform}</span>
                     <div className="social-author">{post.author}</div>
+                    {formatPublishedDate(post) && (
+                      <div className="social-date">
+                        {formatPublishedDate(post)}
+                      </div>
+                    )}
                   </div>
                   {post.image && (
                     <div className="social-media-image">

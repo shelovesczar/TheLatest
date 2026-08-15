@@ -180,6 +180,7 @@ npm run verify:deploy-env:strict
 npm run verify:deploy-env:blobs
 npm run audit:bundle
 npm run audit:latency
+npm run audit:sources -- https://your-site.netlify.app
 npm run smoke:netlify-preview -- https://your-site.netlify.app
 ```
 
@@ -190,6 +191,7 @@ What they are for:
 - `verify:deploy-env:blobs`: confirms non-Netlify Blob credentials when needed.
 - `audit:bundle`: inspects production bundle weight.
 - `audit:latency`: checks latency-sensitive surfaces.
+- `audit:sources`: reports managed sources missing trust, ownership, or perspective metadata.
 - `smoke:netlify-preview`: validates a deployed Netlify URL.
 
 ## Deployment

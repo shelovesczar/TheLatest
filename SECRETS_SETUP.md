@@ -7,10 +7,13 @@ This repo cannot populate secret values automatically. Set them directly in GitH
 Fastest terminal path on this machine:
 
 1. Log in to GitHub CLI:
+
 ```powershell
 & 'C:\Program Files\GitHub CLI\gh.exe' auth login -h github.com -p https -w
 ```
+
 2. Run the guided helper:
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\set-hosted-secrets.ps1
 ```
@@ -23,9 +26,27 @@ Manual web path:
 4. Add the secrets used by `.github/workflows/deploy-readiness.yml`.
 
 Required:
+
 - `SESSION_TOKEN_PEPPER`
 
+Generate it yourself. This is not issued by Netlify, GitHub, or any third-party provider.
+
+PowerShell:
+
+```powershell
+[Convert]::ToHexString((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+```
+
+Node:
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Use a different value per environment and store it only in your secret manager or env configuration.
+
 Recommended:
+
 - `ADMIN_EMAILS`
 - `RSSHUB_BASE_URL`
 - `RSS_APP_BUNDLE_FEED_URL`
@@ -37,6 +58,7 @@ Recommended:
 - `ANTHROPIC_API_KEY`
 
 Optional for Docker, CI, or other non-Netlify runtimes that still need live Blob persistence:
+
 - `NETLIFY_BLOBS_SITE_ID`
 - `NETLIFY_BLOBS_TOKEN`
 
@@ -58,9 +80,11 @@ Manual web path:
 4. Add the runtime values the app uses.
 
 At minimum, production should have:
+
 - `SESSION_TOKEN_PEPPER`
 
 Recommended for fuller behavior:
+
 - `ADMIN_EMAILS`
 - `RSSHUB_BASE_URL`
 - `RSS_APP_BUNDLE_FEED_URL`
@@ -77,6 +101,7 @@ For browser-side AI setup, also define whichever `VITE_*` provider keys you inte
 - Netlify hosted Functions usually inject Blob access automatically, so production can run without manually setting Blob vars in the Netlify UI.
 - If you want zero local `netlify dev`, Docker, CI, or direct Node-function Blob warnings, set both `NETLIFY_BLOBS_SITE_ID` and `NETLIFY_BLOBS_TOKEN` in the root `.env` used on that machine.
 - To verify Blob-ready local or CI setup, run `npm run verify:deploy-env:blobs`.
+- To audit managed sources that are missing trust, ownership, or perspective metadata, run `npm run audit:sources -- https://your-site.netlify.app`.
 - To find `NETLIFY_BLOBS_SITE_ID`, open the Netlify project and copy `Project ID` from `Project configuration > General > Project information`.
 - To create `NETLIFY_BLOBS_TOKEN`, generate a Netlify Personal Access Token and keep it server-side only.
 - Run `npm run verify:deploy-env` after setting values to confirm the general gate can pass.

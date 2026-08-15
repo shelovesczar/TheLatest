@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { getImageProps } from "../../utils/imageUtils";
 import { deriveMediaOutlet } from "../../utils/sourceUtils";
-import { formatDateOnly } from "../../utils/dateUtils";
+import { formatPublishedDate } from "../../utils/dateUtils";
 import { resolveContentHref } from "../../utils/storyRouting";
 import { getGeneratedContentLabel } from "../../utils/contentLabels";
 import "./Opinions.css";
@@ -113,9 +113,11 @@ function Opinions({ loadingOpinions, opinions, categoryPath }) {
                             {getGeneratedContentLabel(opinion)}
                           </span>
                         )}
-                        <span className="card-date">
-                          {formatDateOnly(opinion.date)}
-                        </span>
+                        {formatPublishedDate(opinion) && (
+                          <span className="card-date">
+                            {formatPublishedDate(opinion)}
+                          </span>
+                        )}
                       </div>
                       <div className="card-headline-text">
                         {truncateText(opinion.title, 120)}

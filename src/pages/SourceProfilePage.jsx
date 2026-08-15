@@ -1,23 +1,53 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import PageBackBar from "../components/common/PageBackBar";
 import {
   getSourceProfileBySlug,
-  getTrustDescriptor,
+  getTrustDescriptorForProfile,
   PERSPECTIVE_METHODOLOGY,
 } from "../utils/sourceProfiles";
+import {
+  findRegistryRecord,
+  getSourceRegistry,
+  mergeSourceProfileWithRegistry,
+} from "../services/sourceRegistryService";
 import "./LegalPage.css";
 
 function SourceProfilePage() {
   const { sourceSlug } = useParams();
-  const profile = useMemo(
+  const [registryRecord, setRegistryRecord] = useState(null);
+
+  const baseProfile = useMemo(
     () => getSourceProfileBySlug(sourceSlug),
     [sourceSlug],
   );
-  const trust = useMemo(
-    () => getTrustDescriptor(profile.displayName),
-    [profile.displayName],
+
+  useEffect(() => {
+    let ignore = false;
+
+    getSourceRegistry()
+      .then((records) => {
+        if (!ignore) {
+          setRegistryRecord(findRegistryRecord(records, baseProfile));
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setRegistryRecord(null);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [baseProfile]);
+
+  const profile = useMemo(
+    () => mergeSourceProfileWithRegistry(baseProfile, registryRecord),
+    [baseProfile, registryRecord],
   );
+
+  const trust = useMemo(() => getTrustDescriptorForProfile(profile), [profile]);
 
   const sections = [
     {
@@ -133,6 +163,24 @@ function SourceProfilePage() {
             <p className="legal-page__paragraph">
               <strong>What it means:</strong> {trust.rationale}
             </p>
+            {profile.registryNotes ? (
+              <p className="legal-page__paragraph">
+                <strong>Registry note:</strong> {profile.registryNotes}
+              </p>
+            ) : null}
+            {profile.registryUpdatedAt ? (
+              <p className="legal-page__paragraph">
+                <strong>Last reviewed:</strong>{" "}
+                {new Date(profile.registryUpdatedAt).toLocaleDateString(
+                  "en-US",
+                  {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  },
+                )}
+              </p>
+            ) : null}
           </article>
 
           {sections.map((section) => (

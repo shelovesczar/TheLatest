@@ -196,11 +196,10 @@ module.exports = {
       tags: ["entertainment", "movies", "tv", "hollywood", "oscars"],
     },
     {
-      platform: "X",
+      platform: "Publisher",
       source: "Hollywood Reporter",
       category: "entertainment",
-      route: "/twitter/user/THR",
-      fallbackUrl: "https://www.hollywoodreporter.com/feed/",
+      url: "https://www.hollywoodreporter.com/feed/",
       priority: "standard",
       weight: 1,
       maxItems: 15,
@@ -284,11 +283,10 @@ module.exports = {
 
     // Culture
     {
-      platform: "X",
+      platform: "Publisher",
       source: "The Guardian Culture",
       category: "culture",
-      route: "/twitter/user/guardian",
-      fallbackUrl: "https://www.theguardian.com/culture/rss",
+      url: "https://www.theguardian.com/culture/rss",
       priority: "standard",
       weight: 1,
       maxItems: 15,

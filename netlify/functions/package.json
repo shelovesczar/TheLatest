@@ -1,6 +1,7 @@
 {
   "name": "netlify-functions",
   "version": "1.0.0",
+  "type": "commonjs",
   "dependencies": {
     "@netlify/blobs": "^10.7.9",
     "axios": "^1.7.9",

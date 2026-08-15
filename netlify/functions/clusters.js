@@ -1,48 +1,131 @@
 /* global require, exports */
-const rssAggregator = require('./rss-aggregator');
-const { labelStoryPerspective } = require('./perspective');
+const rssAggregator = require("./rss-aggregator.cjs");
+const { labelStoryPerspective } = require("./perspective");
 
 const STOP_WORDS = new Set([
-  'the', 'and', 'for', 'with', 'from', 'that', 'this', 'into', 'about', 'after', 'before', 'their', 'there',
-  'have', 'has', 'had', 'were', 'was', 'will', 'would', 'could', 'should', 'over', 'under', 'between',
-  'amid', 'amidst', 'through', 'across', 'what', 'when', 'where', 'which', 'while', 'news', 'latest',
-  'says', 'say', 'said', 'just', 'more', 'than', 'them', 'they', 'your', 'onto', 'still', 'also'
+  "the",
+  "and",
+  "for",
+  "with",
+  "from",
+  "that",
+  "this",
+  "into",
+  "about",
+  "after",
+  "before",
+  "their",
+  "there",
+  "have",
+  "has",
+  "had",
+  "were",
+  "was",
+  "will",
+  "would",
+  "could",
+  "should",
+  "over",
+  "under",
+  "between",
+  "amid",
+  "amidst",
+  "through",
+  "across",
+  "what",
+  "when",
+  "where",
+  "which",
+  "while",
+  "news",
+  "latest",
+  "says",
+  "say",
+  "said",
+  "just",
+  "more",
+  "than",
+  "them",
+  "they",
+  "your",
+  "onto",
+  "still",
+  "also",
 ]);
 
 const MIN_PERSPECTIVE_CLUSTER_SOURCES = 2;
 
 function jsonHeaders() {
   return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Content-Type': 'application/json'
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Content-Type": "application/json",
   };
 }
 
-function normalizeText(value = '') {
-  return String(value || '')
+function normalizeText(value = "") {
+  return String(value || "")
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
-function tokenize(value = '') {
+function tokenize(value = "") {
   return normalizeText(value)
-    .split(' ')
+    .split(" ")
     .filter((token) => token.length >= 4 && !STOP_WORDS.has(token));
 }
 
+function normalizeKeyPart(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
+}
+
+function stableHash(value = "") {
+  const source = String(value || "");
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (Math.imul(31, hash) + source.charCodeAt(index)) | 0;
+  }
+  return String(Math.abs(hash));
+}
+
+function buildClusterIdentity(story = {}, tokens = []) {
+  const canonical = normalizeText(
+    story.canonicalUrl || story.url || story.link || "",
+  );
+  const titleKey = tokenize(story.title || "")
+    .slice(0, 6)
+    .join("-");
+  const dateBucket = String(story.publishedAt || story.date || "").slice(0, 10);
+  const tokenKey = tokens.slice(0, 6).join("|");
+  const hash = stableHash(
+    `${canonical || titleKey || "coverage"}|${dateBucket}|${tokenKey}`,
+  );
+
+  return {
+    clusterId: `cluster-${hash}`,
+    clusterKey: normalizeKeyPart(titleKey || hash) || `cluster-${hash}`,
+  };
+}
+
 function getMinutesAgo(item = {}) {
-  const stamp = item.publishedAt || item.date || item.pubDate || item.isoDate || '';
+  const stamp =
+    item.publishedAt || item.date || item.pubDate || item.isoDate || "";
   const parsed = Date.parse(stamp);
   if (Number.isNaN(parsed)) return 9999;
   return Math.max(0, Math.round((Date.now() - parsed) / 60000));
 }
 
 function clusterScore(cluster = {}, tokens = []) {
-  if (!cluster.tokens || cluster.tokens.size === 0 || tokens.length === 0) return 0;
+  if (!cluster.tokens || cluster.tokens.size === 0 || tokens.length === 0)
+    return 0;
   let overlap = 0;
   tokens.forEach((token) => {
     if (cluster.tokens.has(token)) overlap += 1;
@@ -65,7 +148,7 @@ function buildClusterTopic(cluster = {}) {
     .slice(0, 3)
     .map(([token]) => token.charAt(0).toUpperCase() + token.slice(1));
 
-  return terms.length > 0 ? terms.join(' · ') : 'Coverage cluster';
+  return terms.length > 0 ? terms.join(" · ") : "Coverage cluster";
 }
 
 function summarizePerspectiveSources(sources = []) {
@@ -74,15 +157,21 @@ function summarizePerspectiveSources(sources = []) {
     unclassifiedSources: 0,
     classifiedSources: 0,
     methods: {},
-    confidence: {}
+    confidence: {},
   };
 
   (Array.isArray(sources) ? sources : []).forEach((story) => {
-    const key = String(story?.perspectiveKey || 'unknown').trim().toLowerCase();
-    const method = String(story?.perspectiveMethod || 'unclassified').trim().toLowerCase();
-    const confidence = String(story?.perspectiveConfidence || 'low').trim().toLowerCase();
+    const key = String(story?.perspectiveKey || "unknown")
+      .trim()
+      .toLowerCase();
+    const method = String(story?.perspectiveMethod || "unclassified")
+      .trim()
+      .toLowerCase();
+    const confidence = String(story?.perspectiveConfidence || "low")
+      .trim()
+      .toLowerCase();
 
-    if (key === 'unknown') {
+    if (key === "unknown") {
       summary.unclassifiedSources += 1;
     } else {
       summary.classifiedSources += 1;
@@ -100,9 +189,13 @@ async function clusterStories(items = [], limit = 8) {
   const clusters = [];
 
   stories.forEach((story) => {
-    const titleTokens = tokenize(story.title || '');
-    const bodyTokens = tokenize(`${story.description || ''} ${story.content || ''}`);
-    const combinedTokens = Array.from(new Set([...titleTokens, ...bodyTokens])).slice(0, 12);
+    const titleTokens = tokenize(story.title || "");
+    const bodyTokens = tokenize(
+      `${story.description || ""} ${story.content || ""}`,
+    );
+    const combinedTokens = Array.from(
+      new Set([...titleTokens, ...bodyTokens]),
+    ).slice(0, 12);
     if (combinedTokens.length === 0) return;
 
     let bestCluster = null;
@@ -115,18 +208,23 @@ async function clusterStories(items = [], limit = 8) {
       }
     });
 
-    const sourceName = String(story.source || 'Unknown Source').trim() || 'Unknown Source';
-    const sourceKey = sourceName.toLowerCase();
+    const sourceName =
+      String(story.source || "Unknown Source").trim() || "Unknown Source";
+    const sourceKey = String(story.sourceId || sourceName)
+      .trim()
+      .toLowerCase();
 
     if (!bestCluster || bestScore < 2) {
+      const identity = buildClusterIdentity(story, combinedTokens);
       clusters.push({
-        id: `cluster-${clusters.length + 1}`,
+        id: identity.clusterId,
+        key: identity.clusterKey,
         seed: story,
         tokens: new Set(combinedTokens),
         tokenCounts: upsertTokenCounts(new Map(), combinedTokens),
         stories: [story],
         sourceKeys: new Set([sourceKey]),
-        latestMinutesAgo: getMinutesAgo(story)
+        latestMinutesAgo: getMinutesAgo(story),
       });
       return;
     }
@@ -138,53 +236,69 @@ async function clusterStories(items = [], limit = 8) {
 
     combinedTokens.forEach((token) => bestCluster.tokens.add(token));
     upsertTokenCounts(bestCluster.tokenCounts, combinedTokens);
-    bestCluster.latestMinutesAgo = Math.min(bestCluster.latestMinutesAgo, getMinutesAgo(story));
+    bestCluster.latestMinutesAgo = Math.min(
+      bestCluster.latestMinutesAgo,
+      getMinutesAgo(story),
+    );
   });
 
   const ranked = clusters
     .map((cluster, index) => ({
       id: cluster.id || `cluster-${index + 1}`,
+      clusterKey: cluster.key || `cluster-${index + 1}`,
       topic: buildClusterTopic(cluster),
       minutesAgo: cluster.latestMinutesAgo,
       sourceCount: cluster.sourceKeys.size,
+      articleCount: cluster.stories.length,
       sources: cluster.stories
         .sort((left, right) => getMinutesAgo(left) - getMinutesAgo(right))
-        .slice(0, 6)
+        .slice(0, 6),
     }))
     .filter((cluster) => cluster.sources.length > 0)
     .sort((left, right) => {
-      if (right.sourceCount !== left.sourceCount) return right.sourceCount - left.sourceCount;
+      if (right.sourceCount !== left.sourceCount)
+        return right.sourceCount - left.sourceCount;
       return left.minutesAgo - right.minutesAgo;
     })
     .slice(0, limit);
 
-  const annotatedClusters = await Promise.all(ranked.map(async (cluster) => {
-    const annotatedSources = await Promise.all(cluster.sources.map(async (story) => {
-      const perspective = await labelStoryPerspective({
-        headline: story.title || '',
-        description: `${story.description || ''} ${story.content || ''}`,
-        source: story.source || ''
-      });
+  const annotatedClusters = await Promise.all(
+    ranked.map(async (cluster) => {
+      const annotatedSources = await Promise.all(
+        cluster.sources.map(async (story) => {
+          const perspective = await labelStoryPerspective({
+            headline: story.title || "",
+            description: `${story.description || ""} ${story.content || ""}`,
+            source: story.source || "",
+          });
+
+          return {
+            ...story,
+            perspectiveKey: perspective.key,
+            perspectiveLabel: perspective.label,
+            perspectiveStyle: perspective.sourceStyle,
+            perspectiveMethod: perspective.method,
+            perspectiveConfidence: perspective.confidence,
+            perspectiveRationale: perspective.rationale,
+            perspectiveEstimated: perspective.isEstimated,
+          };
+        }),
+      );
 
       return {
-        ...story,
-        perspectiveKey: perspective.key,
-        perspectiveLabel: perspective.label,
-        perspectiveStyle: perspective.sourceStyle,
-        perspectiveMethod: perspective.method,
-        perspectiveConfidence: perspective.confidence,
-        perspectiveRationale: perspective.rationale,
-        perspectiveEstimated: perspective.isEstimated
+        ...cluster,
+        sources: annotatedSources.map((story) => ({
+          ...story,
+          clusterId: cluster.id,
+          clusterKey: cluster.clusterKey,
+        })),
+        comparisonEligible:
+          cluster.sourceCount >= MIN_PERSPECTIVE_CLUSTER_SOURCES &&
+          annotatedSources.length >= MIN_PERSPECTIVE_CLUSTER_SOURCES,
+        perspectiveHealth: summarizePerspectiveSources(annotatedSources),
       };
-    }));
-
-    return {
-      ...cluster,
-      sources: annotatedSources,
-      comparisonEligible: cluster.sourceCount >= MIN_PERSPECTIVE_CLUSTER_SOURCES && annotatedSources.length >= MIN_PERSPECTIVE_CLUSTER_SOURCES,
-      perspectiveHealth: summarizePerspectiveSources(annotatedSources)
-    };
-  }));
+    }),
+  );
 
   return annotatedClusters.filter((cluster) => cluster.comparisonEligible);
 }
@@ -192,28 +306,47 @@ async function clusterStories(items = [], limit = 8) {
 exports.handler = async (event) => {
   const headers = jsonHeaders();
 
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 200, headers, body: "" };
   }
 
-  if (event.httpMethod !== 'GET') {
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed.' }) };
+  if (event.httpMethod !== "GET") {
+    return {
+      statusCode: 405,
+      headers,
+      body: JSON.stringify({ error: "Method not allowed." }),
+    };
   }
 
   try {
-    const { type = 'news', category = '', search = '', limit = '8' } = event.queryStringParameters || {};
+    const {
+      type = "news",
+      category = "",
+      search = "",
+      limit = "8",
+    } = event.queryStringParameters || {};
     const maxClusters = Math.max(1, Math.min(parseInt(limit, 10) || 8, 12));
 
-    const response = await rssAggregator.handler({
-      httpMethod: 'GET',
-      queryStringParameters: {
-        type,
-        ...(category ? { category } : {}),
-        ...(search ? { search, strictSearch: '0', relaxSearchFallback: '1', minStrictResults: '4' } : {})
-      }
-    }, {});
+    const response = await rssAggregator.handler(
+      {
+        httpMethod: "GET",
+        queryStringParameters: {
+          type,
+          ...(category ? { category } : {}),
+          ...(search
+            ? {
+                search,
+                strictSearch: "0",
+                relaxSearchFallback: "1",
+                minStrictResults: "4",
+              }
+            : {}),
+        },
+      },
+      {},
+    );
 
-    const payload = JSON.parse(response.body || '{}');
+    const payload = JSON.parse(response.body || "{}");
     const items = Array.isArray(payload.data) ? payload.data : [];
     const clusters = await clusterStories(items, maxClusters);
 
@@ -227,14 +360,14 @@ exports.handler = async (event) => {
         minPerspectiveSources: MIN_PERSPECTIVE_CLUSTER_SOURCES,
         type,
         category,
-        search
-      })
+        search,
+      }),
     };
   } catch (error) {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: error.message || 'Unknown error' })
+      body: JSON.stringify({ error: error.message || "Unknown error" }),
     };
   }
 };

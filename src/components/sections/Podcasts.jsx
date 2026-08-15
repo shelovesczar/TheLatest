@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { getImageProps } from "../../utils/imageUtils";
 import { deriveMediaOutlet } from "../../utils/sourceUtils";
-import { formatDateOnly } from "../../utils/dateUtils";
+import { formatPublishedDate } from "../../utils/dateUtils";
 import { resolveContentHref } from "../../utils/storyRouting";
 import { getGeneratedContentLabel } from "../../utils/contentLabels";
 import "./Podcasts.css";
@@ -113,9 +113,11 @@ function Podcasts({ loadingPodcasts, podcasts, categoryPath }) {
                             {getGeneratedContentLabel(podcast)}
                           </span>
                         )}
-                        <span className="card-date">
-                          {formatDateOnly(podcast.date)}
-                        </span>
+                        {formatPublishedDate(podcast) && (
+                          <span className="card-date">
+                            {formatPublishedDate(podcast)}
+                          </span>
+                        )}
                       </div>
                       <div className="card-headline-text">
                         {truncateText(podcast.title, 100)}

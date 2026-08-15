@@ -1,64 +1,77 @@
-import { useState, useEffect } from 'react'
-import { useSearch } from '../context/SearchContext'
-import { getRandomTrendingPosts } from '../socialMediaService'
-import { getRandomCategoryPosts } from '../socialMediaPosts'
-import SocialMediaBundle from '../components/sections/SocialMediaBundle'
-import PageBackBar from '../components/common/PageBackBar'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faXTwitter, faInstagram, faTiktok, faReddit } from '@fortawesome/free-brands-svg-icons'
-import { getImageProps } from '../utils/imageUtils'
-import './CategoryPage.css'
-import '../components/sections/SocialMedia.css'
+import { useState, useEffect } from "react";
+import { useSearch } from "../context/SearchContext";
+import { getRandomTrendingPosts } from "../socialMediaService";
+import { getRandomCategoryPosts } from "../socialMediaPosts";
+import SocialMediaBundle from "../components/sections/SocialMediaBundle";
+import PageBackBar from "../components/common/PageBackBar";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faXTwitter,
+  faInstagram,
+  faTiktok,
+  faReddit,
+} from "@fortawesome/free-brands-svg-icons";
+import { getImageProps } from "../utils/imageUtils";
+import { formatPublishedDate } from "../utils/dateUtils";
+import "./SocialPage.css";
+import "./CategoryPage.css";
+import "../components/sections/SocialMedia.css";
 
 function SocialPage() {
-  const { topic, hasActiveTopic } = useSearch()
-  const [socialPosts, setSocialPosts] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [selectedPlatform, setSelectedPlatform] = useState('ALL')
+  const { topic, hasActiveTopic } = useSearch();
+  const [socialPosts, setSocialPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedPlatform, setSelectedPlatform] = useState("ALL");
 
   useEffect(() => {
     const loadSocialPosts = async () => {
-      setLoading(true)
+      setLoading(true);
       try {
-        const activeTopic = hasActiveTopic ? topic : ''
-        let posts = await getRandomTrendingPosts(20, activeTopic)
+        const activeTopic = hasActiveTopic ? topic : "";
+        let posts = await getRandomTrendingPosts(20, activeTopic);
 
         // If topic feed is sparse, broaden to overall social feed before mock fallback.
         if ((!posts || posts.length === 0) && activeTopic) {
-          posts = await getRandomTrendingPosts(20, '')
+          posts = await getRandomTrendingPosts(20, "");
         }
 
-        setSocialPosts(posts && posts.length > 0 ? posts : getRandomCategoryPosts(20))
+        setSocialPosts(
+          posts && posts.length > 0 ? posts : getRandomCategoryPosts(20),
+        );
       } catch (error) {
-        console.error('Error loading social posts:', error)
-        setSocialPosts(getRandomCategoryPosts(20))
+        console.error("Error loading social posts:", error);
+        setSocialPosts(getRandomCategoryPosts(20));
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    loadSocialPosts()
-  }, [topic, hasActiveTopic])
+    loadSocialPosts();
+  }, [topic, hasActiveTopic]);
 
   const getIcon = (platform) => {
     switch (platform) {
-      case 'X':
-        return faXTwitter
-      case 'Instagram':
-        return faInstagram
-      case 'TikTok':
-        return faTiktok
-      case 'Reddit':
-        return faReddit
+      case "X":
+        return faXTwitter;
+      case "Instagram":
+        return faInstagram;
+      case "TikTok":
+        return faTiktok;
+      case "Reddit":
+        return faReddit;
       default:
-        return faXTwitter
+        return faXTwitter;
     }
-  }
+  };
 
-  const platforms = ['ALL', ...new Set(socialPosts.map(p => p.platform).filter(Boolean))]
-  const filteredPosts = selectedPlatform === 'ALL'
-    ? socialPosts
-    : socialPosts.filter(p => p.platform === selectedPlatform)
+  const platforms = [
+    "ALL",
+    ...new Set(socialPosts.map((p) => p.platform).filter(Boolean)),
+  ];
+  const filteredPosts =
+    selectedPlatform === "ALL"
+      ? socialPosts
+      : socialPosts.filter((p) => p.platform === selectedPlatform);
 
   return (
     <div className="category-page">
@@ -66,8 +79,8 @@ function SocialPage() {
         shellClassName="topic-page-shell"
         fallbackTo="/"
         breadcrumbs={[
-          { label: 'Home', to: '/' },
-          { label: hasActiveTopic ? `${topic} Social` : 'Social' }
+          { label: "Home", to: "/" },
+          { label: hasActiveTopic ? `${topic} Social` : "Social" },
         ]}
         meta={`${filteredPosts.length} posts across ${Math.max(platforms.length - 1, 0)} platforms`}
       />
@@ -75,40 +88,58 @@ function SocialPage() {
       <div className="category-hero">
         <div className="category-hero-content">
           <h1 className="category-title">
-            {hasActiveTopic ? `${topic} on Social Media` : 'Trending Social Media'}
+            {hasActiveTopic
+              ? `${topic} on Social Media`
+              : "Trending Social Media"}
           </h1>
           <p className="category-description">
-            {hasActiveTopic 
+            {hasActiveTopic
               ? `The most popular social media posts about ${topic} right now`
-              : 'Trending posts from X, Instagram, TikTok, and Reddit'
-            }
+              : "Trending posts from X, Instagram, TikTok, and Reddit"}
           </p>
         </div>
       </div>
 
       <div className="category-content">
         <section className="section social-media">
-          <SocialMediaBundle bundleUrl="https://rss.app/feeds/_LVYomWWGnBBWz7m9.xml" bundleNumber={2} totalFeeds={1} />
+          <SocialMediaBundle
+            bundleUrl="https://rss.app/feeds/_LVYomWWGnBBWz7m9.xml"
+            bundleNumber={2}
+            totalFeeds={1}
+          />
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "1.5rem",
+            }}
+          >
             <h2 className="section-title">Social Media Posts</h2>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              {platforms.map(platform => (
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              {platforms.map((platform) => (
                 <button
                   key={platform}
                   onClick={() => setSelectedPlatform(platform)}
                   style={{
-                    padding: '0.5rem 1rem',
-                    borderRadius: '25px',
-                    border: '1.5px solid var(--accent-color)',
-                    background: selectedPlatform === platform ? 'var(--accent-color)' : 'transparent',
-                    color: selectedPlatform === platform ? '#ffffff' : 'var(--accent-color)',
-                    fontWeight: '700',
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08rem'
+                    padding: "0.5rem 1rem",
+                    borderRadius: "25px",
+                    border: "1.5px solid var(--accent-color)",
+                    background:
+                      selectedPlatform === platform
+                        ? "var(--accent-color)"
+                        : "transparent",
+                    color:
+                      selectedPlatform === platform
+                        ? "#ffffff"
+                        : "var(--accent-color)",
+                    fontWeight: "700",
+                    fontSize: "0.85rem",
+                    cursor: "pointer",
+                    transition: "all 0.3s",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08rem",
                   }}
                 >
                   {platform}
@@ -116,7 +147,7 @@ function SocialPage() {
               ))}
             </div>
           </div>
-          
+
           {loading ? (
             <div className="loading-container">
               <p className="loading-text">Loading social media posts...</p>
@@ -136,6 +167,11 @@ function SocialPage() {
                         <div className="social-post-meta">
                           <span className="author">{post.author}</span>
                           <span className="platform">{post.platform}</span>
+                          {formatPublishedDate(post) && (
+                            <span className="post-date">
+                              {formatPublishedDate(post)}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -143,17 +179,21 @@ function SocialPage() {
                         <div className="social-post-media">
                           {post.video ? (
                             <div className="social-post-video-container">
-                              <video 
-                                src={post.video} 
-                                controls 
+                              <video
+                                src={post.video}
+                                controls
                                 className="social-post-video"
                                 poster={post.image}
                               />
                               <div className="video-play-overlay">▶</div>
                             </div>
                           ) : (
-                            <img 
-                              {...getImageProps(post.image, post.content, 'general')} 
+                            <img
+                              {...getImageProps(
+                                post.image,
+                                post.content,
+                                "general",
+                              )}
                               className="social-post-image"
                               alt={post.content}
                             />
@@ -165,7 +205,12 @@ function SocialPage() {
 
                       <div className="social-post-stats">
                         <span>💬 {post.replies?.toLocaleString() || 0}</span>
-                        <span>🔄 {post.retweets?.toLocaleString() || post.shares?.toLocaleString() || 0}</span>
+                        <span>
+                          🔄{" "}
+                          {post.retweets?.toLocaleString() ||
+                            post.shares?.toLocaleString() ||
+                            0}
+                        </span>
                         <span>❤️ {post.likes?.toLocaleString() || 0}</span>
                       </div>
 
@@ -176,7 +221,12 @@ function SocialPage() {
                         <button className="social-action-button">📤</button>
                       </div>
 
-                      <a href={post.url} target="_blank" rel="noopener noreferrer" className="view-post-link">
+                      <a
+                        href={post.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="view-post-link"
+                      >
                         View Full Post →
                       </a>
                     </>
@@ -186,10 +236,9 @@ function SocialPage() {
             </div>
           )}
         </section>
-
       </div>
     </div>
-  )
+  );
 }
 
-export default SocialPage
+export default SocialPage;

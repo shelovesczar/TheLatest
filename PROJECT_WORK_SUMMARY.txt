@@ -1,0 +1,232 @@
+THE LATEST PROJECT WORK SUMMARY
+Updated: 2026-08-14
+
+PROJECT OVERVIEW
+The Latest has been built into a multi-surface news aggregation product focused on live news, opinions, podcasts, videos, social signals, source trust context, and side-by-side perspective comparison. The project has evolved from a basic RSS-driven frontend into a broader editorial product with source governance, server-side enrichment, search UX improvements, analytics, and deployment-readiness tooling.
+
+PRIMARY PRODUCT DIRECTION
+- RSS-first aggregation with optional API-backed expansion.
+- Stronger source transparency and trust context to differentiate from competitors like Ground News.
+- Lower-cost architecture where provider APIs are fallback or supplemental layers, not the default for every request.
+- Improved editorial polish on homepage cards, search landing, and comparison surfaces.
+- Better measurement of user engagement across trust and comparison features.
+
+MAJOR COMPLETED WORK
+
+1. HOMEPAGE AND CARD DESIGN
+- Refined the Top Stories side-by-side cards to look smaller, tighter, and more editorial.
+- Eliminated excess whitespace and footer voids in comparison cards.
+- Matched image proportions more cleanly with card content.
+- Added a second stacked comparison card below the main side-by-side lead card.
+- Improved content sizing and card density for a more professional presentation.
+
+2. DATE NORMALIZATION ACROSS SURFACES
+- Replaced vague "Latest" labels with actual publish dates wherever possible.
+- Centralized date handling in shared utilities.
+- Applied publish-date normalization across top stories, opinions, podcasts, and social surfaces.
+- Propagated normalized timestamps into full listing pages as well.
+
+3. SOURCE TRUST AND PROFILE LAYER
+- Added explicit source-profile links across homepage cards and comparison surfaces.
+- Built a static source profile registry for major outlets.
+- Added richer trust descriptors and source-level context.
+- Enabled explicit trust score overrides from a managed backend registry.
+- Integrated backend-managed source metadata into the source page and article reader.
+- Extended trust and perspective handling into search and comparison surfaces.
+- Fixed null trust-score coercion in both registry merge and render-layer trust resolution so live truth badges do not collapse to zero when managed scores are blank.
+- Expanded canonical source-family coverage so feed variants and syndicated inputs resolve back to curated outlet profiles more reliably.
+
+4. SOURCE REGISTRY AND BACKEND GOVERNANCE FOUNDATIONS
+- Added a public GET endpoint for managed source records.
+- Added admin-gated POST support for ownership, perspective, trust score, notes, and active status.
+- Added service-side registry merging so backend overrides can layer over static source profiles.
+- Added source-governance audit tooling to quantify missing metadata.
+- Seeded managed-source governance from the curated frontend registry for known major outlets.
+- Reworked the governance audit to distinguish baseline resolved coverage from deeper outlet curation coverage.
+- Curated multiple follow-on batches across news, business, tech, sports, culture, entertainment, opinion, lifestyle, and public-media podcast brands.
+
+5. STORY CLUSTERING AND PERSPECTIVE COMPARISON
+- Added more stable cluster identity generation with hashed cluster IDs and keys.
+- Improved same-story grouping across outlets.
+- Added source-based perspective fallback when explicit classification is unavailable.
+- Carried comparison metadata into side-by-side surfaces.
+- Added comparison analytics for views, story clicks, source selection, and profile clicks.
+
+6. SEARCH EXPERIENCE REWORK
+- Reworked the search landing page.
+- Added starter search cards for no-query state.
+- Added overview cards for active searches.
+- Added best-starting-point cards for strong exact/high-signal matches.
+- Added registry-backed trust and perspective resolution to result cards.
+- Added search view and result-click analytics.
+- Preserved AI search-assist behavior while improving the core landing and discovery flow.
+
+7. RSS INGESTION AND PROVIDER EXPANSION
+- Added support for dynamic ADDITIONAL_RSS_FEEDS configuration.
+- Added support for EXTERNAL_NEWS_PROVIDERS configuration.
+- Implemented NewsAPI and GNews provider parsing in the backend aggregator.
+- Allowed provider-backed feeds to supplement category coverage.
+- Added provider-backed live backfill to opinions, videos, and podcasts before generated fallback.
+- Expanded provider groups for politics, tech, business, entertainment, sports, culture, and lifestyle.
+
+8. SOCIAL FEEDS AND FEED CONFIGURATION
+- Changed SOCIAL_RSS_FEEDS behavior so env-defined feeds extend the built-in list instead of replacing it.
+- Fixed duplicate helper issues in social feed loading.
+- Repaired broken social feed routes with direct publisher feeds where necessary.
+- Added Reddit and Hacker News supplemental social/topic feeds.
+
+9. FEED AUDIT, PRIORITIZATION, AND QUALITY CONTROL
+- Audited live feeds for dead or failing upstream sources.
+- Removed or disabled broken built-in video and podcast feeds that were wasting fetch slots.
+- Promoted high-value opinions and video feeds to higher priority.
+- Preserved RSS-first operation while improving actual live coverage quality.
+
+10. ANALYTICS AND ENGAGEMENT TRACKING
+- Added dossier section engagement analytics earlier in the project.
+- Added search view and result-click analytics.
+- Added comparison analytics on the side-by-side surface.
+- Kept analytics consent-aware via the existing consent flow.
+
+11. SEARCH, DOSSIER, AND AI FALLBACK BEHAVIOR
+- Preserved server-backed editorial summary behavior.
+- Added better fallback routing between strict and relaxed search modes.
+- Kept generated-content fallback available when live RSS or provider coverage is thin.
+- Added env verification around Anthropic and fallback model configuration.
+
+12. DEPLOYMENT AND DEV-TOOLING HARDENING
+- Added deploy environment verification scripts.
+- Added Blob credential checks for non-Netlify runtimes.
+- Added deployed smoke-test tooling.
+- Added source-governance audit tooling.
+- Fixed the local dev-netlify launcher so it no longer falsely selects a conflicting port.
+- Added regression tests for provider backfill logic and dev-netlify port resolution.
+- Fixed Node-compatible source profile import behavior for backend seeding.
+- Marked netlify/functions/package.json as type commonjs to prevent Netlify from loading CommonJS functions as ESM.
+
+13. LIVE PRODUCTION DEBUGGING, SUMMARY RECOVERY, AND RSS PACKAGING FIXES
+- Investigated a live-site regression where shared devices and first-load users were seeing generated fallback content instead of live RSS coverage.
+- Confirmed the server-side shared summary endpoint could still return Claude-backed summaries while the homepage UI was restoring stale local fallback state.
+- Updated homepage summary caching so model-free local editorial summaries no longer count as strong cache entries.
+- Bumped the homepage summary cache version to invalidate stale localStorage entries that survived hard refreshes.
+- Traced a separate production outage to the public rss-aggregator function entrypoint being loaded with the wrong module mode in Netlify.
+- Split the RSS aggregator into a stable CommonJS implementation file and a public wrapper entrypoint so Netlify can load the public function while internal callers continue using CommonJS.
+- Repeated live deploy validation against the production URL and unique deploy URLs until the public RSS endpoint returned real live feed items again.
+- Confirmed live shared summaries still return Claude-backed topics after the RSS packaging fix.
+
+14. EXECUTIVE / REPORTING SUPPORT
+- Produced prior executive-facing summary work for leadership communication.
+- Consolidated product viability direction around trust, comparison, and coverage differentiation.
+
+CURRENT REPO STATUS
+- Build passes locally.
+- Focused Vitest coverage passes for source profiles, source registry service, provider fallback logic, and dev-netlify port resolution.
+- Deploy environment verification now passes locally.
+- Managed source governance seeding works in the local backend module for known curated outlets.
+- Source profile regression coverage now includes canonical outlet mapping, variant-family mapping, second-batch curation coverage, and opinion/podcast family resolution.
+- Current curated source coverage is 159 of 189 managed source records, leaving 30 uncurated records across 29 unique outlets.
+- The RSS aggregator now uses a split-entry packaging approach:
+  - netlify/functions/rss-aggregator-impl.cjs holds the CommonJS implementation.
+  - netlify/functions/rss-aggregator.cjs is the internal CommonJS bridge for other functions.
+  - netlify/functions/rss-aggregator.js is the public wrapper entrypoint for Netlify.
+
+CURRENT KNOWN PRODUCTION STATUS
+- Production URL checked: https://resonant-bombolone-87d70d.netlify.app
+- Live deploys were iterated until the public RSS endpoint stopped failing with Netlify module-loading/runtime packaging errors.
+- Current live deploy verified: 6a7f39c99cc10571cd92788d.
+- The public RSS endpoint now returns HTTP 200 and real aggregated feed data again.
+- The shared summary endpoint still returns Claude (claude-sonnet-5) topics on live production.
+- Raw homepage HTML no longer has The Latest Editorial fallback baked into the delivered shell.
+- Truth-score rendering was also fixed so blank managed trust values no longer render as zero in production.
+- The main remaining production follow-up is browser-level smoke verification of the hydrated homepage and major browse surfaces after the live RSS restoration.
+
+DEPLOYED SOURCE-GOVERNANCE STATUS
+- The governance model is now much stronger locally than this file previously reflected.
+- Current validated local/source-resolution state shows:
+  - Total managed sources: 189
+  - Resolved governance coverage: 189 of 189
+  - Curated coverage: 159 of 189
+  - Remaining uncurated records: 30
+  - Remaining unique outlets: 29
+- Recently added curated coverage includes examples such as:
+  - Channel NewsAsia
+  - Fortune
+  - Billboard
+  - Apartment Therapy
+  - South China Morning Post
+  - National Review
+  - Marketplace
+  - The Hollywood Reporter
+- Remaining backlog is now concentrated in long-tail culture, lifestyle, podcast, and secondary trade outlets rather than major unclassified newsrooms.
+
+CURRENT ENV / CONFIG STATUS
+- SESSION_TOKEN_PEPPER is now set and verify:deploy-env passes.
+- Remaining verifier warnings are reduced to:
+  - ADMIN_EMAILS not set
+  - RSS_APP_AUTH_TOKEN not set
+- Notes instead of hard warnings now cover:
+  - Browser AI intentionally disabled via VITE_AI_PROVIDER=editorial
+  - RSS bundle feed URL/source using built-in defaults
+  - ANTHROPIC_CONTENT_FALLBACK_MODEL falling back to summary model/default
+
+WHAT IS STILL INCOMPLETE
+1. Browser-level production smoke verification still needs to be rerun against the current live site.
+  Reason: endpoint-level validation is current, but a full hydrated-browser pass across homepage and browse surfaces has not yet been rerun after the final RSS packaging deploy.
+   Commands:
+   - npm run smoke:netlify-preview -- https://your-site.netlify.app
+   - npm run audit:sources -- https://your-site.netlify.app
+
+2. The final source-curation backlog is not finished yet.
+   Reason: 30 managed source records across 29 unique outlets still resolve to fallback "Needs review" metadata.
+
+3. The remaining backlog is now mostly long-tail outlets rather than core governance gaps.
+   Reason: the unresolved set is now concentrated in lifestyle, culture, podcasts, and secondary trade brands rather than the core newsroom set.
+
+4. ADMIN_EMAILS should be set if you want production admin actions fully locked down.
+
+5. RSS_APP_AUTH_TOKEN is only needed if the RSS.app bundle feed is private.
+   If the bundle feed is public and your current API key/secret path is sufficient, this may not be a blocker.
+
+RECOMMENDED NEXT STEPS
+1. Run deployed smoke testing against the real production URL now that the RSS endpoint is returning live data again.
+2. Run the deployed source-governance audit again so the live numbers can be compared against the current local 159-of-189 curated state.
+3. Curate the remaining long-tail outlet backlog, starting with lifestyle, culture, podcasts, and secondary trade brands.
+4. Set ADMIN_EMAILS if admin-only operational actions should be locked down in production.
+5. Only set RSS_APP_AUTH_TOKEN if the RSS.app bundle feed is private.
+
+KEY FILES TO KNOW
+- src/pages/SearchResults.jsx
+- src/pages/SearchResults.css
+- src/components/sections/TopStories.jsx
+- src/utils/dateUtils.js
+- src/utils/sourceProfiles.js
+- src/services/sourceRegistryService.js
+- src/newsService.js
+- src/components/sections/AISummary.jsx
+- netlify/functions/rss-aggregator.cjs
+- netlify/functions/rss-aggregator.js
+- netlify/functions/rss-aggregator-impl.cjs
+- netlify/functions/sources.js
+- netlify/functions/clusters.js
+- netlify/functions/fetchSocialFeeds.js
+- netlify/functions/trackEngagement.js
+- scripts/verify-deploy-env.mjs
+- scripts/smoke-netlify-preview.mjs
+- scripts/audit-source-governance.mjs
+- scripts/dev-netlify.mjs
+- netlify/functions/package.json
+
+VALIDATION COMPLETED LOCALLY
+- npm run build
+- npm run verify:deploy-env
+- npm exec vitest run src/utils/sourceProfiles.test.js src/services/sourceRegistryService.test.js src/newsService.test.js scripts/dev-netlify.test.js
+- npm exec vitest run src/utils/sourceProfiles.test.js
+- direct Node inspection of netlify/functions/rss-aggregator.cjs for managed source seeding
+
+FINAL HANDOFF NOTE
+The project has moved well beyond a simple RSS reader. It now has a meaningful trust layer, comparison UX, source governance foundations, provider-assisted resilience, analytics, and deploy-readiness tooling. The main short-term blocker is not feature breadth. It is making sure the latest backend packaging fix is deployed and then verifying live production behavior against that updated deployment.
+
+LATEST LIVE VALIDATION NOTE
+- Live production RSS endpoint recovered after entrypoint packaging fixes and redeploy.
+- Live shared summary endpoint returns Claude-backed output.
+- Homepage summary cache handling was tightened so stale model-free editorial fallback does not out-rank stronger shared-summary data.
+- Remaining validation should focus on end-to-end browser behavior rather than raw endpoint health.

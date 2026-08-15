@@ -24,6 +24,10 @@ import {
 import { formatDateOnly } from "../utils/dateUtils";
 import { resolveContentHref } from "../utils/storyRouting";
 import { getGeneratedContentLabel } from "../utils/contentLabels";
+import {
+  getSourceProfile,
+  getTrustDescriptorForProfile,
+} from "../utils/sourceProfiles";
 import PageBackBar from "../components/common/PageBackBar";
 import "./AllNewsPage.css";
 
@@ -35,6 +39,52 @@ function toTextValue(value) {
     return value.map(toTextValue).filter(Boolean).join(", ");
   if (typeof value === "object" && typeof value._ === "string") return value._;
   return "";
+}
+
+const PERSPECTIVE_METHOD_LABELS = {
+  "ai-headline": "AI estimate from headline and summary framing",
+  "source-map": "Source map estimate from outlet profile",
+  unclassified: "Perspective not classified with enough confidence",
+};
+
+function resolveStoryPerspective(article = {}, fallbackProfile = null) {
+  const explicitKey = String(article?.perspectiveKey || "")
+    .trim()
+    .toLowerCase();
+  if (explicitKey && explicitKey !== "unknown") {
+    return {
+      key: explicitKey,
+      label: String(article?.perspectiveLabel || "Unclassified").trim(),
+      method: String(article?.perspectiveMethod || "source-map")
+        .trim()
+        .toLowerCase(),
+    };
+  }
+
+  const profile = fallbackProfile || getSourceProfile(article);
+  if (profile?.perspectiveKey && profile.perspectiveKey !== "unknown") {
+    return {
+      key: profile.perspectiveKey,
+      label: profile.perspectiveLabel,
+      method: "source-map",
+    };
+  }
+
+  return null;
+}
+
+function enrichVideoItem(item) {
+  const sourceProfile = getSourceProfile(item);
+  return {
+    ...item,
+    sourceProfile,
+    sourceDisplayName:
+      sourceProfile?.displayName || item?.source || "Video Desk",
+    sourceFilterLabel:
+      sourceProfile?.displayName || item?.source || "Video Desk",
+    trust: getTrustDescriptorForProfile(sourceProfile),
+    perspective: resolveStoryPerspective(item, sourceProfile),
+  };
 }
 
 function AllVideosPage({ category = null }) {
@@ -118,7 +168,7 @@ function AllVideosPage({ category = null }) {
           ]);
         }
 
-        setVideos(dedupeByMediaKey(topicVideos));
+        setVideos(dedupeByMediaKey(topicVideos).map(enrichVideoItem));
       } else {
         const videosData = await fetchVideos(filterContext);
         const normalizedVideos = (Array.isArray(videosData) ? videosData : [])
@@ -135,7 +185,7 @@ function AllVideosPage({ category = null }) {
           );
         }
 
-        setVideos(dedupeByMediaKey(filtered));
+        setVideos(dedupeByMediaKey(filtered).map(enrichVideoItem));
       }
     } catch (error) {
       console.error("Error loading videos:", error);
@@ -152,20 +202,26 @@ function AllVideosPage({ category = null }) {
   useEffect(() => {
     if (
       selectedSource !== "ALL" &&
-      !videos.some((item) => item.source === selectedSource)
+      !videos.some((item) => item.sourceFilterLabel === selectedSource)
     ) {
       setSelectedSource("ALL");
     }
   }, [videos, selectedSource]);
 
-  const sources = [
-    "ALL",
-    ...new Set(videos.map((item) => item.source).filter(Boolean)),
-  ];
+  const sourceCounts = videos.reduce((accumulator, item) => {
+    const key = item.sourceFilterLabel;
+    if (!key) return accumulator;
+    accumulator[key] = (accumulator[key] || 0) + 1;
+    return accumulator;
+  }, {});
+  const sourceEntries = Object.entries(sourceCounts).sort((left, right) => {
+    if (right[1] !== left[1]) return right[1] - left[1];
+    return left[0].localeCompare(right[0]);
+  });
   const filteredVideos =
     selectedSource === "ALL"
       ? videos
-      : videos.filter((item) => item.source === selectedSource);
+      : videos.filter((item) => item.sourceFilterLabel === selectedSource);
 
   const handleSourceClick = (source) => {
     setSelectedSource(source);
@@ -221,14 +277,12 @@ function AllVideosPage({ category = null }) {
               <span className="hero-stat-label">Videos</span>
             </div>
             <div className="hero-stat">
-              <span className="hero-stat-value">
-                {Math.max(sources.length - 1, 0)}
-              </span>
+              <span className="hero-stat-value">{sourceEntries.length}</span>
               <span className="hero-stat-label">Sources</span>
             </div>
             <div className="hero-stat">
               <span className="hero-stat-value">
-                {selectedSource === "ALL" ? "Live" : selectedSource}
+                {selectedSource === "ALL" ? "All" : selectedSource}
               </span>
               <span className="hero-stat-label">Feed</span>
             </div>
@@ -241,7 +295,7 @@ function AllVideosPage({ category = null }) {
           <h2 className="source-filter-title">Source Ticker</h2>
           <span className="source-filter-count">
             {selectedSource === "ALL"
-              ? "All sources active"
+              ? `${sourceEntries.length} source families active across ${videos.length} videos`
               : `${filteredVideos.length} videos from ${selectedSource}`}
           </span>
         </div>
@@ -254,13 +308,22 @@ function AllVideosPage({ category = null }) {
             <FontAwesomeIcon icon={faChevronLeft} />
           </button>
           <div className="source-pills" ref={sourceTickerRef}>
-            {sources.map((source) => (
+            <button
+              className={`source-pill ${selectedSource === "ALL" ? "active" : ""}`}
+              onClick={() => handleSourceClick("ALL")}
+            >
+              All sources
+              <span className="source-pill-count">{videos.length}</span>
+            </button>
+            {sourceEntries.map(([source, count]) => (
               <button
                 key={source}
                 className={`source-pill ${selectedSource === source ? "active" : ""}`}
                 onClick={() => handleSourceClick(source)}
+                title={`${count} video${count === 1 ? "" : "s"} from ${source}`}
               >
                 {source}
+                <span className="source-pill-count">{count}</span>
               </button>
             ))}
           </div>
@@ -307,7 +370,7 @@ function AllVideosPage({ category = null }) {
                   <div className="lead-story-content">
                     <div className="news-card-meta lead-story-meta">
                       <span className="news-card-source">
-                        {leadStory.category || leadStory.source}
+                        {leadStory.category || leadStory.sourceDisplayName}
                       </span>
                       {getGeneratedContentLabel(leadStory) && (
                         <span className="news-card-time">
@@ -319,6 +382,29 @@ function AllVideosPage({ category = null }) {
                           {formatDateOnly(leadStory.publishedAt)}
                         </span>
                       )}
+                    </div>
+                    <div className="story-context-row">
+                      <span className="story-context-source">
+                        {leadStory.sourceDisplayName}
+                      </span>
+                      {leadStory.perspective ? (
+                        <span
+                          className={`story-perspective-pill story-perspective-pill--${leadStory.perspective.key}`}
+                          title={
+                            PERSPECTIVE_METHOD_LABELS[
+                              leadStory.perspective.method
+                            ] || PERSPECTIVE_METHOD_LABELS["source-map"]
+                          }
+                        >
+                          {leadStory.perspective.label}
+                        </span>
+                      ) : null}
+                      <span
+                        className={`story-trust-pill story-trust-pill--${leadStory.trust.band}`}
+                        title={leadStory.trust.rationale}
+                      >
+                        {leadStory.trust.shortLabel}
+                      </span>
                     </div>
                     <a
                       href={leadStoryHref}
@@ -378,7 +464,9 @@ function AllVideosPage({ category = null }) {
                     )}
                     <div className="secondary-story-content">
                       <div className="news-card-meta">
-                        <span className="news-card-source">{item.source}</span>
+                        <span className="news-card-source">
+                          {item.sourceDisplayName}
+                        </span>
                         {getGeneratedContentLabel(item) && (
                           <span className="news-card-time">
                             {getGeneratedContentLabel(item)}
@@ -389,6 +477,29 @@ function AllVideosPage({ category = null }) {
                             {formatDateOnly(item.publishedAt)}
                           </span>
                         )}
+                      </div>
+                      <div className="story-context-row">
+                        <span className="story-context-source">
+                          {item.sourceDisplayName}
+                        </span>
+                        {item.perspective ? (
+                          <span
+                            className={`story-perspective-pill story-perspective-pill--${item.perspective.key}`}
+                            title={
+                              PERSPECTIVE_METHOD_LABELS[
+                                item.perspective.method
+                              ] || PERSPECTIVE_METHOD_LABELS["source-map"]
+                            }
+                          >
+                            {item.perspective.label}
+                          </span>
+                        ) : null}
+                        <span
+                          className={`story-trust-pill story-trust-pill--${item.trust.band}`}
+                          title={item.trust.rationale}
+                        >
+                          {item.trust.shortLabel}
+                        </span>
                       </div>
                       <a
                         href={resolveContentHref(item)}
@@ -445,7 +556,7 @@ function AllVideosPage({ category = null }) {
                         <div className="latest-story-content">
                           <div className="news-card-meta">
                             <span className="news-card-source">
-                              {item.category || item.source}
+                              {item.category || item.sourceDisplayName}
                             </span>
                             {getGeneratedContentLabel(item) && (
                               <span className="news-card-time">
@@ -457,6 +568,29 @@ function AllVideosPage({ category = null }) {
                                 {formatDateOnly(item.publishedAt)}
                               </span>
                             )}
+                          </div>
+                          <div className="story-context-row">
+                            <span className="story-context-source">
+                              {item.sourceDisplayName}
+                            </span>
+                            {item.perspective ? (
+                              <span
+                                className={`story-perspective-pill story-perspective-pill--${item.perspective.key}`}
+                                title={
+                                  PERSPECTIVE_METHOD_LABELS[
+                                    item.perspective.method
+                                  ] || PERSPECTIVE_METHOD_LABELS["source-map"]
+                                }
+                              >
+                                {item.perspective.label}
+                              </span>
+                            ) : null}
+                            <span
+                              className={`story-trust-pill story-trust-pill--${item.trust.band}`}
+                              title={item.trust.rationale}
+                            >
+                              {item.trust.shortLabel}
+                            </span>
                           </div>
                           <a
                             href={href}
@@ -517,7 +651,29 @@ function AllVideosPage({ category = null }) {
                       rel="noopener noreferrer"
                       className="quick-update-item"
                     >
-                      <span className="quick-update-source">{item.source}</span>
+                      <span className="quick-update-source">
+                        {item.sourceDisplayName}
+                      </span>
+                      <div className="quick-update-context">
+                        {item.perspective ? (
+                          <span
+                            className={`story-perspective-pill story-perspective-pill--${item.perspective.key}`}
+                            title={
+                              PERSPECTIVE_METHOD_LABELS[
+                                item.perspective.method
+                              ] || PERSPECTIVE_METHOD_LABELS["source-map"]
+                            }
+                          >
+                            {item.perspective.label}
+                          </span>
+                        ) : null}
+                        <span
+                          className={`story-trust-pill story-trust-pill--${item.trust.band}`}
+                          title={item.trust.rationale}
+                        >
+                          {item.trust.shortLabel}
+                        </span>
+                      </div>
                       <h3 className="quick-update-headline">
                         {truncateText(item.title, 88)}
                       </h3>

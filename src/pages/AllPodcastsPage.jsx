@@ -21,9 +21,13 @@ import {
   dedupeByMediaKey,
   removeCrossDuplicates,
 } from "../utils/mediaClassification";
-import { formatDateOnly } from "../utils/dateUtils";
+import { formatDateOnly, resolvePublishedTimestamp } from "../utils/dateUtils";
 import { resolveContentHref } from "../utils/storyRouting";
 import { getGeneratedContentLabel } from "../utils/contentLabels";
+import {
+  getSourceProfile,
+  getTrustDescriptorForProfile,
+} from "../utils/sourceProfiles";
 import PageBackBar from "../components/common/PageBackBar";
 import "./AllNewsPage.css";
 
@@ -35,6 +39,52 @@ function toTextValue(value) {
     return value.map(toTextValue).filter(Boolean).join(", ");
   if (typeof value === "object" && typeof value._ === "string") return value._;
   return "";
+}
+
+const PERSPECTIVE_METHOD_LABELS = {
+  "ai-headline": "AI estimate from headline and summary framing",
+  "source-map": "Source map estimate from outlet profile",
+  unclassified: "Perspective not classified with enough confidence",
+};
+
+function resolveStoryPerspective(article = {}, fallbackProfile = null) {
+  const explicitKey = String(article?.perspectiveKey || "")
+    .trim()
+    .toLowerCase();
+  if (explicitKey && explicitKey !== "unknown") {
+    return {
+      key: explicitKey,
+      label: String(article?.perspectiveLabel || "Unclassified").trim(),
+      method: String(article?.perspectiveMethod || "source-map")
+        .trim()
+        .toLowerCase(),
+    };
+  }
+
+  const profile = fallbackProfile || getSourceProfile(article);
+  if (profile?.perspectiveKey && profile.perspectiveKey !== "unknown") {
+    return {
+      key: profile.perspectiveKey,
+      label: profile.perspectiveLabel,
+      method: "source-map",
+    };
+  }
+
+  return null;
+}
+
+function enrichPodcastItem(item) {
+  const sourceProfile = getSourceProfile(item);
+  return {
+    ...item,
+    sourceProfile,
+    sourceDisplayName:
+      sourceProfile?.displayName || item?.source || "Podcast Desk",
+    sourceFilterLabel:
+      sourceProfile?.displayName || item?.source || "Podcast Desk",
+    trust: getTrustDescriptorForProfile(sourceProfile),
+    perspective: resolveStoryPerspective(item, sourceProfile),
+  };
 }
 
 function AllPodcastsPage({ category = null }) {
@@ -82,7 +132,7 @@ function AllPodcastsPage({ category = null }) {
           }) || "Podcast Desk",
         hosts: toTextValue(item?.hosts),
         category: toTextValue(item?.category),
-        publishedAt: toTextValue(item?.publishedAt || item?.time),
+        publishedAt: resolvePublishedTimestamp(item),
         link: toTextValue(item?.link || item?.url),
         image: toTextValue(item?.thumbnail) || toTextValue(item?.image),
       });
@@ -121,7 +171,7 @@ function AllPodcastsPage({ category = null }) {
           ]);
         }
 
-        setPodcasts(dedupeByMediaKey(topicPodcasts));
+        setPodcasts(dedupeByMediaKey(topicPodcasts).map(enrichPodcastItem));
       } else {
         const podcastsData = await fetchTrendingContent(filterContext);
         const normalizedPodcasts = (
@@ -140,7 +190,7 @@ function AllPodcastsPage({ category = null }) {
           );
         }
 
-        setPodcasts(dedupeByMediaKey(filtered));
+        setPodcasts(dedupeByMediaKey(filtered).map(enrichPodcastItem));
       }
     } catch (error) {
       console.error("Error loading podcasts:", error);
@@ -157,20 +207,26 @@ function AllPodcastsPage({ category = null }) {
   useEffect(() => {
     if (
       selectedSource !== "ALL" &&
-      !podcasts.some((item) => item.source === selectedSource)
+      !podcasts.some((item) => item.sourceFilterLabel === selectedSource)
     ) {
       setSelectedSource("ALL");
     }
   }, [podcasts, selectedSource]);
 
-  const sources = [
-    "ALL",
-    ...new Set(podcasts.map((item) => item.source).filter(Boolean)),
-  ];
+  const sourceCounts = podcasts.reduce((accumulator, item) => {
+    const key = item.sourceFilterLabel;
+    if (!key) return accumulator;
+    accumulator[key] = (accumulator[key] || 0) + 1;
+    return accumulator;
+  }, {});
+  const sourceEntries = Object.entries(sourceCounts).sort((left, right) => {
+    if (right[1] !== left[1]) return right[1] - left[1];
+    return left[0].localeCompare(right[0]);
+  });
   const filteredPodcasts =
     selectedSource === "ALL"
       ? podcasts
-      : podcasts.filter((item) => item.source === selectedSource);
+      : podcasts.filter((item) => item.sourceFilterLabel === selectedSource);
 
   const handleSourceClick = (source) => {
     setSelectedSource(source);
@@ -228,14 +284,12 @@ function AllPodcastsPage({ category = null }) {
               <span className="hero-stat-label">Episodes</span>
             </div>
             <div className="hero-stat">
-              <span className="hero-stat-value">
-                {Math.max(sources.length - 1, 0)}
-              </span>
+              <span className="hero-stat-value">{sourceEntries.length}</span>
               <span className="hero-stat-label">Shows</span>
             </div>
             <div className="hero-stat">
               <span className="hero-stat-value">
-                {selectedSource === "ALL" ? "Live" : selectedSource}
+                {selectedSource === "ALL" ? "All" : selectedSource}
               </span>
               <span className="hero-stat-label">Feed</span>
             </div>
@@ -248,7 +302,7 @@ function AllPodcastsPage({ category = null }) {
           <h2 className="source-filter-title">Show / Host Ticker</h2>
           <span className="source-filter-count">
             {selectedSource === "ALL"
-              ? "All shows active"
+              ? `${sourceEntries.length} source families active across ${podcasts.length} episodes`
               : `${filteredPodcasts.length} episodes from ${selectedSource}`}
           </span>
         </div>
@@ -261,13 +315,22 @@ function AllPodcastsPage({ category = null }) {
             <FontAwesomeIcon icon={faChevronLeft} />
           </button>
           <div className="source-pills" ref={sourceTickerRef}>
-            {sources.map((source) => (
+            <button
+              className={`source-pill ${selectedSource === "ALL" ? "active" : ""}`}
+              onClick={() => handleSourceClick("ALL")}
+            >
+              All sources
+              <span className="source-pill-count">{podcasts.length}</span>
+            </button>
+            {sourceEntries.map(([source, count]) => (
               <button
                 key={source}
                 className={`source-pill ${selectedSource === source ? "active" : ""}`}
                 onClick={() => handleSourceClick(source)}
+                title={`${count} episode${count === 1 ? "" : "s"} from ${source}`}
               >
                 {source}
+                <span className="source-pill-count">{count}</span>
               </button>
             ))}
           </div>
@@ -314,7 +377,9 @@ function AllPodcastsPage({ category = null }) {
                   <div className="lead-story-content">
                     <div className="news-card-meta lead-story-meta">
                       <span className="news-card-source">
-                        {leadStory.category || leadStory.source}
+                        {leadStory.category ||
+                          leadStory.hosts ||
+                          leadStory.sourceDisplayName}
                       </span>
                       {getGeneratedContentLabel(leadStory) && (
                         <span className="news-card-time">
@@ -326,6 +391,29 @@ function AllPodcastsPage({ category = null }) {
                           {formatDateOnly(leadStory.publishedAt)}
                         </span>
                       )}
+                    </div>
+                    <div className="story-context-row">
+                      <span className="story-context-source">
+                        {leadStory.sourceDisplayName}
+                      </span>
+                      {leadStory.perspective ? (
+                        <span
+                          className={`story-perspective-pill story-perspective-pill--${leadStory.perspective.key}`}
+                          title={
+                            PERSPECTIVE_METHOD_LABELS[
+                              leadStory.perspective.method
+                            ] || PERSPECTIVE_METHOD_LABELS["source-map"]
+                          }
+                        >
+                          {leadStory.perspective.label}
+                        </span>
+                      ) : null}
+                      <span
+                        className={`story-trust-pill story-trust-pill--${leadStory.trust.band}`}
+                        title={leadStory.trust.rationale}
+                      >
+                        {leadStory.trust.shortLabel}
+                      </span>
                     </div>
                     <a
                       href={leadStoryHref}
@@ -386,7 +474,7 @@ function AllPodcastsPage({ category = null }) {
                     <div className="secondary-story-content">
                       <div className="news-card-meta">
                         <span className="news-card-source">
-                          {item.hosts || item.source}
+                          {item.hosts || item.sourceDisplayName}
                         </span>
                         {getGeneratedContentLabel(item) && (
                           <span className="news-card-time">
@@ -398,6 +486,29 @@ function AllPodcastsPage({ category = null }) {
                             {formatDateOnly(item.publishedAt)}
                           </span>
                         )}
+                      </div>
+                      <div className="story-context-row">
+                        <span className="story-context-source">
+                          {item.sourceDisplayName}
+                        </span>
+                        {item.perspective ? (
+                          <span
+                            className={`story-perspective-pill story-perspective-pill--${item.perspective.key}`}
+                            title={
+                              PERSPECTIVE_METHOD_LABELS[
+                                item.perspective.method
+                              ] || PERSPECTIVE_METHOD_LABELS["source-map"]
+                            }
+                          >
+                            {item.perspective.label}
+                          </span>
+                        ) : null}
+                        <span
+                          className={`story-trust-pill story-trust-pill--${item.trust.band}`}
+                          title={item.trust.rationale}
+                        >
+                          {item.trust.shortLabel}
+                        </span>
                       </div>
                       <a
                         href={resolveContentHref(item)}
@@ -454,7 +565,9 @@ function AllPodcastsPage({ category = null }) {
                         <div className="latest-story-content">
                           <div className="news-card-meta">
                             <span className="news-card-source">
-                              {item.category || item.hosts || item.source}
+                              {item.category ||
+                                item.hosts ||
+                                item.sourceDisplayName}
                             </span>
                             {getGeneratedContentLabel(item) && (
                               <span className="news-card-time">
@@ -466,6 +579,29 @@ function AllPodcastsPage({ category = null }) {
                                 {formatDateOnly(item.publishedAt)}
                               </span>
                             )}
+                          </div>
+                          <div className="story-context-row">
+                            <span className="story-context-source">
+                              {item.sourceDisplayName}
+                            </span>
+                            {item.perspective ? (
+                              <span
+                                className={`story-perspective-pill story-perspective-pill--${item.perspective.key}`}
+                                title={
+                                  PERSPECTIVE_METHOD_LABELS[
+                                    item.perspective.method
+                                  ] || PERSPECTIVE_METHOD_LABELS["source-map"]
+                                }
+                              >
+                                {item.perspective.label}
+                              </span>
+                            ) : null}
+                            <span
+                              className={`story-trust-pill story-trust-pill--${item.trust.band}`}
+                              title={item.trust.rationale}
+                            >
+                              {item.trust.shortLabel}
+                            </span>
                           </div>
                           <a
                             href={href}
@@ -527,8 +663,28 @@ function AllPodcastsPage({ category = null }) {
                       className="quick-update-item"
                     >
                       <span className="quick-update-source">
-                        {item.hosts || item.source}
+                        {item.hosts || item.sourceDisplayName}
                       </span>
+                      <div className="quick-update-context">
+                        {item.perspective ? (
+                          <span
+                            className={`story-perspective-pill story-perspective-pill--${item.perspective.key}`}
+                            title={
+                              PERSPECTIVE_METHOD_LABELS[
+                                item.perspective.method
+                              ] || PERSPECTIVE_METHOD_LABELS["source-map"]
+                            }
+                          >
+                            {item.perspective.label}
+                          </span>
+                        ) : null}
+                        <span
+                          className={`story-trust-pill story-trust-pill--${item.trust.band}`}
+                          title={item.trust.rationale}
+                        >
+                          {item.trust.shortLabel}
+                        </span>
+                      </div>
                       <h3 className="quick-update-headline">
                         {truncateText(item.title, 88)}
                       </h3>

@@ -1,4 +1,4 @@
-const rssAggregator = require("./rss-aggregator");
+const rssAggregator = require("./rss-aggregator.cjs");
 const { enforceRateLimit } = require("./rateLimit");
 const {
   STORE_NAMES,

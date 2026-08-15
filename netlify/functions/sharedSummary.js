@@ -5,7 +5,7 @@ const {
   isBlobConfigurationError,
 } = require("./blobStore");
 const { requireAdminAccess } = require("./adminAccess");
-const rssAggregator = require("./rss-aggregator");
+const rssAggregator = require("./rss-aggregator.cjs");
 const { enforceRateLimit } = require("./rateLimit");
 const fs = require("fs");
 const path = require("path");

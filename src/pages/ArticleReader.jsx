@@ -32,9 +32,14 @@ import { deriveMediaOutlet } from "../utils/sourceUtils";
 import {
   getSourceProfile,
   getSourceProfileHref,
-  getTrustDescriptor,
+  getTrustDescriptorForProfile,
   PERSPECTIVE_METHODOLOGY,
 } from "../utils/sourceProfiles";
+import {
+  findRegistryRecord,
+  getSourceRegistry,
+  mergeSourceProfileWithRegistry,
+} from "../services/sourceRegistryService";
 import "./ArticleReader.css";
 
 const isGeneratedFallbackUrl = (value = "") =>
@@ -194,6 +199,7 @@ export default function ArticleReader() {
   const [savedByKey, setSavedByKey] = useState({ key: "", value: false });
   const [copied, setCopied] = useState(false);
   const [fontSize, setFontSize] = useState(18);
+  const [sourceRegistryRecord, setSourceRegistryRecord] = useState(null);
   const dossierSectionRefs = useRef({});
   const seenDossierSectionsRef = useRef(new Set());
   const [dossierState, setDossierState] = useState({
@@ -596,13 +602,46 @@ export default function ArticleReader() {
     return storyHref || sourceUrl;
   }, [article, sourceUrl]);
 
-  const sourceProfile = useMemo(
+  const baseSourceProfile = useMemo(
     () => getSourceProfile(article || siteName),
     [article, siteName],
   );
+
+  useEffect(() => {
+    if (!baseSourceProfile?.displayName) {
+      setSourceRegistryRecord(null);
+      return;
+    }
+
+    let ignore = false;
+
+    getSourceRegistry()
+      .then((records) => {
+        if (!ignore) {
+          setSourceRegistryRecord(
+            findRegistryRecord(records, baseSourceProfile),
+          );
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setSourceRegistryRecord(null);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [baseSourceProfile]);
+
+  const sourceProfile = useMemo(
+    () =>
+      mergeSourceProfileWithRegistry(baseSourceProfile, sourceRegistryRecord),
+    [baseSourceProfile, sourceRegistryRecord],
+  );
   const sourceTrust = useMemo(
-    () => getTrustDescriptor(article || siteName),
-    [article, siteName],
+    () => getTrustDescriptorForProfile(sourceProfile),
+    [sourceProfile],
   );
   const perspectiveDescriptor = useMemo(
     () => getPerspectiveDescriptor(article, sourceProfile),
@@ -1053,6 +1092,12 @@ export default function ArticleReader() {
                   <dt>Base</dt>
                   <dd>{sourceProfile.country}</dd>
                 </div>
+                {sourceProfile.registryNotes ? (
+                  <div>
+                    <dt>Registry note</dt>
+                    <dd>{sourceProfile.registryNotes}</dd>
+                  </div>
+                ) : null}
               </dl>
               <Link
                 to={sourceProfile.href}
