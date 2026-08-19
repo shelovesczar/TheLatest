@@ -136,8 +136,9 @@ Recommended server/runtime variables for fuller behavior:
 Optional browser-exposed AI keys, depending on which frontend provider path you want active:
 
 - `VITE_OPENAI_API_KEY`
-- `VITE_ANTHROPIC_API_KEY`
 - `VITE_PERPLEXITY_API_KEY`
+
+Do not set `VITE_ANTHROPIC_API_KEY`; Claude-backed summaries and perspective generation use server-side `ANTHROPIC_API_KEY` only.
 
 Optional for Blob-backed persistence outside managed Netlify runtimes:
 

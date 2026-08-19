@@ -5,32 +5,40 @@ import { useAuth } from '../../context/AuthContext'
 import './LoginModal.css'
 
 function LoginModal({ isOpen, onClose }) {
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, requestReset } = useAuth()
   const [mode, setMode] = useState('login')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const [infoMessage, setInfoMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setErrorMessage('')
+    setInfoMessage('')
     setIsSubmitting(true)
 
     try {
       if (mode === 'register') {
         await signUp({ name, email, password })
+        setName('')
+        setEmail('')
+        setPassword('')
+        onClose()
+      } else if (mode === 'forgot') {
+        const payload = await requestReset({ email })
+        setInfoMessage(payload?.message || 'If an account exists for that email, a reset link is on its way.')
       } else {
         await signIn({ email, password })
+        setName('')
+        setEmail('')
+        setPassword('')
+        onClose()
       }
-
-      setName('')
-      setEmail('')
-      setPassword('')
-      onClose()
     } catch (error) {
-      setErrorMessage(error.message || 'Unable to sign in right now.')
+      setErrorMessage(error.message || 'Unable to complete that request right now.')
     } finally {
       setIsSubmitting(false)
     }
@@ -42,8 +50,15 @@ function LoginModal({ isOpen, onClose }) {
     setEmail('')
     setPassword('')
     setErrorMessage('')
+    setInfoMessage('')
     setIsSubmitting(false)
     onClose()
+  }
+
+  const switchMode = (nextMode) => {
+    setMode(nextMode)
+    setErrorMessage('')
+    setInfoMessage('')
   }
 
   if (!isOpen) return null
@@ -55,11 +70,15 @@ function LoginModal({ isOpen, onClose }) {
           <FontAwesomeIcon icon={faTimes} />
         </button>
 
-        <h2 className="login-modal-title">{mode === 'register' ? 'Create Account' : 'Sign In'}</h2>
+        <h2 className="login-modal-title">
+          {mode === 'register' ? 'Create Account' : mode === 'forgot' ? 'Reset Password' : 'Sign In'}
+        </h2>
         <p className="login-modal-subtitle">
           {mode === 'register'
             ? 'Create a cross-device account for following, dashboard access, and saved preferences.'
-            : 'Sign in to manage your follows, view the dashboard, and keep preferences synced.'}
+            : mode === 'forgot'
+              ? "Enter your account email and we'll send you a link to choose a new password."
+              : 'Sign in to manage your follows, view the dashboard, and keep preferences synced.'}
         </p>
 
         <form onSubmit={handleSubmit} className="login-form">
@@ -91,39 +110,63 @@ function LoginModal({ isOpen, onClose }) {
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <input
-              type="password"
-              id="password"
-              className="form-input"
-              placeholder="Use at least 8 characters"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-            />
-          </div>
+          {mode !== 'forgot' && (
+            <div className="form-group">
+              <label htmlFor="password">Password</label>
+              <input
+                type="password"
+                id="password"
+                className="form-input"
+                placeholder="Use at least 8 characters"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+              />
+            </div>
+          )}
+
+          {mode === 'login' && (
+            <button
+              type="button"
+              className="auth-inline-btn auth-forgot-link"
+              onClick={() => switchMode('forgot')}
+            >
+              Forgot password?
+            </button>
+          )}
 
           {errorMessage && <p className="error-message">{errorMessage}</p>}
+          {infoMessage && <p className="info-message">{infoMessage}</p>}
 
           <button type="submit" className="login-button" disabled={isSubmitting}>
-            {isSubmitting ? 'Working...' : (mode === 'register' ? 'Create Account' : 'Sign In')}
+            {isSubmitting
+              ? 'Working...'
+              : mode === 'register'
+                ? 'Create Account'
+                : mode === 'forgot'
+                  ? 'Send Reset Link'
+                  : 'Sign In'}
           </button>
         </form>
 
         <div className="auth-mode-switch">
-          <span>{mode === 'register' ? 'Already have an account?' : 'Need an account?'}</span>
-          <button
-            type="button"
-            className="auth-inline-btn"
-            onClick={() => {
-              setMode((current) => current === 'register' ? 'login' : 'register')
-              setErrorMessage('')
-            }}
-          >
-            {mode === 'register' ? 'Sign in instead' : 'Create one'}
-          </button>
+          {mode === 'forgot' ? (
+            <button type="button" className="auth-inline-btn" onClick={() => switchMode('login')}>
+              Back to sign in
+            </button>
+          ) : (
+            <>
+              <span>{mode === 'register' ? 'Already have an account?' : 'Need an account?'}</span>
+              <button
+                type="button"
+                className="auth-inline-btn"
+                onClick={() => switchMode(mode === 'register' ? 'login' : 'register')}
+              >
+                {mode === 'register' ? 'Sign in instead' : 'Create one'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

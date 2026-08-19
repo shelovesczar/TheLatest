@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { getSession, loginUser, logoutUser, registerUser } from '../services/authService'
+import { getSession, loginUser, logoutUser, registerUser, requestPasswordReset, resetPassword } from '../services/authService'
 
 const AUTH_STORAGE_KEY = 'thelatest_auth_session_v1'
 const AuthContext = createContext(null)
@@ -68,6 +68,16 @@ export function AuthProvider({ children }) {
     return payload
   }, [persistAuth])
 
+  const requestReset = useCallback(async ({ email }) => {
+    return requestPasswordReset({ email })
+  }, [])
+
+  const completeReset = useCallback(async ({ token, password }) => {
+    const payload = await resetPassword({ token, password })
+    persistAuth(payload)
+    return payload
+  }, [persistAuth])
+
   const signOut = useCallback(async () => {
     const currentToken = token
     setToken('')
@@ -90,8 +100,10 @@ export function AuthProvider({ children }) {
     isAuthenticated: Boolean(token && user),
     signIn,
     signUp,
-    signOut
-  }), [token, user, loading, signIn, signOut, signUp])
+    signOut,
+    requestReset,
+    completeReset
+  }), [token, user, loading, signIn, signOut, signUp, requestReset, completeReset])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

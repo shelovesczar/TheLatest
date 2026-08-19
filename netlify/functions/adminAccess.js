@@ -19,7 +19,8 @@ function getAllowedAdminEmails() {
 function canManageAdminActions(user = {}) {
   const allowlist = getAllowedAdminEmails();
   if (allowlist.length === 0) {
-    return true;
+    // Fail closed: with no ADMIN_EMAILS configured, nobody is an admin.
+    return false;
   }
 
   const email = String(user.email || '').trim().toLowerCase();

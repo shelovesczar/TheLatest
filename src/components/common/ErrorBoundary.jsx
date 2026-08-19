@@ -1,5 +1,6 @@
 import { Component } from 'react';
 import './ErrorBoundary.css';
+import { reportClientError } from '../../services/errorReportingService';
 
 /**
  * ErrorBoundary — catches render/lifecycle errors in any child component tree.
@@ -26,10 +27,14 @@ class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
-    // Log to console in all environments; swap for an error-reporting
-    // service (Sentry, Datadog, etc.) when you're ready.
     console.error('[ErrorBoundary] Caught error:', error);
     console.error('[ErrorBoundary] Component stack:', info.componentStack);
+
+    reportClientError({
+      message: error?.message || String(error),
+      stack: error?.stack || '',
+      componentStack: info?.componentStack || '',
+    });
   }
 
   handleRetry = () => {

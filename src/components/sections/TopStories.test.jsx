@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { ConsentProvider } from "../../context/ConsentContext";
 import TopStories from "./TopStories";
 
 const sampleStory = {
@@ -17,25 +18,27 @@ const sampleStory = {
 
 function renderTopStories(props = {}) {
   return render(
-    <MemoryRouter>
-      <TopStories
-        loading={false}
-        topStories={[
-          sampleStory,
-          {
-            ...sampleStory,
-            title: "Markets react to late-night budget talks",
-            url: "https://www.reuters.com/example-two",
-            source: "Reuters",
-          },
-        ]}
-        activeStory={0}
-        setActiveStory={() => {}}
-        categoryTitle="Politics"
-        categoryPath="/category/politics/all-news"
-        {...props}
-      />
-    </MemoryRouter>,
+    <ConsentProvider>
+      <MemoryRouter>
+        <TopStories
+          loading={false}
+          topStories={[
+            sampleStory,
+            {
+              ...sampleStory,
+              title: "Markets react to late-night budget talks",
+              url: "https://www.reuters.com/example-two",
+              source: "Reuters",
+            },
+          ]}
+          activeStory={0}
+          setActiveStory={() => {}}
+          categoryTitle="Politics"
+          categoryPath="/category/politics/all-news"
+          {...props}
+        />
+      </MemoryRouter>
+    </ConsentProvider>,
   );
 }
 
@@ -113,10 +116,14 @@ describe("TopStories perspective guardrails", () => {
       screen.getByRole("button", { name: /back to top stories/i }),
     ).toBeTruthy();
     expect(screen.getByText("Coverage snapshot")).toBeTruthy();
-    expect(
-      screen
-        .getByRole("link", { name: /source profile/i })
-        .getAttribute("href"),
-    ).toBe("/sources/npr");
+    const sourceProfileLinks = screen.getAllByRole("link", {
+      name: /source profile/i,
+    });
+
+    expect(sourceProfileLinks).toHaveLength(2);
+    expect(sourceProfileLinks[0].getAttribute("href")).toBe("/sources/npr");
+    expect(sourceProfileLinks[1].getAttribute("href")).toBe(
+      "/sources/fox-news",
+    );
   });
 });

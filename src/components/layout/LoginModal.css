@@ -135,6 +135,24 @@
   margin: -10px 0 10px 0;
 }
 
+/* Info Message (e.g. password-reset confirmation) */
+.info-message {
+  padding: 12px;
+  background-color: rgba(46, 160, 67, 0.1);
+  border-left: 4px solid #2ea043;
+  color: #2ea043;
+  font-size: 14px;
+  border-radius: 4px;
+  margin: -10px 0 10px 0;
+}
+
+/* Forgot-password link, right-aligned under the password field */
+.auth-forgot-link {
+  align-self: flex-end;
+  font-size: 13px;
+  margin-top: -12px;
+}
+
 /* Login Button */
 .login-button {
   padding: 14px 20px;

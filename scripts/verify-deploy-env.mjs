@@ -13,7 +13,7 @@ const RECOMMENDED = [
   {
     key: "ADMIN_EMAILS",
     reason:
-      "Locks down warm-content, feed-status, trending, and source-management admin actions.",
+      "Required for anyone to access warm-content, feed-status, trending, and source-management admin actions — admin access now fails closed (denies everyone) when this is unset.",
   },
   {
     key: "RSSHUB_BASE_URL",
@@ -55,16 +55,17 @@ const RECOMMENDED = [
     reason:
       "Pins the summary model used for shared AI briefings instead of relying on code defaults.",
   },
+  {
+    key: "RESEND_API_KEY",
+    reason:
+      "Without this, password-reset emails are only logged to the function console instead of actually being sent to users.",
+  },
 ];
 
 const AI_GROUPS = [
   {
     label: "client AI summary provider",
-    keys: [
-      "VITE_OPENAI_API_KEY",
-      "VITE_ANTHROPIC_API_KEY",
-      "VITE_PERPLEXITY_API_KEY",
-    ],
+    keys: ["VITE_OPENAI_API_KEY", "VITE_PERPLEXITY_API_KEY"],
     reason:
       "Without one of these, browser-side AI summary generation will stay disabled.",
   },
@@ -213,12 +214,12 @@ function validateAnthropicConfig(messages) {
 
   if (browserKey) {
     if (looksLikePlaceholder(browserKey)) {
-      messages.warnings.push(
-        "VITE_ANTHROPIC_API_KEY is set but still looks like a placeholder.",
+      messages.errors.push(
+        "VITE_ANTHROPIC_API_KEY is set but still looks like a placeholder. Remove it from hosted environments instead of leaving a dead browser Anthropic path configured.",
       );
     } else {
-      messages.warnings.push(
-        "VITE_ANTHROPIC_API_KEY is set. This exposes an Anthropic key to the browser bundle; prefer server-side ANTHROPIC_API_KEY only.",
+      messages.errors.push(
+        "VITE_ANTHROPIC_API_KEY is set. Remove it from hosted environments and use server-side ANTHROPIC_API_KEY only.",
       );
     }
   }

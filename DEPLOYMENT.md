@@ -69,8 +69,10 @@ Recommended for full feature coverage:
 - `NEWS_API_KEY`
 - `GNEWS_API_KEY`
 - `SOCIAL_RSS_FEEDS`
-- one of `VITE_OPENAI_API_KEY`, `VITE_ANTHROPIC_API_KEY`, or `VITE_PERPLEXITY_API_KEY`
+- one of `VITE_OPENAI_API_KEY` or `VITE_PERPLEXITY_API_KEY`
 - `ANTHROPIC_API_KEY`
+
+Do not set `VITE_ANTHROPIC_API_KEY` in Netlify. Claude-backed features should use server-side `ANTHROPIC_API_KEY` only.
 
 Optional for Docker, CI, or other non-Netlify runtimes that still need Blob access:
 

@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { STORE_NAMES, getJson, setJson, deleteKey } = require('./blobStore');
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 
 function normalizeEmail(email = '') {
   return String(email || '').trim().toLowerCase();
@@ -24,7 +25,7 @@ function buildUserKey(email = '') {
   return `users/${stableHash(normalizeEmail(email))}`;
 }
 
-function digestSessionToken(token = '') {
+function digestToken(token = '') {
   const normalizedToken = String(token || '').trim();
   if (!normalizedToken) return '';
 
@@ -36,12 +37,20 @@ function digestSessionToken(token = '') {
   return crypto.createHash('sha256').update(normalizedToken).digest('hex');
 }
 
+function digestSessionToken(token = '') {
+  return digestToken(token);
+}
+
 function buildLegacySessionKey(token = '') {
   return `sessions/${String(token || '').trim()}`;
 }
 
 function buildSessionKey(token = '') {
-  return `sessions/${digestSessionToken(token)}`;
+  return `sessions/${digestToken(token)}`;
+}
+
+function buildPasswordResetKey(token = '') {
+  return `password-resets/${digestToken(token)}`;
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
@@ -205,6 +214,64 @@ async function getSessionByToken(token = '') {
   }
 }
 
+async function createPasswordResetToken(user = {}) {
+  const token = createSessionToken();
+  const createdAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS).toISOString();
+
+  const record = {
+    userId: user.id,
+    email: user.email,
+    createdAt,
+    expiresAt
+  };
+
+  await setJson(STORE_NAMES.passwordResets, buildPasswordResetKey(token), record, {
+    metadata: { userId: user.id, email: user.email, expiresAt }
+  });
+
+  return { token, expiresAt };
+}
+
+// Single-use: the record is deleted whether or not it turns out to be valid,
+// so a token can never be replayed after this call.
+async function consumePasswordResetToken(token = '') {
+  const normalizedToken = String(token || '').trim();
+  if (!normalizedToken) return null;
+
+  const key = buildPasswordResetKey(normalizedToken);
+  const record = await getJson(STORE_NAMES.passwordResets, key);
+  if (!record) return null;
+
+  await deleteKey(STORE_NAMES.passwordResets, key);
+
+  if (Date.parse(record.expiresAt || '') <= Date.now()) {
+    return null;
+  }
+
+  return record;
+}
+
+async function updateUserPassword(email = '', newPassword = '') {
+  const normalizedEmail = normalizeEmail(email);
+  const user = await getUserByEmail(normalizedEmail);
+  if (!user) return null;
+
+  const { salt, hash } = hashPassword(newPassword);
+  const updatedUser = {
+    ...user,
+    passwordHash: hash,
+    passwordSalt: salt,
+    updatedAt: new Date().toISOString()
+  };
+
+  await setJson(STORE_NAMES.users, buildUserKey(normalizedEmail), updatedUser, {
+    metadata: { email: normalizedEmail, name: updatedUser.name }
+  });
+
+  return updatedUser;
+}
+
 async function getAuthenticatedUser(event = {}) {
   const token = getSessionToken(event);
   if (!token) return null;
@@ -232,12 +299,14 @@ async function getAuthenticatedUser(event = {}) {
 
 module.exports = {
   SESSION_TTL_MS,
+  PASSWORD_RESET_TTL_MS,
   normalizeEmail,
   normalizeName,
   digestSessionToken,
   buildUserKey,
   buildLegacySessionKey,
   buildSessionKey,
+  buildPasswordResetKey,
   hashPassword,
   verifyPassword,
   sanitizeUser,
@@ -245,5 +314,8 @@ module.exports = {
   getUserByEmail,
   createUser,
   createSession,
+  createPasswordResetToken,
+  consumePasswordResetToken,
+  updateUserPassword,
   getAuthenticatedUser
 };

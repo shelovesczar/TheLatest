@@ -43,10 +43,38 @@
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
 
+# script-src keeps 'unsafe-inline' because SeoManager.jsx injects per-route
+# JSON-LD structured data as a dynamically-created inline <script> tag —
+# content is static-per-file (no server-side templating to hand out a nonce),
+# so a hash allowlist isn't practical. style-src keeps 'unsafe-inline' because
+# the app renders React inline style={{...}} attributes throughout — removing
+# it would require rewriting every styled component to CSS classes. img-src
+# stays broad (https:) since article thumbnails are hotlinked from arbitrary
+# RSS/news sources, not a fixed CDN list.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://www.reddit.com https://api.openai.com https://api.perplexity.ai; frame-src https://www.youtube.com; media-src 'self' https:"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+
 [[headers]]
   for = "/index.html"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://www.reddit.com https://api.openai.com https://api.perplexity.ai; frame-src https://www.youtube.com; media-src 'self' https:"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
 
 # Netlify function responses — let the in-memory cache on the function handle
 # freshness; tell the CDN/browser not to cache the JSON directly.

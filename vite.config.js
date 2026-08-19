@@ -6,7 +6,11 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'jsdom',
-    globals: true
+    globals: true,
+    // .netlify/functions-serve is a local `netlify dev` build cache (copies of
+    // netlify/functions/*, including *.test.js) — exclude it or every test
+    // file in netlify/functions gets picked up and run twice.
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.netlify/**']
   },
   server: {
     host: true,   // bind to 0.0.0.0 so phones on the same Wi-Fi can connect

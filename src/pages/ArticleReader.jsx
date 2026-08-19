@@ -42,6 +42,17 @@ import {
 } from "../services/sourceRegistryService";
 import "./ArticleReader.css";
 
+const EMPTY_DOSSIER_STATE = {
+  status: "idle",
+  query: "",
+  coverage: [],
+  clusters: [],
+  opinions: [],
+  videos: [],
+  podcasts: [],
+  social: [],
+};
+
 const isGeneratedFallbackUrl = (value = "") =>
   String(value || "").includes("fallback.thelatest.local/generated/");
 
@@ -202,29 +213,20 @@ export default function ArticleReader() {
   const [sourceRegistryRecord, setSourceRegistryRecord] = useState(null);
   const dossierSectionRefs = useRef({});
   const seenDossierSectionsRef = useRef(new Set());
-  const [dossierState, setDossierState] = useState({
-    status: "idle",
-    query: "",
-    coverage: [],
-    clusters: [],
-    opinions: [],
-    videos: [],
-    podcasts: [],
-    social: [],
-  });
+  const [dossierState, setDossierState] = useState(EMPTY_DOSSIER_STATE);
 
   const derivedArticle = useMemo(() => {
+    const resolvedStoredStory = storySlug ? storedStory : null;
     return (
       location.state?.article ||
-      storedStory ||
+      resolvedStoredStory ||
       parseStoryArticleFromSearch({ search: location.search }) ||
       null
     );
-  }, [location.search, location.state, storedStory]);
+  }, [location.search, location.state, storedStory, storySlug]);
 
   useEffect(() => {
     if (!storySlug) {
-      setStoredStory(null);
       return;
     }
 
@@ -381,16 +383,6 @@ export default function ArticleReader() {
 
   useEffect(() => {
     if (!article?.title) {
-      setDossierState({
-        status: "idle",
-        query: "",
-        coverage: [],
-        clusters: [],
-        opinions: [],
-        videos: [],
-        podcasts: [],
-        social: [],
-      });
       return;
     }
 
@@ -439,24 +431,28 @@ export default function ArticleReader() {
     };
   }, [article]);
 
+  const effectiveDossierState = article?.title
+    ? dossierState
+    : EMPTY_DOSSIER_STATE;
+
   const dossierSections = useMemo(() => {
     const sections = [
       {
         key: "coverage",
         itemCount:
-          dossierState.clusters.length > 0
-            ? dossierState.clusters.length
-            : dossierState.coverage.length,
+          effectiveDossierState.clusters.length > 0
+            ? effectiveDossierState.clusters.length
+            : effectiveDossierState.coverage.length,
       },
-      { key: "opinions", itemCount: dossierState.opinions.length },
-      { key: "videos", itemCount: dossierState.videos.length },
-      { key: "podcasts", itemCount: dossierState.podcasts.length },
-      { key: "social", itemCount: dossierState.social.length },
+      { key: "opinions", itemCount: effectiveDossierState.opinions.length },
+      { key: "videos", itemCount: effectiveDossierState.videos.length },
+      { key: "podcasts", itemCount: effectiveDossierState.podcasts.length },
+      { key: "social", itemCount: effectiveDossierState.social.length },
       { key: "trust", itemCount: 1 },
     ];
 
     return sections.filter((section) => section.itemCount > 0);
-  }, [dossierState]);
+  }, [effectiveDossierState]);
 
   useEffect(() => {
     if (
@@ -487,7 +483,7 @@ export default function ArticleReader() {
             article,
             section,
             itemCount,
-            query: dossierState.query,
+            query: effectiveDossierState.query,
           });
         });
       },
@@ -503,7 +499,7 @@ export default function ArticleReader() {
   }, [
     article,
     dossierSections,
-    dossierState.query,
+    effectiveDossierState.query,
     location.pathname,
     trackEngagement,
   ]);
@@ -521,10 +517,10 @@ export default function ArticleReader() {
         itemTitle: item?.title || item?.content || "",
         itemSource: item?.source || item?.platform || "",
         itemType: item?.contentKind || item?.type || section,
-        query: dossierState.query,
+        query: effectiveDossierState.query,
       });
     },
-    [article, dossierState.query, location.pathname, trackEngagement],
+    [article, effectiveDossierState.query, location.pathname, trackEngagement],
   );
 
   const rawSourceUrl = article?.link || article?.url || "";
@@ -609,7 +605,6 @@ export default function ArticleReader() {
 
   useEffect(() => {
     if (!baseSourceProfile?.displayName) {
-      setSourceRegistryRecord(null);
       return;
     }
 
@@ -634,10 +629,17 @@ export default function ArticleReader() {
     };
   }, [baseSourceProfile]);
 
+  const effectiveSourceRegistryRecord = baseSourceProfile?.displayName
+    ? sourceRegistryRecord
+    : null;
+
   const sourceProfile = useMemo(
     () =>
-      mergeSourceProfileWithRegistry(baseSourceProfile, sourceRegistryRecord),
-    [baseSourceProfile, sourceRegistryRecord],
+      mergeSourceProfileWithRegistry(
+        baseSourceProfile,
+        effectiveSourceRegistryRecord,
+      ),
+    [baseSourceProfile, effectiveSourceRegistryRecord],
   );
   const sourceTrust = useMemo(
     () => getTrustDescriptorForProfile(sourceProfile),

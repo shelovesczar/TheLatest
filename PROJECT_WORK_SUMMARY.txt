@@ -1,5 +1,5 @@
 THE LATEST PROJECT WORK SUMMARY
-Updated: 2026-08-14
+Updated: 2026-08-19
 
 PROJECT OVERVIEW
 The Latest has been built into a multi-surface news aggregation product focused on live news, opinions, podcasts, videos, social signals, source trust context, and side-by-side perspective comparison. The project has evolved from a basic RSS-driven frontend into a broader editorial product with source governance, server-side enrichment, search UX improvements, analytics, and deployment-readiness tooling.
@@ -160,8 +160,8 @@ DEPLOYED SOURCE-GOVERNANCE STATUS
 
 CURRENT ENV / CONFIG STATUS
 - SESSION_TOKEN_PEPPER is now set and verify:deploy-env passes.
+- ADMIN_EMAILS is now set (24.chernandez@gmail.com) locally and across all three hosted Netlify contexts (production, deploy-preview, branch-deploy).
 - Remaining verifier warnings are reduced to:
-  - ADMIN_EMAILS not set
   - RSS_APP_AUTH_TOKEN not set
 - Notes instead of hard warnings now cover:
   - Browser AI intentionally disabled via VITE_AI_PROVIDER=editorial
@@ -181,17 +181,22 @@ WHAT IS STILL INCOMPLETE
 3. The remaining backlog is now mostly long-tail outlets rather than core governance gaps.
    Reason: the unresolved set is now concentrated in lifestyle, culture, podcasts, and secondary trade brands rather than the core newsroom set.
 
-4. ADMIN_EMAILS should be set if you want production admin actions fully locked down.
+4. RESOLVED: ADMIN_EMAILS is now set to 24.chernandez@gmail.com (a personal address, used as a placeholder until an Our National Conversation org/domain email is provisioned) both locally and in all three hosted Netlify contexts.
 
 5. RSS_APP_AUTH_TOKEN is only needed if the RSS.app bundle feed is private.
    If the bundle feed is public and your current API key/secret path is sufficient, this may not be a blocker.
+
+6. RESEND_API_KEY is not set yet, so password-reset emails are only logged to the Netlify function console, not actually delivered to users.
+   Reason: no transactional email provider is configured. The reset flow itself is fully built and tested; this is the one remaining step before real users can actually receive reset emails.
+   Action: create a Resend account, verify a sending domain, and set RESEND_API_KEY + EMAIL_FROM in Netlify (see SECRETS_SETUP.md).
 
 RECOMMENDED NEXT STEPS
 1. Run deployed smoke testing against the real production URL now that the RSS endpoint is returning live data again.
 2. Run the deployed source-governance audit again so the live numbers can be compared against the current local 159-of-189 curated state.
 3. Curate the remaining long-tail outlet backlog, starting with lifestyle, culture, podcasts, and secondary trade brands.
-4. Set ADMIN_EMAILS if admin-only operational actions should be locked down in production.
+4. DONE: ADMIN_EMAILS is set. Swap it to an org/domain email once Our National Conversation provisions one, instead of relying on a personal Gmail long-term.
 5. Only set RSS_APP_AUTH_TOKEN if the RSS.app bundle feed is private.
+6. Set up a Resend account and RESEND_API_KEY/EMAIL_FROM before launch so password-reset emails actually send instead of only being logged.
 
 KEY FILES TO KNOW
 - src/pages/SearchResults.jsx
@@ -230,3 +235,141 @@ LATEST LIVE VALIDATION NOTE
 - Live shared summary endpoint returns Claude-backed output.
 - Homepage summary cache handling was tightened so stale model-free editorial fallback does not out-rank stronger shared-summary data.
 - Remaining validation should focus on end-to-end browser behavior rather than raw endpoint health.
+
+CLAUDE AUDIT HARDENING CHANGES COMPLETED (08/19/2026)
+- Reviewed and implemented the concrete launch-readiness items surfaced by the later Claude audit rather than treating the audit as a blind patch list.
+- Confirmed the active production AI summary path is server-side Anthropic via Netlify Functions, not a browser-exposed Claude key path.
+
+1. SECURITY AND ENV HARDENING
+- Added baseline security headers to netlify.toml, including Content-Security-Policy with base-uri/frame-ancestors/object-src restrictions, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, and Permissions-Policy.
+- Removed the browser-side VITE_ANTHROPIC_API_KEY path from src/services/aiService.js so Anthropic is no longer a frontend provider option in the shipped client code.
+- Kept Claude-backed summary and perspective behavior server-side through ANTHROPIC_API_KEY in Netlify Functions.
+- Updated env examples, deployment docs, release checklist guidance, and secret-setup tooling so they no longer suggest configuring VITE_ANTHROPIC_API_KEY for hosted environments.
+- Strengthened scripts/verify-deploy-env.mjs so VITE_ANTHROPIC_API_KEY is treated as a real misconfiguration rather than a soft warning if it ever shows up again.
+
+2. LIVE NETLIFY CONFIG VERIFICATION
+- Queried the linked Netlify site directly across dev, production, deploy-preview, and branch-deploy contexts.
+- Verified that VITE_ANTHROPIC_API_KEY is not present in the hosted environment.
+- Verified that the live Anthropic-related variables currently present are limited to:
+  - ANTHROPIC_API_KEY
+  - ANTHROPIC_PERSPECTIVE_MODEL
+  - ANTHROPIC_SUMMARY_MODEL
+- This confirms the cost-risk called out in the Claude audit was checked directly against the real Netlify project, not only inferred from repo code.
+
+3. CLAUDE-AUDIT PRODUCT / ROUTING CLEANUP
+- Added a real NotFoundPage and catch-all route so unknown paths no longer silently fall through the SPA without a proper 404 surface.
+- Removed dead fake subscribe plumbing from App.jsx instead of preserving unused alert/console behavior.
+- Updated the TopStories regression test to match the current side-by-side UI and wrapped the slice with ConsentProvider.
+- Corrected stale release checklist test instructions so the documented validation path matches the current project.
+
+4. DOMAIN / SITE CONFIG CLEANUP
+- Centralized the canonical site URL and contact-email configuration through shared site config utilities.
+- Replaced hardcoded thelatest.news references across footer, legal/contact pages, and article-fetch User-Agent handling.
+- Made the SEO metadata site URL safe for both Vite runtime access and Node-side prerender/build imports.
+
+5. LINT / DEV-ERGONOMICS CLEANUP
+- Split ad slot and size presets out of AdBreak.jsx into a dedicated presets module so the prior Fast Refresh warning is gone.
+- Cleared the focused TopStories and AdBreak test slices after the audit-driven changes.
+- Preserved the earlier lint/parser fix for the rss-aggregator Netlify wrapper while keeping the current hardening pass clean.
+
+LATEST CLAUDE-AUDIT VALIDATION COMPLETED
+- npm run lint
+- npm test -- AdBreak.test.jsx TopStories.test.jsx
+- npm run build
+- npm run verify:deploy-env
+- netlify env:list
+- netlify env:list --context production
+- netlify env:list --context deploy-preview
+- netlify env:list --context branch-deploy
+
+LATEST CLAUDE-AUDIT OUTCOME
+- The browser-exposed Anthropic key concern has been checked both in code and against the live Netlify environment.
+- Baseline clickjacking/content-type/referrer hardening is now in place in Netlify headers.
+- The repo no longer advertises or depends on a hosted VITE_ANTHROPIC_API_KEY path.
+- Remaining operational follow-up is mostly standard production hygiene rather than a blocking Claude-audit security issue.
+
+ADMIN ACCESS, RATE LIMITING, CSP, AND ERROR-REPORTING HARDENING (08/19/2026)
+A second Claude-audit follow-up pass, focused on the auth/admin surface, transport-level hardening, and closing the "no production visibility into client errors" gap.
+
+1. ADMIN ACCESS FAIL-CLOSED FIX
+- Found that netlify/functions/adminAccess.js granted admin actions to ANY authenticated user whenever ADMIN_EMAILS was unset, instead of denying everyone. This is a real bug, not just a config gap: any deploy that forgot to set ADMIN_EMAILS silently ran wide open.
+- Fixed canManageAdminActions() to fail closed: an empty allowlist now denies admin access to everyone instead of granting it to everyone.
+- Confirmed admin access here is entirely homegrown (netlify/functions/authStore.js: scrypt password hashing, HMAC-peppered session tokens in Netlify Blobs) -- there is no third-party identity provider or SSO involved. Admin status is purely "is this authenticated account's email in the ADMIN_EMAILS allowlist."
+- Set ADMIN_EMAILS=24.chernandez@gmail.com locally (.env) and in Netlify (production, deploy-preview, branch-deploy contexts) via the Netlify CLI, with an inline TODO comment (in .env and .env.example) to swap to an Our National Conversation org/domain email once one exists.
+- Updated scripts/verify-deploy-env.mjs's ADMIN_EMAILS guidance text to reflect the new fail-closed behavior.
+
+2. AUTH RATE LIMITING
+- netlify/functions/auth.js's register and login actions had no rate limiting at all, despite netlify/functions/rateLimit.js already being used elsewhere (searchAssist, sharedSummary, generatedContent, rss-aggregator).
+- Added enforceRateLimit to register (5 requests/min per IP) and login (10 requests/min per IP+email combination), returning 429 with Retry-After when exceeded.
+
+3. CONTENT-SECURITY-POLICY HARDENING
+- netlify.toml previously shipped a CSP with only base-uri/frame-ancestors/object-src -- no script-src, style-src, img-src, font-src, or connect-src restriction at all, meaning script and connection sources were effectively unrestricted.
+- Added explicit directives: script-src 'self' 'unsafe-inline', style-src 'self' 'unsafe-inline', img-src 'self' data: https:, font-src 'self' data:, connect-src 'self' https://www.reddit.com https://api.openai.com https://api.perplexity.ai, frame-src https://www.youtube.com, media-src 'self' https:.
+- script-src and style-src keep 'unsafe-inline' deliberately: SeoManager.jsx injects per-route JSON-LD structured data as a dynamically created inline <script>, and the app renders React inline style={{...}} attributes throughout -- both are static-site constraints (no per-request server templating to hand out a CSP nonce), documented inline in netlify.toml.
+- Verified the header live: ran `netlify dev`, confirmed the CSP header is actually served, then drove a headless Playwright browser across home, an article page, /videos (YouTube iframe), a /topic page (direct-from-browser Reddit fetch), and /dashboard. First pass caught one real violation (the JSON-LD inline script); after adding 'unsafe-inline' to script-src, zero CSP violations and zero console errors across all five routes. Confirmed with a homepage screenshot that rendering (including the live server-side Claude AI briefing) was unaffected.
+
+4. LIGHTWEIGHT CLIENT ERROR REPORTING
+- There was previously no production visibility into client-side errors -- ErrorBoundary.jsx only did console.error, which is invisible once deployed.
+- Added netlify/functions/clientError.js: rate-limited (20/min/IP), truncates and logs incoming error reports via console.error (visible immediately in Netlify function logs) and aggregates them into Netlify Blobs (STORE_NAMES.clientErrors) keyed by day + message/path signature with a running count.
+- Added src/services/errorReportingService.js as the client-side POST helper.
+- Wired it into ErrorBoundary.jsx's componentDidCatch (React render errors) and into src/main.jsx via window 'error' and 'unhandledrejection' listeners (errors outside the React tree).
+- Deliberately did not require signing up for a third-party service (Sentry/Datadog/etc.) -- this gives baseline visibility without a new external dependency or account.
+
+5. NEW SECURITY-FOCUSED TEST COVERAGE
+- Added netlify/functions/adminAccess.test.js (10 tests): covers the fail-closed allowlist behavior, case-insensitive matching, and the 401/403/allowed paths of requireAdminAccess.
+- Added netlify/functions/rateLimit.test.js (7 tests): window bucketing, per-IP scoping, per-keySuffix (per-account) scoping.
+- Added netlify/functions/auth.test.js (3 tests): confirms register/login actually return 429 once their configured thresholds are hit, and that login limits are scoped per email+IP rather than globally.
+- Discovered along the way that vi.mock() does not reliably intercept require() calls between sibling CommonJS files in this project's netlify/functions (type: commonjs) directory -- the initial mocked tests were silently exercising the REAL authStore/blobStore code underneath, including live network calls to the real Netlify Blobs store using the real credentials in the local .env file (this both caused test timeouts and briefly wrote a handful of harmless test rate-limit-counter keys into the live Blobs store). Fixed by monkey-patching the sibling module's exports object directly before requiring the module under test, which works correctly under Node's real CJS module-cache semantics. All three new test files now run in-memory only, in well under a second combined.
+- Full suite is now 55 tests passing (up from 35), lint clean.
+
+LATEST HARDENING VALIDATION COMPLETED
+- npm run lint
+- npm test (55 tests passing)
+- npm run build
+- netlify dev + headless Playwright CSP violation check across 5 routes (0 violations) + homepage screenshot
+- netlify env:get / env:set ADMIN_EMAILS across production, deploy-preview, branch-deploy contexts
+
+6. DEPENDENCY SECURITY FIX
+- npm audit surfaced 11 high-severity react-router/react-router-dom CVEs (XSS via redirect handling, CSRF, open redirect, DoS via route matching and path expansion) affecting the installed 7.13.0, patched in 7.18.2, plus a form-data CRLF-injection advisory.
+- package.json already allowed ^7.13.0, so 7.18.2 was a safe in-range patch bump, not a breaking major-version change. Ran `npm audit fix` (no --force); package.json was untouched, only package-lock.json/installed versions moved. Re-ran the full test suite (55/55 passing) and a production build (243 route shells prerendered) to confirm nothing broke.
+- `npm audit` (production deps) now reports 0 vulnerabilities.
+
+LATEST HARDENING OUTCOME
+- The admin allowlist can no longer fail open -- an unset or empty ADMIN_EMAILS now denies everyone rather than granting everyone admin actions.
+- Auth register/login endpoints are no longer brute-forceable/spammable without any rate limiting.
+- The CSP now meaningfully restricts script/style/connect/frame sources instead of having no restriction on any of them.
+- Client-side production errors are now visible via Netlify function logs and an aggregated Blobs store, without requiring a new third-party account.
+- The two prior fixes (admin fail-closed, auth rate limiting) now have direct regression coverage instead of relying on manual review alone.
+
+HSTS AND ACCOUNT-RECOVERY HARDENING (08/19/2026)
+A third same-day follow-up pass covering the two "worth doing before launch" items from the last review round: transport-security headers and a missing password-recovery flow.
+
+1. STRICT-TRANSPORT-SECURITY HEADER
+- Added `Strict-Transport-Security = "max-age=31536000; includeSubDomains"` to both header blocks in netlify.toml.
+- Deliberately left off the `preload` directive -- submitting to the browser HSTS preload list is a separate, much harder-to-reverse commitment (it affects every subdomain indefinitely and takes a manual removal request to undo) that should be a deliberate later decision, not a side effect of this change.
+
+2. PASSWORD-RESET ("FORGOT PASSWORD") FLOW
+- The auth system had register/login/logout but no account-recovery path, meaning a user who forgot their password had no way back into an account with saved follows/dashboard data except abandoning it and re-registering.
+- Backend: netlify/functions/authStore.js gained createPasswordResetToken, consumePasswordResetToken (single-use -- the record is deleted on lookup whether or not it's still valid, so a token can never be replayed), and updateUserPassword, all built on the same scrypt/HMAC-pepper primitives already used for sessions. Generalized the session-token-hashing function into a shared digestToken so reset tokens reuse the same SESSION_TOKEN_PEPPER-based hashing rather than introducing a second secret.
+- netlify/functions/auth.js gained two new actions: request-password-reset (rate-limited 5/min per email+IP; always returns the same generic "if an account exists..." message and only actually sends an email when the account exists, so the endpoint can't be used to enumerate registered emails) and reset-password (rate-limited 10/min per IP; validates the token, updates the password, and immediately signs the user in with a fresh session so they don't have to log in again right after resetting).
+- Added netlify/functions/emailService.js: a minimal Resend-backed email sender (plain fetch call, no new npm dependency). Until RESEND_API_KEY is set, it logs the email (including the reset link) to the function's console instead of throwing, so the whole flow is testable in local dev / netlify dev before any email provider is configured. Documented the RESEND_API_KEY / EMAIL_FROM setup in .env.example, SECRETS_SETUP.md, scripts/set-hosted-secrets.ps1, and scripts/verify-deploy-env.mjs (recommended, not required -- reset emails just get logged instead of sent until it's set).
+- The reset link's origin is reconstructed from the incoming request's Host/X-Forwarded-Host/X-Forwarded-Proto headers (falling back to VITE_SITE_URL, then a hardcoded default) rather than depending on an env var that isn't set in every context -- this way the link is correct whether the request came in on a custom domain, the raw *.netlify.app URL, a deploy preview, or local dev.
+- Frontend: added a "forgot" mode to the existing LoginModal (a "Forgot password?" link under the password field switches to an email-only form, submits via a new requestReset() on AuthContext, shows a green confirmation message reusing the existing form styling) and a new standalone /reset-password page (src/pages/ResetPasswordPage.jsx, wired into App.jsx) that reads the token from the URL query, collects and confirms a new password, and calls a new completeReset() on AuthContext which both resets the password and persists the returned session (auto-login after reset).
+- Added netlify/functions/auth.test.js coverage for both new actions (9 new tests): sends-email-and-generic-message for existing accounts, generic-message-with-no-email for non-existent accounts (enumeration protection), rate limiting on both actions, successful reset + auto-login, and rejection of invalid/expired tokens and too-short passwords.
+- End-to-end verified live against `netlify dev`: registered a real test account, requested a reset, confirmed the (unsent, logged) reset link appeared correctly in the function console with the right host and protocol, drove the actual /reset-password page in a headless browser through to its "Password Updated" success screen, then confirmed login with the new password worked. Separately drove the LoginModal's "Forgot password?" click-through end to end (open modal -> Forgot password -> submit email -> green confirmation message), zero console errors. Cleaned up the test account (and its follows record) from the live Netlify Blobs store afterward via `netlify blobs:delete` since this local testing ran against the real hosted Blobs credentials in .env.
+
+3. DEV-ERGONOMICS FIX FOUND ALONG THE WAY
+- Running `netlify dev` populates a local `.netlify/functions-serve/` build cache containing copies of everything in netlify/functions/, including the *.test.js files added in the last two rounds. Vitest's default test discovery picked those copies up too, silently doubling the netlify/functions test count (61 real tests briefly reported as 113) any time someone had run `netlify dev` before `npm test`. `.netlify/` was already gitignored so this never affected CI, but it was a real local footgun. Fixed by excluding `.netlify/**` in vite.config.js's test config.
+
+LATEST HSTS/RECOVERY VALIDATION COMPLETED
+- npm run lint
+- npm test (61 tests passing, confirmed stable after excluding the .netlify/functions-serve cache)
+- npm run build (243 route shells prerendered)
+- netlify dev + live end-to-end password-reset flow (register -> request reset -> reset via the real page -> login with new password) verified via curl and headless Playwright, with screenshots
+- netlify blobs:list / blobs:get / blobs:delete to clean up the test account created during that live verification
+
+LATEST HSTS/RECOVERY OUTCOME
+- Repeat visitors' browsers will no longer even attempt a plain-HTTP request to the site for a year after their first HTTPS visit.
+- Users who forget their password now have a real, rate-limited, enumeration-safe way back into their account instead of being locked out permanently.
+- The reset flow works end-to-end today in every environment (logs the link instead of emailing it until RESEND_API_KEY is set), so there's no hard blocker to shipping it now and wiring up real email delivery whenever a Resend account is set up.
+- Confirmed there is no separate database in this project: Netlify Blobs (a key-value blob store) is already the entire user/session/reset-token "database" -- see authStore.js and blobStore.js. This is adequate at the project's current scale (simple get-by-key lookups, no relational queries needed) and required no new infrastructure decision for this feature.

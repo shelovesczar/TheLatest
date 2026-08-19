@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AD_SIZE_PRESETS, AD_SLOT_PRESETS } from "./AdBreak";
+import { AD_SIZE_PRESETS, AD_SLOT_PRESETS } from "./AdBreak.presets";
 
 const ALLOWED_IAB_SIZES = new Set([
   "970x250",

@@ -1,13 +1,17 @@
-import js from '@eslint/js'
-import globals from 'globals'
-import reactHooks from 'eslint-plugin-react-hooks'
-import reactRefresh from 'eslint-plugin-react-refresh'
-import { defineConfig, globalIgnores } from 'eslint/config'
+import js from "@eslint/js";
+import globals from "globals";
+import reactHooks from "eslint-plugin-react-hooks";
+import reactRefresh from "eslint-plugin-react-refresh";
+import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
-  globalIgnores(['dist', '.netlify/**', 'netlify/functions/FEED_ROTATION_GUIDE.js']),
+  globalIgnores([
+    "dist",
+    ".netlify/**",
+    "netlify/functions/FEED_ROTATION_GUIDE.js",
+  ]),
   {
-    files: ['src/**/*.{js,jsx}'],
+    files: ["src/**/*.{js,jsx}"],
     extends: [
       js.configs.recommended,
       reactHooks.configs.flat.recommended,
@@ -17,27 +21,34 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
       parserOptions: {
-        ecmaVersion: 'latest',
+        ecmaVersion: "latest",
         ecmaFeatures: { jsx: true },
-        sourceType: 'module',
+        sourceType: "module",
       },
     },
     rules: {
-      'no-unused-vars': ['warn', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^[A-Z_]', caughtErrorsIgnorePattern: '^[A-Z_]' }],
-      'no-useless-escape': 'warn',
-      'react-hooks/exhaustive-deps': 'warn',
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-refresh/only-export-components': 'warn',
+      "no-unused-vars": [
+        "warn",
+        {
+          varsIgnorePattern: "^[A-Z_]",
+          argsIgnorePattern: "^[A-Z_]",
+          caughtErrorsIgnorePattern: "^[A-Z_]",
+        },
+      ],
+      "no-useless-escape": "warn",
+      "react-hooks/exhaustive-deps": "warn",
+      "react-hooks/set-state-in-effect": "warn",
+      "react-refresh/only-export-components": "warn",
     },
   },
   {
-    files: ['src/context/**/*.jsx'],
+    files: ["src/context/**/*.jsx"],
     rules: {
-      'react-refresh/only-export-components': 'off',
+      "react-refresh/only-export-components": "off",
     },
   },
   {
-    files: ['**/*.{test,spec}.{js,jsx}'],
+    files: ["**/*.{test,spec}.{js,jsx}"],
     languageOptions: {
       globals: {
         ...globals.browser,
@@ -47,38 +58,52 @@ export default defineConfig([
     },
   },
   {
-    files: ['netlify/functions/**/*.js'],
+    files: ["netlify/functions/**/*.js"],
     extends: [js.configs.recommended],
     languageOptions: {
       ecmaVersion: 2022,
-      sourceType: 'script',
+      sourceType: "script",
       globals: globals.node,
     },
     rules: {
-      'no-unused-vars': ['warn', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^[A-Z_]', caughtErrorsIgnorePattern: '^[A-Z_]' }],
-      'no-redeclare': 'off',
-      'no-useless-escape': 'warn',
+      "no-unused-vars": [
+        "warn",
+        {
+          varsIgnorePattern: "^[A-Z_]",
+          argsIgnorePattern: "^[A-Z_]",
+          caughtErrorsIgnorePattern: "^[A-Z_]",
+        },
+      ],
+      "no-redeclare": "off",
+      "no-useless-escape": "warn",
     },
   },
   {
-    files: ['netlify/functions/rss-aggregator.js'],
+    files: ["netlify/functions/rss-aggregator.js"],
     languageOptions: {
       ecmaVersion: 2022,
-      sourceType: 'module',
+      sourceType: "module",
       globals: globals.node,
     },
   },
   {
-    files: ['scripts/**/*.mjs', 'vite.config.js', 'eslint.config.js'],
+    files: ["scripts/**/*.mjs", "vite.config.js", "eslint.config.js"],
     extends: [js.configs.recommended],
     languageOptions: {
       ecmaVersion: 2022,
-      sourceType: 'module',
+      sourceType: "module",
       globals: globals.node,
     },
     rules: {
-      'no-unused-vars': ['warn', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^[A-Z_]', caughtErrorsIgnorePattern: '^[A-Z_]' }],
-      'no-useless-escape': 'warn',
+      "no-unused-vars": [
+        "warn",
+        {
+          varsIgnorePattern: "^[A-Z_]",
+          argsIgnorePattern: "^[A-Z_]",
+          caughtErrorsIgnorePattern: "^[A-Z_]",
+        },
+      ],
+      "no-useless-escape": "warn",
     },
   },
-])
+]);

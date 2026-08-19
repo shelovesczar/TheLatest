@@ -54,8 +54,10 @@ Recommended:
 - `NEWS_API_KEY`
 - `GNEWS_API_KEY`
 - `SOCIAL_RSS_FEEDS`
-- `VITE_OPENAI_API_KEY` or `VITE_ANTHROPIC_API_KEY` or `VITE_PERPLEXITY_API_KEY`
+- `VITE_OPENAI_API_KEY` or `VITE_PERPLEXITY_API_KEY`
 - `ANTHROPIC_API_KEY`
+- `RESEND_API_KEY` (required before launch if you want password-reset emails to actually send; see below)
+- `EMAIL_FROM`
 
 Optional for Docker, CI, or other non-Netlify runtimes that still need live Blob persistence:
 
@@ -93,8 +95,19 @@ Recommended for fuller behavior:
 - `GNEWS_API_KEY`
 - `SOCIAL_RSS_FEEDS`
 - `ANTHROPIC_API_KEY`
+- `RESEND_API_KEY`
+- `EMAIL_FROM`
 
-For browser-side AI setup, also define whichever `VITE_*` provider keys you intend to expose to the frontend build.
+For browser-side AI setup, define only the `VITE_*` provider keys you intentionally want exposed to the frontend build.
+Do not set `VITE_ANTHROPIC_API_KEY` in Netlify. Claude-backed summaries and perspective generation should use server-side `ANTHROPIC_API_KEY` only.
+
+## Password-reset emails (Resend)
+
+The "forgot password" flow (`netlify/functions/auth.js` actions `request-password-reset` / `reset-password`) sends its reset link through `netlify/functions/emailService.js`. Until `RESEND_API_KEY` is set, that function logs the email (including the reset link) to the Netlify function console instead of sending it -- usable for local testing, not for real users.
+
+1. Create a account at https://resend.com and generate an API key at https://resend.com/api-keys.
+2. Verify a sending domain (or use their `onboarding@resend.dev` test address for early testing only -- it won't reliably deliver to arbitrary recipients).
+3. Set `RESEND_API_KEY` and `EMAIL_FROM` (e.g. `The Latest <noreply@yourdomain.com>`) in Netlify's environment variables.
 
 ## Notes
 

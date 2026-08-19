@@ -14,6 +14,8 @@ const STORE_NAMES = {
   follows: "user-follows",
   users: "app-users",
   sessions: "app-sessions",
+  clientErrors: "client-errors",
+  passwordResets: "password-resets",
 };
 
 let localEnvCache = null;

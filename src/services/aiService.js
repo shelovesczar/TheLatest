@@ -1,5 +1,6 @@
-// AI Service for generating dynamic summaries
-// Supports OpenAI, Anthropic Claude, and Perplexity
+// AI Service for generating dynamic summaries.
+// Browser-side AI supports OpenAI and Perplexity only.
+// Claude runs through server-side Netlify functions.
 
 import {
   fetchRSSNews,
@@ -15,7 +16,6 @@ import {
 const AI_PROVIDERS = {
   EDITORIAL: "editorial",
   OPENAI: "openai",
-  ANTHROPIC: "anthropic",
   PERPLEXITY: "perplexity",
 };
 
@@ -28,7 +28,6 @@ const CONFIG = {
   provider: import.meta.env.VITE_AI_PROVIDER || AI_PROVIDERS.OPENAI,
   apiKeys: {
     openai: import.meta.env.VITE_OPENAI_API_KEY,
-    anthropic: import.meta.env.VITE_ANTHROPIC_API_KEY,
     perplexity: import.meta.env.VITE_PERPLEXITY_API_KEY,
   },
   maxTokens: 250,
@@ -615,57 +614,6 @@ async function generateOpenAISummary(topic = "") {
 }
 
 /**
- * Generate AI summary using Anthropic Claude
- */
-async function generateClaudeSummary(topic = "") {
-  const apiKey = CONFIG.apiKeys.anthropic;
-
-  if (!apiKey) {
-    console.warn("Anthropic API key not configured");
-    return null;
-  }
-
-  const prompt = topic
-    ? `Provide a concise 150-word summary of the latest news and developments about "${topic}". Focus on the most recent and significant events, trends, and discussions.`
-    : `Provide a concise 150-word summary of today's top global news stories across politics, technology, business, culture, and current events.`;
-
-  try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-3-sonnet-20240229",
-        max_tokens: CONFIG.maxTokens,
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Anthropic API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return {
-      summary: data.content[0].text,
-      provider: "Claude 3 Sonnet",
-      timestamp: new Date().toISOString(),
-    };
-  } catch (error) {
-    console.error("Anthropic API error:", error);
-    return null;
-  }
-}
-
-/**
  * Generate AI summary using Perplexity
  */
 async function generatePerplexitySummary(topic = "") {
@@ -737,7 +685,6 @@ export async function generateAISummary(requestOrTopic = "", options = {}) {
   const providers = [
     { name: AI_PROVIDERS.PERPLEXITY, fn: generatePerplexitySummary },
     { name: AI_PROVIDERS.OPENAI, fn: generateOpenAISummary },
-    { name: AI_PROVIDERS.ANTHROPIC, fn: generateClaudeSummary },
   ];
 
   // Try configured provider first

@@ -1,10 +1,13 @@
-import { Link } from 'react-router-dom'
-import './Footer.css'
+import { Link } from "react-router-dom";
+import { SUPPORT_EMAIL } from "../../utils/siteConfig";
+import "./Footer.css";
 
 function Footer() {
   return (
     <footer className="footer">
-      <p className="footer-text">From headlines to hashtags, keep up with <em>the latest!</em></p>
+      <p className="footer-text">
+        From headlines to hashtags, keep up with <em>the latest!</em>
+      </p>
       <div className="footer-links">
         <Link to="/news">News</Link>
         <Link to="/social">Social</Link>
@@ -21,10 +24,15 @@ function Footer() {
         <Link to="/privacy">Privacy Policy</Link>
         <Link to="/terms">Terms of Use</Link>
       </div>
-      <p className="footer-support">Editorial, corrections, and support requests: <a href="mailto:support@thelatest.news">support@thelatest.news</a></p>
-      <p className="footer-copyright">© 2026 The Latest, Inc. All Rights Reserved.</p>
+      <p className="footer-support">
+        Editorial, corrections, and support requests:{" "}
+        <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+      </p>
+      <p className="footer-copyright">
+        © 2026 The Latest, Inc. All Rights Reserved.
+      </p>
     </footer>
-  )
+  );
 }
 
-export default Footer
+export default Footer;
