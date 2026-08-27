@@ -35,12 +35,12 @@ const BottomDock = () => {
       label: 'Following',
       color: '#FF9500'
     },
-    { 
-      path: '/dashboard', 
-      icon: faUser, 
+    {
+      path: '/account',
+      icon: faUser,
       label: 'Profile',
       color: '#32ADE6',
-      matchPaths: ['/dashboard']
+      matchPaths: ['/account', '/dashboard']
     }
   ];
 
@@ -48,7 +48,9 @@ const BottomDock = () => {
     <nav className="bottom-dock">
       <div className="bottom-dock-container">
         {navItems.map((item) => {
-          const isActive = (item.matchPaths || [item.path]).some((path) => location.pathname.startsWith(path));
+          const isActive = (item.matchPaths || [item.path]).some((path) =>
+            path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
+          );
           return (
             <Link
               key={item.path}

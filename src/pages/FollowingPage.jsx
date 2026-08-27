@@ -134,7 +134,7 @@ const FollowingPage = () => {
       {!isAuthenticated ? (
         <div className="following-auth-card">
           <h3>Cross-device following is live.</h3>
-          <p>Create an account or sign in to save follows server-side and unlock the internal dashboard.</p>
+          <p>Create an account or sign in to save follows server-side and manage them from your account page.</p>
           <button className="following-auth-btn" onClick={() => setShowLoginModal(true)}>
             Sign In To Continue
           </button>
@@ -227,7 +227,7 @@ const FollowingPage = () => {
             <div>
               <strong>{followCount}</strong> follows active
             </div>
-            <Link to="/dashboard">Open internal dashboard →</Link>
+            <Link to="/account">Manage your account →</Link>
           </div>
 
           {loading ? (

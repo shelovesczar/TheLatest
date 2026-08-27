@@ -48,6 +48,8 @@ const sitemapXml = [
 const robotsTxt = [
   'User-agent: *',
   'Allow: /',
+  'Disallow: /account',
+  'Disallow: /internal',
   'Disallow: /dashboard',
   'Disallow: /saved',
   'Disallow: /following',

@@ -10,6 +10,7 @@ import {
   BrowserRouter as Router,
   Routes,
   Route,
+  Navigate,
   useLocation,
 } from "react-router-dom";
 import "./App.css";
@@ -44,6 +45,7 @@ const TopicPage = lazy(() => import("./pages/TopicPage"));
 const SportsPage = lazy(() => import("./components/sections/Sports"));
 const SavedPage = lazy(() => import("./pages/SavedPage"));
 const FollowingPage = lazy(() => import("./pages/FollowingPage"));
+const AccountPage = lazy(() => import("./pages/AccountPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const ArticleReader = lazy(() => import("./pages/ArticleReader"));
 const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
@@ -264,7 +266,10 @@ function App() {
                     <Route path="/sports" element={<SportsPage />} />
                     <Route path="/following" element={<FollowingPage />} />
                     <Route path="/saved" element={<SavedPage />} />
-                    <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/account" element={<AccountPage />} />
+                    <Route path="/internal" element={<DashboardPage />} />
+                    {/* Old profile-tab route -- keep bookmarks/links working */}
+                    <Route path="/dashboard" element={<Navigate to="/account" replace />} />
                     <Route path="/privacy" element={<PrivacyPage />} />
                     <Route path="/terms" element={<TermsPage />} />
                     <Route path="/about" element={<AboutPage />} />

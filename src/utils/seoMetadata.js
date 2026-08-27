@@ -90,7 +90,11 @@ export function buildRouteMetadata(locationLike = {}, options = {}) {
       ? `Search results for ${query} across news, opinions, videos, podcasts, and curated editorial coverage.`
       : "Search the latest reporting, analysis, and media coverage across every section of The Latest.";
     robots = "noindex,follow";
-  } else if (pathname === "/dashboard") {
+  } else if (pathname === "/account") {
+    title = `Your Account | ${SITE_NAME}`;
+    description = "Sign in to manage your account, follows, and saved articles.";
+    robots = "noindex,nofollow";
+  } else if (pathname === "/internal") {
     title = `Internal Dashboard | ${SITE_NAME}`;
     description =
       "Internal editorial dashboard for feed health, source quality, and engagement monitoring.";
@@ -325,8 +329,10 @@ export function buildStructuredData(locationLike = {}, metadata = {}) {
     if (query) {
       breadcrumbItems.push({ name: query, item: metadata.canonicalUrl });
     }
-  } else if (pathname === "/dashboard") {
-    breadcrumbItems.push({ name: "Dashboard", item: metadata.canonicalUrl });
+  } else if (pathname === "/account") {
+    breadcrumbItems.push({ name: "Account", item: metadata.canonicalUrl });
+  } else if (pathname === "/internal") {
+    breadcrumbItems.push({ name: "Internal Dashboard", item: metadata.canonicalUrl });
   } else if (pathname === "/saved") {
     pageType = "CollectionPage";
     breadcrumbItems.push({ name: "Saved", item: metadata.canonicalUrl });

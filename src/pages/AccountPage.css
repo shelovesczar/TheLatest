@@ -1,0 +1,182 @@
+.account-page {
+  min-height: 100vh;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding-bottom: 6rem;
+}
+
+.account-empty {
+  padding: 3rem var(--section-padding-x);
+  color: var(--text-secondary);
+}
+
+.account-hero {
+  padding: 2.4rem var(--section-padding-x) 1.6rem;
+  border-bottom: 1px solid var(--border-color);
+  background: linear-gradient(180deg, rgba(43, 107, 168, 0.08), transparent 70%);
+}
+
+.account-hero-inner {
+  max-width: var(--container-max-width);
+  margin: 0 auto;
+}
+
+.account-kicker {
+  display: inline-block;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+
+.account-hero h1 {
+  margin: 0 0 0.55rem;
+  font-size: clamp(1.7rem, 4vw, 2.6rem);
+  line-height: 1.12;
+}
+
+.account-hero p {
+  margin: 0;
+  color: var(--text-secondary);
+  max-width: 60ch;
+}
+
+/* Signed-out auth panel — reuses .login-form / .form-group / .form-input /
+   .login-button / .auth-mode-switch etc. from LoginModal.css so the field
+   styling stays identical between the modal and this full page. */
+.account-auth-panel {
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 2rem var(--section-padding-x) 0;
+}
+
+.account-auth-panel .login-form {
+  gap: 1.1rem;
+}
+
+.account-grid {
+  max-width: var(--container-max-width);
+  margin: 0 auto;
+  padding: 1.5rem var(--section-padding-x) 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 720px) {
+  .account-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.account-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.4rem;
+}
+
+.account-panel h2 {
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+}
+
+.account-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.account-link-btn {
+  display: block;
+  text-align: center;
+  padding: 0.85rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(63, 120, 182, 0.42);
+  background: #1f3760;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.92rem;
+  text-decoration: none;
+  transition: background-color 0.16s ease;
+}
+
+.account-link-btn:hover {
+  background: #2d4b83;
+}
+
+.account-link-btn--admin {
+  background: transparent;
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.account-link-btn--admin:hover {
+  background: var(--accent-light);
+}
+
+.account-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin: 0;
+}
+
+.account-detail-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.6rem;
+}
+
+.account-detail-list dt {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.account-detail-list dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
+}
+
+.account-signout-row {
+  max-width: var(--container-max-width);
+  margin: 0 auto;
+  padding: 1.6rem var(--section-padding-x) 0;
+}
+
+.account-signout-btn {
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 0.78rem 1.3rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.16s ease, color 0.16s ease;
+}
+
+.account-signout-btn:hover:not(:disabled) {
+  border-color: #ff6b6b;
+  color: #ff6b6b;
+}
+
+.account-signout-btn:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+[data-theme="light"] .account-link-btn {
+  background: var(--accent-color);
+}
+
+[data-theme="light"] .account-link-btn:hover {
+  background: var(--accent-hover);
+}

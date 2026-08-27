@@ -13,7 +13,7 @@ import './Header.css'
 function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { isAuthenticated, user, signOut } = useAuth()
+  const { isAuthenticated, isAdmin, user, signOut } = useAuth()
   const { clearTopic } = useSearch()
   const navShellRef = useRef(null)
   const flyoutRef = useRef(null)
@@ -399,11 +399,11 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
                       <span className="header-profile-name">{user?.name || 'Member'}</span>
                       <div className="header-nav-divider"></div>
                       <Link
-                        to="/dashboard"
+                        to="/account"
                         className="header-profile-link"
-                        onClick={() => handleProfileAction(() => navigate('/dashboard'))}
+                        onClick={() => handleProfileAction(() => navigate('/account'))}
                       >
-                        Dashboard
+                        Account
                       </Link>
                       <Link
                         to="/following"
@@ -412,6 +412,15 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
                       >
                         Following
                       </Link>
+                      {isAdmin && (
+                        <Link
+                          to="/internal"
+                          className="header-profile-link"
+                          onClick={() => handleProfileAction(() => navigate('/internal'))}
+                        >
+                          Internal Dashboard
+                        </Link>
+                      )}
                       <button
                         type="button"
                         className="header-profile-link header-profile-action"
