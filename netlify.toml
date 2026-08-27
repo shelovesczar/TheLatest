@@ -103,6 +103,16 @@
   to = "/node_modules/:splat"
   status = 200
 
+# Vite serves some modules by absolute filesystem path under /@fs/* -- this
+# happens routinely on Windows dev machines (e.g. src/App.jsx ends up requested
+# as /@fs/C:/Users/.../src/App.jsx). Without this rule those requests fall
+# through to the SPA catch-all below and get served index.html instead of the
+# real JS, which then fails Vite's import-analysis with a cryptic parse error.
+[[redirects]]
+  from = "/@fs/*"
+  to = "/@fs/:splat"
+  status = 200
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
