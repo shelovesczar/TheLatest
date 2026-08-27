@@ -69,13 +69,14 @@ function createSessionToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function sanitizeUser(user = {}) {
+function sanitizeUser(user = {}, { isAdmin = false } = {}) {
   return {
     id: user.id,
     email: user.email,
     name: user.name,
     createdAt: user.createdAt,
-    updatedAt: user.updatedAt
+    updatedAt: user.updatedAt,
+    isAdmin
   };
 }
 

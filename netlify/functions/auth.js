@@ -1,6 +1,7 @@
 const { deleteKey } = require('./blobStore');
 const { enforceRateLimit } = require('./rateLimit');
 const { sendEmail } = require('./emailService');
+const { canManageAdminActions } = require('./adminAccess');
 const {
   normalizeEmail,
   normalizeName,
@@ -62,7 +63,7 @@ exports.handler = async (event) => {
         body: JSON.stringify({
           authenticated: true,
           token: auth.token,
-          user: sanitizeUser(auth.user)
+          user: sanitizeUser(auth.user, { isAdmin: canManageAdminActions(auth.user) })
         })
       };
     }
@@ -111,7 +112,7 @@ exports.handler = async (event) => {
         body: JSON.stringify({
           authenticated: true,
           token: session.token,
-          user: sanitizeUser(user)
+          user: sanitizeUser(user, { isAdmin: canManageAdminActions(user) })
         })
       };
     }
@@ -149,7 +150,7 @@ exports.handler = async (event) => {
         body: JSON.stringify({
           authenticated: true,
           token: session.token,
-          user: sanitizeUser(user)
+          user: sanitizeUser(user, { isAdmin: canManageAdminActions(user) })
         })
       };
     }
@@ -244,7 +245,7 @@ exports.handler = async (event) => {
         body: JSON.stringify({
           authenticated: true,
           token: session.token,
-          user: sanitizeUser(updatedUser)
+          user: sanitizeUser(updatedUser, { isAdmin: canManageAdminActions(updatedUser) })
         })
       };
     }

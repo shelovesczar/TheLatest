@@ -413,6 +413,7 @@
 .header-compass-link:focus-visible {
   border-color: #2d4b83;
   outline: none;
+  color: var(--accent-color) !important;
 }
 
 .header-compass-link.active {
@@ -429,7 +430,7 @@
 .header-compass-link--landing:hover,
 .header-compass-link--landing:focus-visible {
   border-color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.08);
+  background: white;
 }
 
 .header-compass-link--landing.active {
@@ -741,21 +742,35 @@
   }
 
   .header-search-form {
-    width: min(100%, 460px);
-    flex-basis: min(100%, 460px);
     height: 46px;
-    padding: 0.12rem 0.16rem 0.12rem 1rem;
     border-width: 4px;
     border-radius: 999px;
+  }
+
+  .header-search-form.header-search-form--open {
+    width: min(100%, 460px);
+    flex-basis: min(100%, 460px);
+    padding: 0.12rem 0.16rem 0.12rem 1rem;
     flex: 1 1 auto;
+  }
+
+  .header-search-form.header-search-form--collapsed {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    justify-content: center;
+    flex: 0 0 44px;
   }
 
   .header-search-input--landing {
     font-size: 0.94rem;
   }
 
-  .header-search-form:focus-within,
-  .header-search-form--landing:focus-within {
+  .header-search-form.header-search-form--open:focus-within,
+  .header-search-form--landing.header-search-form--open:focus-within {
     width: min(100%, 460px);
     flex-basis: min(100%, 460px);
   }
@@ -968,22 +983,26 @@
   }
 }
 
-/* Collapsible search — icon-only by default on desktop/tablet, expands to
-   the full input on click. Scoped to 769px+ only; mobile keeps the
-   always-visible full-width search bar defined in the 768px block above,
-   since there's no nav-space pressure to solve there. */
+/* Collapsible search — icon-only by default, expands to the full input on
+   click/tap (mobile gets its own sizing in the 768px block above; this
+   block covers desktop/tablet). The base .header-search-form rule sets
+   `flex: 1 1 <basis>`, so the collapsed state must explicitly zero out
+   flex-grow/shrink too (not just width/flex-basis) — otherwise leftover
+   free space in .header-utilities silently stretches it back out. */
 @media (min-width: 769px) {
   .header-search-form.header-search-form--collapsed {
     width: 40px;
     min-width: 40px;
-    flex-basis: 40px;
     height: 40px;
     padding: 0;
     border: none;
     background: transparent;
     justify-content: center;
     cursor: pointer;
-    transition: width 0.22s ease, flex-basis 0.22s ease;
+    flex: 0 0 40px;
+    transition:
+      width 0.22s ease,
+      flex-basis 0.22s ease;
   }
 
   .header-search-form.header-search-form--collapsed:hover {
@@ -1008,6 +1027,9 @@
   }
 
   .header-search-form--open {
-    transition: width 0.22s ease, flex-basis 0.22s ease, border-color 0.18s ease;
+    transition:
+      width 0.22s ease,
+      flex-basis 0.22s ease,
+      border-color 0.18s ease;
   }
 }
