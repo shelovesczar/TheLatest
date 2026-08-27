@@ -4,7 +4,7 @@
 // tests exercise the in-memory bucket fallback deterministically instead of
 // hitting the real Netlify Blobs store the local .env happens to have live
 // credentials for (that made repeated runs leak state across each other).
-const blobStore = require('./blobStore');
+const blobStore = require('../blobStore');
 
 const originalGetJson = blobStore.getJson;
 const originalSetJson = blobStore.setJson;
@@ -14,7 +14,7 @@ const notConfiguredError = () =>
 blobStore.getJson = vi.fn(notConfiguredError);
 blobStore.setJson = vi.fn(notConfiguredError);
 
-const { enforceRateLimit, getClientAddress } = require('./rateLimit');
+const { enforceRateLimit, getClientAddress } = require('../rateLimit');
 
 afterAll(() => {
   blobStore.getJson = originalGetJson;

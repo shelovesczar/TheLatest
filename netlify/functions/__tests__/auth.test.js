@@ -6,9 +6,9 @@
 // enforceRateLimit's bucket reads/writes stay in-memory instead of hitting
 // the real Netlify Blobs store the local .env happens to have credentials
 // for (that made these tests slow and wrote test data into live infra).
-const authStore = require('./authStore');
-const blobStore = require('./blobStore');
-const emailService = require('./emailService');
+const authStore = require('../authStore');
+const blobStore = require('../blobStore');
+const emailService = require('../emailService');
 
 const notConfiguredError = () =>
   Promise.reject(new Error('The environment has not been configured to use Netlify Blobs.'));
@@ -41,7 +41,7 @@ blobStore.getJson = vi.fn(notConfiguredError);
 blobStore.setJson = vi.fn(notConfiguredError);
 emailService.sendEmail = vi.fn().mockResolvedValue({ sent: false, logged: true });
 
-const { handler } = require('./auth');
+const { handler } = require('../auth');
 
 afterAll(() => {
   Object.assign(authStore, {

@@ -3,11 +3,11 @@
 // between sibling CJS files here, so authStore's export is monkey-patched
 // directly on its exports object *before* adminAccess.js requires it —
 // Node's module cache means adminAccess.js picks up the same patched object.
-const authStore = require('./authStore');
+const authStore = require('../authStore');
 const originalGetAuthenticatedUser = authStore.getAuthenticatedUser;
 authStore.getAuthenticatedUser = vi.fn();
 
-const { canManageAdminActions, requireAdminAccess } = require('./adminAccess');
+const { canManageAdminActions, requireAdminAccess } = require('../adminAccess');
 
 describe('canManageAdminActions', () => {
   const originalAdminEmails = process.env.ADMIN_EMAILS;
