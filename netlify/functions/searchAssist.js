@@ -19,6 +19,9 @@ function jsonHeaders() {
       "Content-Type, Authorization, X-Session-Token",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Content-Type": "application/json",
+    // Read-only, non-personalized (query-keyed) responses — short CDN/browser
+    // cache instead of a full function round trip on every request.
+    "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
   };
 }
 

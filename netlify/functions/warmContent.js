@@ -17,6 +17,42 @@ const SUMMARY_TARGETS = [
   { category: "culture", label: "Culture", sourceCategory: "culture" },
 ];
 
+// All 11 feedKeys in RSS_FEEDS — previously only 7 were warmed hourly.
+const WARM_FEED_KEYS = [
+  "news",
+  "politics",
+  "opinions",
+  "videos",
+  "podcasts",
+  "sports",
+  "tech",
+  "entertainment",
+  "business",
+  "lifestyle",
+  "culture",
+];
+
+// warmContent is a plain synchronous scheduled function, not a -background
+// function — a small bounded-concurrency pool keeps total wall time close to
+// the slowest single item instead of the sum of all of them, while avoiding
+// firing every category's fetches at once against upstream RSS hosts.
+async function mapWithConcurrency(items, worker, concurrency = 4) {
+  const results = new Array(items.length);
+  let cursor = 0;
+
+  async function runNext() {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await worker(items[index], index);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, runNext),
+  );
+  return results;
+}
+
 function normalizePart(value = "") {
   return String(value || "")
     .trim()
@@ -70,54 +106,52 @@ async function invokeAggregator(type, category) {
 }
 
 async function warmSummaries() {
-  for (const target of SUMMARY_TARGETS) {
-    const items = await invokeAggregator("news", target.sourceCategory);
-    const timestamp = new Date().toISOString();
-    const summaryData = {
-      summary: buildSummaryText(items, target.label),
-      headline: `${target.label}: Editor's Brief`,
-      provider: "Editorial Cache",
-      timestamp,
-      url: target.category
-        ? `/category/${target.category}`
-        : "/category/top-stories",
-    };
+  await mapWithConcurrency(
+    SUMMARY_TARGETS,
+    async (target) => {
+      const items = await invokeAggregator("news", target.sourceCategory);
+      const timestamp = new Date().toISOString();
+      const summaryData = {
+        summary: buildSummaryText(items, target.label),
+        headline: `${target.label}: Editor's Brief`,
+        provider: "Editorial Cache",
+        timestamp,
+        url: target.category
+          ? `/category/${target.category}`
+          : "/category/top-stories",
+      };
 
-    await setJson(
-      "shared-ai-summaries",
-      buildSummaryKey("", target.category),
-      summaryData,
-      {
-        metadata: {
-          category: normalizePart(target.category) || "general",
-          provider: "Editorial Cache",
-          warmedAt: timestamp,
+      await setJson(
+        "shared-ai-summaries",
+        buildSummaryKey("", target.category),
+        summaryData,
+        {
+          metadata: {
+            category: normalizePart(target.category) || "general",
+            provider: "Editorial Cache",
+            warmedAt: timestamp,
+          },
         },
-      },
-    );
-  }
+      );
+    },
+    4,
+  );
 }
 
 async function runWarmContent() {
-  const categoriesToWarm = [
-    null,
-    "tech",
-    "business",
-    "sports",
-    "entertainment",
-    "lifestyle",
-    "culture",
-  ];
-
-  for (const category of categoriesToWarm) {
-    await invokeAggregator("news", category);
-  }
-
-  await warmSummaries();
+  const [categoryResults] = await Promise.all([
+    mapWithConcurrency(
+      WARM_FEED_KEYS,
+      (feedKey) => rssAggregator.runCategoryWarmFetch(feedKey),
+      4,
+    ),
+    warmSummaries(),
+  ]);
 
   return {
     warmed: true,
     timestamp: new Date().toISOString(),
+    categories: categoryResults,
   };
 }
 

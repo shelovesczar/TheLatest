@@ -210,6 +210,10 @@ KEY FILES TO KNOW
 - netlify/functions/rss-aggregator.cjs
 - netlify/functions/rss-aggregator.js
 - netlify/functions/rss-aggregator-impl.cjs
+- netlify/functions/warmContent.js
+- netlify/functions/searchAssist.js
+- src/pages/DashboardPage.jsx
+- src/utils/cacheManager.js
 - netlify/functions/sources.js
 - netlify/functions/clusters.js
 - netlify/functions/fetchSocialFeeds.js
@@ -507,3 +511,43 @@ LATEST COMPASS/SOURCE-REGISTRY SESSION OUTCOME
 - "The Compass" is now a real, permanently-discoverable feature (persistent header nav entry, dedicated /compass page) instead of something that only sometimes appeared on the homepage -- and its Left/Center/Right labels are now backed by the same 95-source curated registry used everywhere else on the site, instead of a disconnected, stale, AI-second-guessed 24-outlet list.
 - The Politics category page's comparison view went from completely broken (0 clusters) to fully working with correctly-labeled sources, found and fixed via direct verification rather than assumption.
 - One known, smaller follow-up remains open: a handful of auto-derived source names in the politics-category feed pipeline don't match registry aliases due to missing spaces (e.g. "Thehill").
+
+PERSISTENT SEARCH INDEX, ROTATED SOURCE COVERAGE, AND RESPONSE-CACHING HARDENING (08/26/2026)
+Same-day follow-up after the source-registry expansion above. User asked why growing the registry to 95 outlets didn't automatically widen search's real-time reach. Traced the actual search pipeline end-to-end (not assumed): search has no dedicated index -- it scores whatever's in a per-lambda in-memory cache (resets every cold start, 30 min TTL) and, on a miss, does a narrow live top-up capped at 8 sources/category with an 8.5s global timeout, completely decoupled from registry size. Presented three fix options (raise the caps / proactively warm the cache / build a real persisted index); user chose the persisted-index route as the most durable fix, then asked two sharp follow-up questions before approving implementation: (1) would rotating source coverage across warm cycles cause a category like Entertainment to go stale while a user is browsing Politics, and (2) what would adding response/client caching actually accomplish and is it safe. Both were answered concretely (two-tier core/extended rotation so every category refreshes every hour regardless of rotation; Cache-Control explained precisely, including that the existing no-cache header has no ETag validator so it already behaves like no-store) before the plan was finalized and approved.
+
+Investigation found most of the needed infrastructure already existed in production and just wasn't being used correctly: Netlify Blobs (`article-snapshots` store) already persisted per-category snapshots via `persistSnapshot`/`getPersistedSnapshot`, used by both live requests and the existing hourly `warmContent` cron -- but it OVERWROTE the blob every run instead of accumulating, only covered 7 of 11 feed categories (politics/opinions/videos/podcasts were silently never warmed), was capped at the same narrow per-category source limit as live browsing, and search never fell back to it on a cold cache. A design-review pass (a dedicated Plan-agent critique before implementation) caught a real risk that would otherwise have shipped broken: `warmContent` is a plain synchronous `@hourly` scheduled function, not a `-background` function, and was already doing ~15 sequential handler invocations before any of this work -- adding 4 more categories and rotated extended-tier fetches on top of a sequential loop would have risked the function's execution time limit. Parallelizing the warm loop became a prerequisite, not an afterthought.
+
+1. MERGE-AND-PRUNE PERSISTED SNAPSHOTS (netlify/functions/rss-aggregator-impl.cjs)
+- Added `mergeAndPruneSnapshotItems()` as two explicit passes: merge (dedupe fresh items into the existing persisted snapshot via the existing `dedupeItems`/`mergeItems` logic) then prune (drop items older than 48h, sort by recency, cap at 350/category). Kept as two passes deliberately -- `mergeItems` picks the surviving copy by content-quality score, not recency, so recency pruning cannot be assumed as a side effect of merging.
+
+2. STATELESS TWO-TIER ROTATING WARM FETCH (`runCategoryWarmFetch`, same file)
+- Core tier (feeds already marked `priority: "high"` in the registry) is fetched every hourly run, so every category's highest-value sources never go more than ~1h stale regardless of rotation -- directly answering the Politics/Entertainment staleness question above.
+- Extended tier (the rest of that category's registry feeds) is chunked, with which chunk runs this hour picked deterministically from wall-clock time (`Math.floor(Date.now() / ROTATION_WINDOW_MS) % numChunks`) rather than a persisted cursor -- immune to cold starts and overlapping cron invocations, which a stored offset would not be. Chunk size is targeted to stay close to that category's existing live-request cap, so per-run fetch volume and upstream request rate don't balloon.
+- New warm-only path -- the live user-request handler is completely untouched, zero latency risk to normal browsing/search.
+
+3. WARM JOB EXTENDED TO ALL 11 CATEGORIES AND PARALLELIZED (netlify/functions/warmContent.js)
+- `categoriesToWarm` previously only warmed 7 of 11 feedKeys via a sequential `invokeAggregator` loop; now warms all 11 (added politics, opinions, videos, podcasts) via the new rotation-aware fetch function.
+- Both the category-warm loop and the existing editorial-summary loop now run with a small bounded-concurrency pool (4 at a time) instead of sequential `for` loops, addressing the sync-function-timeout risk flagged in review.
+
+4. SEARCH FALLS BACK TO PERSISTED SNAPSHOTS ON A COLD CACHE (rss-aggregator-impl.cjs)
+- The search handler's cache-collection step previously only looked at the in-memory `cache` object; on a cold lambda instance every category bucket was empty, so search relied entirely on the narrow 8-source live top-up. It now falls back to `getPersistedSnapshot()` per category before treating a bucket as empty -- no item-schema changes needed, since persisted items already share the exact shape the relevance scorer reads.
+
+5. SCOPED RESPONSE CACHING (rss-aggregator-impl.cjs, netlify/functions/searchAssist.js)
+- Set `Cache-Control: public, max-age=60, stale-while-revalidate=300` directly on the two read-only endpoints' own response headers, rather than adding overlapping `[[headers]]` globs in netlify.toml -- avoids Netlify's ambiguous merge behavior for overlapping path globs and any risk of loosening auth/authStore's `no-cache` rule by accident. Confirmed live that `auth`'s header is unaffected.
+
+6. CLIENT-SIDE CACHE WIRED INTO THE DASHBOARD (src/pages/DashboardPage.jsx)
+- The Dashboard's 4 data fetches (feed status, 3x trending) previously always hit the network on every visit. Wired them through the existing IndexedDB-backed `cacheManager` (already proven in src/rssService.js for search/category pages) instead of adding a new dependency (no SWR/React Query needed). The admin "Refresh Feed Cache" button now also clears this cache so a manual refresh is actually visible instead of silently masked by client cache for up to 30 minutes.
+
+VALIDATION COMPLETED (this pass)
+- npm run lint -- clean; npx vitest run -- 61/61 passing, no regressions.
+- Direct Node smoke test of `runCategoryWarmFetch('business')` against real live feeds and the real Blobs store (not mocked): 74 raw items deduped/pruned to 60; immediate re-run confirmed merge stability (60 -> 60, no duplication growth).
+- Direct Node smoke test of a real cold-cache search for a never-searched term: confirmed log output "425 items in cache (5 from persisted snapshots)" -- direct proof the new fallback actually engages rather than just compiling.
+- Ran the full `runWarmContent()` end to end against live feeds: all 11 categories completed in ~11.5s (previously a strictly sequential ~15-call chain).
+- Started the real `netlify dev` + Vite dev server and curl-verified live: rss-aggregator's response now carries the new `Cache-Control` header; auth's `Cache-Control: no-cache` is unchanged; root and /dashboard both return 200 with no server errors.
+- Could NOT verify the Dashboard's client-cache hit behavior (Network tab, second-load skip) in an actual browser -- no browser-automation tooling (Playwright/chromium-cli) is installed in this environment, and the check requires an authenticated admin session with credentials not available here. Flagged as an open manual-verification item: log into /dashboard, reload within a few minutes, confirm the 4 requests don't re-fire.
+
+OUTCOME
+- Search coverage is no longer capped independently of the 95-source registry expansion -- a cold search now starts from a broad, recently-rotated persisted pool (hundreds of items across most categories) instead of 0 items plus a narrow 8-source live top-up.
+- The hourly warm job now actually warms all 11 categories (silently missing 4 before this pass) in roughly a tenth of the previous sequential wall time, via a genuinely durable persisted store rather than a from-scratch indexing system -- the fix reused existing Blobs/snapshot/priority-rotation infrastructure end to end rather than adding new architecture.
+- Response and client-side caching cut redundant Netlify Function invocations and repeat client fetches without touching data freshness, since the Cache-Control change was scoped to only the two read-only endpoints rather than netlify.toml's blanket rule (auth confirmed unaffected).
+- One real open item: the ~11.5s full warm-job runtime measured locally already exceeds Netlify's default 10s synchronous-function timeout (Starter tier); it fits within Pro/Enterprise's longer limit (26s), but this needs to be confirmed against the actual hosted plan's tier before relying on it in production -- if the hosted plan is Starter-tier, the warm job needs either a further concurrency increase or conversion to a `-background` function.

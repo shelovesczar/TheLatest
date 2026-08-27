@@ -1,9 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { cacheManager } from '../utils/cacheManager'
 import './DashboardPage.css'
 
+const DASHBOARD_CACHE_KEYS = {
+  feedStatus: 'dashboard_v1_feedStatus',
+  trendingArticles: 'dashboard_v1_trending_articles',
+  trendingSources: 'dashboard_v1_trending_sources',
+  pageViews: 'dashboard_v1_page_views',
+}
+
 function DashboardPage() {
-  const { isAuthenticated, loading, token } = useAuth()
+  const { isAuthenticated, isAdmin, loading, token } = useAuth()
   const [feedStatus, setFeedStatus] = useState([])
   const [trendingArticles, setTrendingArticles] = useState([])
   const [trendingSources, setTrendingSources] = useState([])
@@ -14,7 +22,7 @@ function DashboardPage() {
   const [adminActionMessage, setAdminActionMessage] = useState('')
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !isAdmin) {
       setIsLoading(false)
       return
     }
@@ -30,36 +38,34 @@ function DashboardPage() {
           ? { Authorization: `Bearer ${token}` }
           : undefined
 
-        const [feedResponse, articleResponse, sourceResponse, pageResponse] = await Promise.all([
-          fetch('/.netlify/functions/feedStatus', { headers: requestHeaders }),
-          fetch('/.netlify/functions/trending?type=articles&days=7&limit=8', { headers: requestHeaders }),
-          fetch('/.netlify/functions/trending?type=sources&days=7&limit=8', { headers: requestHeaders }),
-          fetch('/.netlify/functions/trending?type=pages&days=7&limit=8', { headers: requestHeaders })
-        ])
+        const loadResource = async (cacheKey, url) => {
+          const cached = await cacheManager.get(cacheKey)
+          if (cached) return cached
 
-        const [feedPayload, articlePayload, sourcePayload, pagePayload] = await Promise.all([
-          feedResponse.json(),
-          articleResponse.json(),
-          sourceResponse.json(),
-          pageResponse.json()
+          const response = await fetch(url, { headers: requestHeaders })
+          const payload = await response.json().catch(() => ({}))
+          if (!response.ok) {
+            throw new Error(payload?.error || 'Unable to load dashboard data.')
+          }
+
+          const items = payload.items || []
+          await cacheManager.set(cacheKey, items)
+          return items
+        }
+
+        const [feedItems, articleItems, sourceItems, pageItems] = await Promise.all([
+          loadResource(DASHBOARD_CACHE_KEYS.feedStatus, '/.netlify/functions/feedStatus'),
+          loadResource(DASHBOARD_CACHE_KEYS.trendingArticles, '/.netlify/functions/trending?type=articles&days=7&limit=8'),
+          loadResource(DASHBOARD_CACHE_KEYS.trendingSources, '/.netlify/functions/trending?type=sources&days=7&limit=8'),
+          loadResource(DASHBOARD_CACHE_KEYS.pageViews, '/.netlify/functions/trending?type=pages&days=7&limit=8')
         ])
 
         if (ignore) return
 
-        if (!feedResponse.ok || !articleResponse.ok || !sourceResponse.ok || !pageResponse.ok) {
-          throw new Error(
-            feedPayload?.error ||
-            articlePayload?.error ||
-            sourcePayload?.error ||
-            pagePayload?.error ||
-            'Unable to load dashboard data.'
-          )
-        }
-
-        setFeedStatus(feedPayload.items || [])
-        setTrendingArticles(articlePayload.items || [])
-        setTrendingSources(sourcePayload.items || [])
-        setPageViews(pagePayload.items || [])
+        setFeedStatus(feedItems)
+        setTrendingArticles(articleItems)
+        setTrendingSources(sourceItems)
+        setPageViews(pageItems)
       } catch (loadError) {
         if (!ignore) {
           setError(loadError.message || 'Unable to load dashboard data.')
@@ -71,7 +77,7 @@ function DashboardPage() {
 
     loadDashboard()
     return () => { ignore = true }
-  }, [isAuthenticated, token])
+  }, [isAuthenticated, isAdmin, token])
 
   const handleWarmContent = async () => {
     if (!token) return
@@ -94,6 +100,9 @@ function DashboardPage() {
         throw new Error(payload?.error || 'Unable to warm content right now.')
       }
 
+      await Promise.all(
+        Object.values(DASHBOARD_CACHE_KEYS).map((cacheKey) => cacheManager.delete(cacheKey))
+      )
       setAdminActionMessage('Content refresh completed. Feed snapshots and summaries were rewarmed.')
     } catch (actionError) {
       setAdminActionMessage(actionError.message || 'Unable to warm content right now.')
@@ -114,6 +123,20 @@ function DashboardPage() {
             <span className="dashboard-kicker">Internal Dashboard</span>
             <h1>Sign in to view feed health and trending analytics.</h1>
             <p>This page reads your new server-side analytics and feed status endpoints.</p>
+          </div>
+        </section>
+      </main>
+    )
+  }
+
+  if (!isAdmin) {
+    return (
+      <main className="dashboard-page">
+        <section className="dashboard-hero">
+          <div className="dashboard-hero-inner">
+            <span className="dashboard-kicker">Internal Dashboard</span>
+            <h1>This dashboard is only available to admin accounts.</h1>
+            <p>Feed health and trending analytics are restricted to the editorial/admin team.</p>
           </div>
         </section>
       </main>

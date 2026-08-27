@@ -96,6 +96,11 @@ const SOFT_TIMEOUT_BY_FEED_KEY = {
 
 const LOW_PRIORITY_FEED = "low";
 
+// Warm-path-only persisted index tuning (does not affect live browsing/search caps above).
+const WARM_ROTATION_WINDOW_MS = 60 * 60 * 1000; // 1 hour — matches the warmContent cron cadence
+const WARM_SNAPSHOT_MAX_AGE_MS = 48 * 60 * 60 * 1000; // drop persisted items older than this
+const WARM_SNAPSHOT_MAX_ITEMS = 350; // cap persisted snapshot size per category
+
 const TOPIC_EXPANSIONS = {
   politics: [
     "politics",
@@ -826,6 +831,108 @@ async function persistSnapshot(cacheKey, items = [], context = {}) {
       error.message,
     );
   }
+}
+
+function chunkFeedList(list = [], size) {
+  if (!Array.isArray(list) || list.length === 0) return [[]];
+  if (!Number.isFinite(size) || size <= 0) return [list];
+
+  const chunks = [];
+  for (let i = 0; i < list.length; i += size) {
+    chunks.push(list.slice(i, i + size));
+  }
+  return chunks;
+}
+
+// Merge freshly-fetched items into a category's existing persisted snapshot,
+// then prune by recency/count as an explicit second pass — dedupeItems/mergeItems
+// picks survivors by content quality, not recency, so pruning can't be left to it.
+function mergeAndPruneSnapshotItems(existingItems = [], freshItems = [], options = {}) {
+  const maxAge = options.maxAge ?? WARM_SNAPSHOT_MAX_AGE_MS;
+  const maxItems = options.maxItems ?? WARM_SNAPSHOT_MAX_ITEMS;
+
+  const merged = dedupeItems([
+    ...(Array.isArray(existingItems) ? existingItems : []),
+    ...(Array.isArray(freshItems) ? freshItems : []),
+  ]);
+
+  const now = Date.now();
+  const recent = merged.filter((item) => {
+    const publishedAt =
+      Number(item.publishedAtEpoch) || toPublishedAtEpoch(item.publishedAt);
+    return publishedAt > 0 && now - publishedAt <= maxAge;
+  });
+
+  return recent
+    .sort((a, b) => (Number(b.publishedAtEpoch) || 0) - (Number(a.publishedAtEpoch) || 0))
+    .slice(0, maxItems);
+}
+
+// Warm-only fetch: always includes a category's high-priority ("core") feeds,
+// plus a rotating chunk of the remaining ("extended") registry feeds picked
+// deterministically from wall-clock time — no persisted cursor needed, so it's
+// immune to cold starts and overlapping cron invocations. Results are merged
+// into (not overwritten onto) the category's persisted Blobs snapshot, which
+// search reads as a fallback when its own in-memory cache is cold (see below).
+// The live user-request path (exports.handler) never calls this — zero impact
+// on browsing/search latency.
+async function runCategoryWarmFetch(feedKey) {
+  const fullCatalog = await getEffectiveFeedList(
+    feedKey,
+    prependBundleFeed(getConfiguredFeedCatalog(feedKey), feedKey),
+  );
+
+  if (fullCatalog.length === 0) {
+    return { feedKey, fetched: 0, total: 0, chunkIndex: 0, chunkCount: 0 };
+  }
+
+  const coreFeeds = fullCatalog.filter((feed) => feed?.priority === "high");
+  const extendedFeeds = fullCatalog.filter((feed) => feed?.priority !== "high");
+
+  // Keep total per-run fetch volume close to today's live-request cap for this
+  // category, not "core + the entire extended tier every hour".
+  const targetTotal = getMaxFeedsForKey(feedKey);
+  const chunkSize = Math.max(targetTotal - coreFeeds.length, 3);
+  const chunks = chunkFeedList(extendedFeeds, chunkSize);
+  const chunkIndex = Math.floor(Date.now() / WARM_ROTATION_WINDOW_MS) % chunks.length;
+  const extendedSlice = chunks[chunkIndex] || [];
+
+  const feedsToFetch = [...coreFeeds, ...extendedSlice];
+  if (feedsToFetch.length === 0) {
+    return { feedKey, fetched: 0, total: 0, chunkIndex, chunkCount: chunks.length };
+  }
+
+  const freshItems = await fetchFeeds(feedsToFetch, {
+    feedKey,
+    maxFeeds: feedsToFetch.length, // exact-length list — selectFeedsForRequest passes it through unmodified
+    disableRotation: true, // this function drives its own rotation; don't also advance the live-request offset
+  });
+
+  const existingSnapshot = await getPersistedSnapshot(
+    feedKey,
+    WARM_SNAPSHOT_MAX_AGE_MS,
+  );
+  const mergedItems = mergeAndPruneSnapshotItems(
+    existingSnapshot?.items || [],
+    freshItems,
+  );
+
+  await persistSnapshot(feedKey, mergedItems, {
+    type: "warm",
+    category: feedKey,
+    chunkIndex,
+    chunkCount: chunks.length,
+    coreCount: coreFeeds.length,
+    extendedFetched: extendedSlice.length,
+  });
+
+  return {
+    feedKey,
+    fetched: feedsToFetch.length,
+    total: mergedItems.length,
+    chunkIndex,
+    chunkCount: chunks.length,
+  };
 }
 
 async function recordFeedHealth(feedConfig = {}, update = {}) {
@@ -3183,6 +3290,11 @@ exports.handler = async (event, _context) => {
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Content-Type": "application/json",
+    // Read-only, non-personalized responses — allow the CDN/browser to serve a
+    // short-lived cached copy instead of round-tripping the function every time.
+    // netlify.toml's blanket no-cache rule for /.netlify/functions/* is overridden
+    // by this response header on a per-function basis (auth/authStore are untouched).
+    "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
   };
 
   // Handle preflight
@@ -3292,23 +3404,49 @@ exports.handler = async (event, _context) => {
         ]),
       );
 
-      searchBuckets.forEach((key) => {
-        if (!getConfiguredFeedCatalog(key).length && !cache[key]) return;
-        const cachedBucket = cache[key];
+      let persistedFallbackHits = 0;
+      const bucketResults = await Promise.all(
+        searchBuckets.map(async (key) => {
+          if (!getConfiguredFeedCatalog(key).length && !cache[key]) return null;
+          const cachedBucket = cache[key];
 
-        if (
-          cachedBucket &&
-          cachedBucket.data &&
-          Array.isArray(cachedBucket.data)
-        ) {
-          allData.push(...cachedBucket.data);
-          if (!isCacheValid(key)) staleCacheKeys.push(key); // stale but still usable
-        } else {
-          staleCacheKeys.push(key); // empty
-        }
+          if (
+            cachedBucket &&
+            cachedBucket.data &&
+            Array.isArray(cachedBucket.data)
+          ) {
+            // stale but still usable — also queued for a live top-up below
+            return { key, items: cachedBucket.data, stale: !isCacheValid(key) };
+          }
+
+          // In-memory cache is cold (e.g. a fresh lambda instance) — fall back
+          // to the persisted, warm-job-rotated snapshot for this category
+          // instead of treating it as empty. Still queued for a live top-up,
+          // since a persisted snapshot can be up to 24h old.
+          const persisted = await getPersistedSnapshot(
+            key,
+            SNAPSHOT_STALE_DURATION,
+          );
+          if (persisted?.items?.length) {
+            cache[key] = {
+              data: persisted.items,
+              timestamp: Date.parse(persisted.timestamp) || Date.now(),
+            };
+            persistedFallbackHits += 1;
+            return { key, items: persisted.items, stale: true };
+          }
+
+          return { key, items: null, stale: true };
+        }),
+      );
+
+      bucketResults.forEach((result) => {
+        if (!result) return;
+        if (Array.isArray(result.items)) allData.push(...result.items);
+        if (result.stale) staleCacheKeys.push(result.key);
       });
       console.log(
-        `[SEARCH] ${allData.length} items in cache; ${staleCacheKeys.length} stale/empty buckets across ${searchBuckets.length} feed groups`,
+        `[SEARCH] ${allData.length} items in cache (${persistedFallbackHits} from persisted snapshots); ${staleCacheKeys.length} stale/empty buckets across ${searchBuckets.length} feed groups`,
       );
 
       // ── Step 2: Only fetch categories that are NOT already cached ─────────
@@ -3854,3 +3992,4 @@ exports.buildManagedSourceId = buildManagedSourceId;
 exports.buildManagedSourceKey = buildManagedSourceKey;
 exports.getManagedSources = getManagedSources;
 exports.getEffectiveFeedList = getEffectiveFeedList;
+exports.runCategoryWarmFetch = runCategoryWarmFetch;
