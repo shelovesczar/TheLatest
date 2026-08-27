@@ -840,6 +840,7 @@
     row-gap: 0.5rem;
     gap: 0.65rem;
     margin-bottom: 1.1rem;
+    padding: 1rem 0rem !important;
   }
 
   .top-stories-actions {
