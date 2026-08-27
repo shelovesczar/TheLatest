@@ -763,6 +763,18 @@
     background: transparent;
     justify-content: center;
     flex: 0 0 44px;
+    overflow: hidden;
+  }
+
+  .header-search-form--collapsed .header-search-input {
+    width: 0;
+    flex: 0 0 0;
+    opacity: 0;
+    padding: 0;
+  }
+
+  .header-search-form--collapsed .header-search-btn {
+    flex-shrink: 0;
   }
 
   .header-search-input--landing {
