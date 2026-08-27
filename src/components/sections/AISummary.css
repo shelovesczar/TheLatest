@@ -100,7 +100,7 @@
 
 .summary-copy {
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(0.98rem, 1.18vw, 1.06rem);
+  font-size: clamp(1.08rem, 1.4vw, 1.22rem);
   color: var(--text-secondary);
   line-height: var(--summary-line-height, 1.58);
   margin: 0;
@@ -115,6 +115,55 @@
 
 .ai-summary-section--heroSplit .summary-copy {
   max-width: none;
+}
+
+.summary-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.2rem 0;
+}
+
+.summary-spinner {
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent-color) 25%, transparent);
+  border-top-color: var(--accent-color);
+  flex-shrink: 0;
+  animation: summary-spin 0.75s linear infinite;
+}
+
+.summary-loading-text {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.98rem;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.summary-refresh-spinner {
+  display: inline-block;
+  width: 0.68rem;
+  height: 0.68rem;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, #2d4b83 25%, transparent);
+  border-top-color: #2d4b83;
+  vertical-align: -0.08rem;
+  animation: summary-spin 0.75s linear infinite;
+}
+
+@keyframes summary-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .summary-spinner,
+  .summary-refresh-spinner {
+    animation-duration: 1.6s;
+  }
 }
 
 .summary-lead {

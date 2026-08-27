@@ -1848,7 +1848,11 @@ const RSS_FEEDS = {
       url: "https://www.latimes.com/world-nation/rss2.0.xml",
       source: "LA Times",
     },
-    { url: "http://feeds.foxnews.com/foxnews/latest", source: "Fox News" },
+    {
+      url: "http://feeds.foxnews.com/foxnews/latest",
+      source: "Fox News",
+      priority: "high",
+    },
     // MSNBC rebranded to MS NOW in Nov 2025 after spinning off from
     // NBCUniversal into Versant Media Group; feed URL and registry entry use
     // the current name.
@@ -1872,6 +1876,7 @@ const RSS_FEEDS = {
     {
       url: "https://www.dailywire.com/feeds/rss.xml",
       source: "The Daily Wire",
+      priority: "high",
     },
     { url: "https://www.motherjones.com/feed/", source: "Mother Jones" },
     { url: "https://time.com/feed/", source: "Time" },
@@ -1925,7 +1930,11 @@ const RSS_FEEDS = {
     { url: "https://feeds.abcnews.com/abcnews/topstories", source: "ABC News" },
     { url: "https://www.cbsnews.com/latest/rss/main", source: "CBS News" },
     { url: "https://www.usatoday.com/rss/", source: "USA Today" },
-    { url: "https://nypost.com/feed/", source: "New York Post" },
+    {
+      url: "https://nypost.com/feed/",
+      source: "New York Post",
+      priority: "high",
+    },
     // AP's current endpoint often returns XML that rss-parser rejects, so avoid selecting it in the fast path.
     {
       url: "https://apnews.com/apf-topnews",
@@ -1966,6 +1975,17 @@ const RSS_FEEDS = {
     {
       url: "http://feeds.foxnews.com/foxnews/politics",
       source: "Fox News Politics",
+      priority: "high",
+    },
+    {
+      url: "https://www.nationalreview.com/feed/",
+      source: "National Review",
+      priority: "high",
+    },
+    {
+      url: "https://www.dailywire.com/feeds/rss.xml",
+      source: "The Daily Wire",
+      priority: "high",
     },
     { url: "https://www.npr.org/rss/rss.php?id=1014", source: "NPR Politics" },
     {
@@ -2000,7 +2020,11 @@ const RSS_FEEDS = {
       priority: "low",
     },
     { url: "https://thehill.com/opinion/feed/", source: "The Hill Opinion" },
-    { url: "https://www.nationalreview.com/feed/", source: "National Review" },
+    {
+      url: "https://www.nationalreview.com/feed/",
+      source: "National Review",
+      priority: "high",
+    },
     { url: "https://reason.com/feed/", source: "Reason" },
     { url: "https://www.commentary.org/feed/", source: "Commentary" },
     {
@@ -2016,11 +2040,12 @@ const RSS_FEEDS = {
     {
       url: "https://www.theamericanconservative.com/feed/",
       source: "The American Conservative",
+      priority: "high",
     },
     {
       url: "https://feeds.a.dj.com/rss/RSSOpinion.xml",
       source: "WSJ Opinion",
-      priority: "low",
+      priority: "high",
     },
     // RSS APP feeds (for more niche topics)
     {

@@ -392,13 +392,22 @@ function AISummary({
 
             <h3 className="summary-headline">{getHeadline()}</h3>
 
-            <p
-              className="summary-copy"
-              style={{ "--summary-line-height": summaryLineHeight }}
-            >
-              <span className="summary-lead">{leadInLabel}</span>
-              {summaryBodyText}
-            </p>
+            {summaryData ? (
+              <p
+                className="summary-copy"
+                style={{ "--summary-line-height": summaryLineHeight }}
+              >
+                <span className="summary-lead">{leadInLabel}</span>
+                {summaryBodyText}
+              </p>
+            ) : (
+              <div className="summary-loading" role="status" aria-live="polite">
+                <span className="summary-spinner" aria-hidden="true"></span>
+                <span className="summary-loading-text">
+                  Generating today&apos;s briefing…
+                </span>
+              </div>
+            )}
 
             <div className="summary-note">
               {noteLabel.prefix}
@@ -431,7 +440,17 @@ function AISummary({
                   onClick={handleRefresh}
                   disabled={isRefreshing}
                 >
-                  {isRefreshing ? "Refreshing..." : "Refresh"}
+                  {isRefreshing ? (
+                    <>
+                      <span
+                        className="summary-refresh-spinner"
+                        aria-hidden="true"
+                      ></span>
+                      Refreshing...
+                    </>
+                  ) : (
+                    "Refresh"
+                  )}
                 </button>
               </div>
             </div>
