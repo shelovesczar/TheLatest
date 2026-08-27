@@ -1,5 +1,5 @@
 THE LATEST PROJECT WORK SUMMARY
-Updated: 2026-08-26
+Updated: 2026-08-27
 
 PROJECT OVERVIEW
 The Latest has been built into a multi-surface news aggregation product focused on live news, opinions, podcasts, videos, social signals, source trust context, and side-by-side perspective comparison. The project has evolved from a basic RSS-driven frontend into a broader editorial product with source governance, server-side enrichment, search UX improvements, analytics, and deployment-readiness tooling.
@@ -212,7 +212,8 @@ KEY FILES TO KNOW
 - netlify/functions/rss-aggregator-impl.cjs
 - netlify/functions/warmContent.js
 - netlify/functions/searchAssist.js
-- src/pages/DashboardPage.jsx
+- src/pages/DashboardPage.jsx (now the /internal admin-only analytics page; /account is the general "Profile" page)
+- src/pages/AccountPage.jsx (signed-out sign-in/register/forgot-password form -> signed-in account dashboard)
 - src/utils/cacheManager.js
 - netlify/functions/sources.js
 - netlify/functions/clusters.js
@@ -220,9 +221,12 @@ KEY FILES TO KNOW
 - netlify/functions/trackEngagement.js
 - scripts/verify-deploy-env.mjs
 - scripts/smoke-netlify-preview.mjs
-- scripts/audit-source-governance.mjs
+- scripts/audit-source-governance.mjs (managed-source governance audit -- the netlify-functions-backed system)
+- scripts/audit-unclassified-sources.mjs (static SOURCE_REGISTRY gap audit -- standalone, no server needed)
+- scripts/batch-classify-sources.mjs (AI-assisted research for SOURCE_REGISTRY gaps; writes a review report, never edits sourceProfiles.js directly)
 - scripts/dev-netlify.mjs
 - netlify/functions/package.json
+- netlify/functions/__tests__/ (auth/adminAccess/rateLimit tests -- must live in a subdirectory, not netlify/functions/ directly, or Netlify tries to deploy them as functions)
 
 VALIDATION COMPLETED LOCALLY
 - npm run build
@@ -551,3 +555,52 @@ OUTCOME
 - The hourly warm job now actually warms all 11 categories (silently missing 4 before this pass) in roughly a tenth of the previous sequential wall time, via a genuinely durable persisted store rather than a from-scratch indexing system -- the fix reused existing Blobs/snapshot/priority-rotation infrastructure end to end rather than adding new architecture.
 - Response and client-side caching cut redundant Netlify Function invocations and repeat client fetches without touching data freshness, since the Cache-Control change was scoped to only the two read-only endpoints rather than netlify.toml's blanket rule (auth confirmed unaffected).
 - One real open item: the ~11.5s full warm-job runtime measured locally already exceeds Netlify's default 10s synchronous-function timeout (Starter tier); it fits within Pro/Enterprise's longer limit (26s), but this needs to be confirmed against the actual hosted plan's tier before relying on it in production -- if the hosted plan is Starter-tier, the warm job needs either a further concurrency increase or conversion to a `-background` function.
+
+SOURCE-REGISTRY GAP CLOSURE, DEPLOY FIX, ACCOUNT PAGE, AND MOBILE POLISH PASS (08/27/2026)
+Started from a direct ask ("do you feel confident in our website" ahead of Jeff Hall's Friday meeting with the AllSides CEO), then continued through a live `netlify deploy` failure the user hit while trying to ship the resulting fixes, followed by three rounds of user-reported mobile UI bugs. Six commits, each independently verified rather than assumed correct.
+
+1. STATIC SOURCE_REGISTRY GAP CLOSURE (726ee7f) -- distinct from the netlify-functions-backed "managed source governance" system covered earlier in this file
+- Audited src/utils/sourceProfiles.js's SOURCE_REGISTRY (the static curated list the frontend actually reads for card labeling) against every source string actually configured in RSS_FEEDS, and found 45 of 192 active sources had no real profile -- directly relevant to a meeting with AllSides' CEO, since bias/source classification is their entire business.
+- Built two new scripts: scripts/audit-unclassified-sources.mjs (standalone, no server needed, cross-references RSS_FEEDS against sourceProfiles.js) and scripts/batch-classify-sources.mjs (three passes -- alias detection, aggregator-construct exclusion, then AI research via the same ANTHROPIC_API_KEY path other functions already use for the rest; writes a review report to .tmp/, never writes sourceProfiles.js directly).
+- Manually reviewed and added 39 new registry entries: 26 correctly marked "Not applicable" for lifestyle/culture/podcast/sports outlets AllSides/MBFC don't rate; 9 political outlets given real AllSides/MBFC-consensus labels (Al Jazeera English, NPR's news programs, The Ezra Klein Show, The Economist's Intelligence, VOA); 4 hand-authored after the AI classifier flagged them for manual review or errored twice in a row -- including catching PJ Media mislabeled under an "entertainment" RSS feed category despite being a Right-leaning political-commentary site (the AI's own flag text called this out explicitly).
+- Excluded Star Malaysia and Times of India per explicit user direction (left unclassified); left the 4 RSS aggregator-bundle constructs (not real outlets) with no entry, matching what the tooling itself recommends.
+- Known limitation flagged, not fixed: the audit script's "gap" heuristic checks `perspectiveKey === "unknown"`, which is the same value used for genuinely non-political outlets -- so it still reports those 26 correctly-curated "Not applicable" entries as gaps. Fixing this cleanly needs a small registry-schema follow-up (a distinct "not applicable" bucket), already flagged in the tooling's own code comments rather than worked around silently.
+
+2. NETLIFY DEPLOY FAILURE -- INVALID FUNCTION NAMES (bf308ff)
+- The user's own `netlify deploy` failed at the CDN-diffing step with a 422 "Incorrect function names" error.
+- Root cause: Netlify's function bundler treats every top-level file in netlify/functions/ as its own function, named from the filename minus its last extension -- so adminAccess.test.js, auth.test.js, and rateLimit.test.js (added across earlier hardening passes) were being registered as functions literally named "adminAccess.test", "auth.test", "rateLimit.test". A period isn't a valid character in a Netlify function name.
+- Fixed by moving the three files into netlify/functions/__tests__/ (a subdirectory with no matching entry-point file isn't scanned as a function) and updating their relative requires. Confirmed via `netlify functions:list` that no dotted names remain and all 61 tests still pass from the new location.
+
+3. LOCAL netlify dev CRASH -- MISSING /@fs/* REDIRECT (d96e66f, Windows-specific)
+- Separately, the user hit a Vite import-analysis parse error in `netlify dev` pointing at garbled index.html content.
+- Root cause: on Windows, Vite serves some modules by absolute filesystem path under /@fs/... (e.g. src/App.jsx requested as /@fs/C:/Users/.../src/App.jsx). netlify.toml's dev-proxy redirect whitelist (/@vite/*, /@react-refresh, /src/*, /node_modules/*) didn't cover this pattern, so those requests fell through to the SPA catch-all and got served index.html instead of real JS -- which Vite then failed to parse as a module, surfacing the (wrong) HTML content in the error overlay.
+- Added a matching `/@fs/*` redirect rule to netlify.toml. Confirmed fixed with a clean headless-browser reload of a real `netlify dev` instance: zero console errors, zero bad-content-type module responses, cards render.
+- Same commit also fixed a real mobile card-layout bug found while doing that verification pass: `.card-source-row`'s `align-items: center` was vertically centering the article-date span against the taller, wrapped `.card-source-group` (source name + perspective pill on one line, "Source profile" link wrapped to its own line below on narrow widths), so the date floated awkwardly between the two lines. Fixed with `align-items: flex-start`; verified with real DOM bounding-box measurements before/after, not just visually.
+
+4. REPLACED THE MOBILE "PROFILE" TAB'S INTERNAL-ADMIN DASHBOARD WITH A REAL ACCOUNT PAGE (ce0b409)
+- The mobile bottom-dock "Profile" tab (and the desktop header's profile-menu "Dashboard" link) both pointed at /dashboard, which renders DashboardPage.jsx -- an admin-only feed-health/trending-analytics tool. A signed-out visitor saw "Sign in to view feed health and trending analytics"; a signed-in non-admin hit a dead end ("restricted to editorial/admin team"). Neither is what a general user expects from "Profile."
+- Added src/pages/AccountPage.jsx at /account: signed-out visitors get a full-page sign-in/register/forgot-password form (reusing AuthContext's existing signIn/signUp/requestReset and the same field styling LoginModal already used); signed-in users get a real account dashboard -- name/email, Following/Saved quick links, Sign Out, and an admin-only link to the internal dashboard.
+- Moved the admin analytics page to /internal, kept /dashboard as a redirect to /account for old links/bookmarks, and updated BottomDock, the header's profile dropdown, FollowingPage's copy (which previously dangled regular users toward "unlock the internal dashboard" -- a promise most of them could never redeem), SEO metadata, and robots.txt to match.
+- Also fixed BottomDock's active-tab check while verifying this change: `pathname.startsWith(path)` is true for every route when path is "/", so the "Today" tab was highlighted active on every single page, visible right in the same screenshot used to verify the new Profile tab.
+- Verified end-to-end against a live `netlify dev` instance: registered a real test account via headless browser, confirmed the page switches from the sign-in form to the authenticated dashboard, confirmed Sign Out clears the session and returns to the sign-in form.
+
+5. MOBILE HEADER OVERLAP AND SEARCH-ICON TEXT BLEED (d81091e)
+- User-reported, with screenshots: the "TOP STORIES" heading overlapping the "See the Compass" button, and a stray letter fragment visible behind the mobile search icon.
+- Overlap: `.top-stories-hdr` forced `flex-wrap: nowrap` with the h2 pinned to `flex-shrink: 0` under 768px, so once the heading and the button no longer fit on one line they rendered on top of each other instead of wrapping to a second line. Switched to `flex-wrap: wrap`; verified with real bounding-box measurements at both 700px and 390px that the two elements now land on separate lines.
+- Search-icon text bleed: the collapsed (icon-only) mobile search form shrank its container to 44px but -- unlike the equivalent desktop-only (min-width: 769px) rule for the same class -- never zeroed the `<input>` inside it, so the "Search" placeholder kept its layout width and peeked out from behind the magnifying-glass icon. Mirrored the desktop block's input-zeroing rule into the mobile breakpoint.
+
+6. FORCED PINCH-ZOOM ROOT-CAUSE FIX (935a98e)
+- User-reported: having to repeatedly pinch-zoom out while navigating the site on a phone.
+- Audited ~15 routes at 320-390px for actual page-level horizontal overflow (the usual cause of unwanted mobile zoom) and found none anywhere -- `document.documentElement.scrollWidth` matched `window.innerWidth` on every page tested.
+- The real cause is a different, well-documented mobile Safari behavior: any focused input/select/textarea with a computed font-size under 16px force-zooms the whole page in, and never zooms back out on blur. The header search input computed to 13.6px (0.8rem against this app's 17px root font-size) -- and that search box sits in the sticky header on every page, so it fires on effectively every visit. Bumped it, its "--landing" variant, and one similarly-undersized read-only field (SocialMediaBundle's bundle-URL input) to 16px.
+- Verified the fix directly by checking the computed style (`getComputedStyle(input).fontSize === "16px"`) rather than by an unavailable native-Safari zoom test, and confirmed no mobile sign-out gap exists separately from this (see item 4) -- the user had asked about both in the same message.
+
+VALIDATION COMPLETED (this pass)
+- npm run lint -- clean after every one of the 6 commits.
+- npm test -- 61/61 passing throughout. Two isolated flaky timeouts appeared once during a full-suite run (Header.test.jsx, Hero.test.jsx); traced to background dev-server/browser processes competing for CPU in this environment, not to any code change -- both passed cleanly re-run in isolation immediately after.
+- npm run build -- clean, 244 route shells prerendered, after every change.
+- Headless Playwright + a locally-installed Chromium (neither was preinstalled in this environment, both set up fresh this session) verification against a live `netlify dev` instance for: the source-registry audit re-run (32 remaining non-political/excluded/ignored gaps, down from 45), the deploy-fix's `netlify functions:list` output, the `/@fs/*` redirect (zero console errors, zero bad-content-type responses), real account registration/dashboard/sign-out, and DOM bounding-box measurements confirming both the card-spacing fix and the header-overlap fix before and after each change.
+
+OUTCOME (this pass)
+- 6 independently-verified fixes shipped: closed 39 of 45 source-registry classification gaps ahead of Jeff's AllSides meeting; unblocked `netlify deploy`, which was fully broken with a 422 before this pass; fixed a Windows-specific local `netlify dev` crash; fixed a real mobile card-layout bug; replaced a genuinely broken mobile "Profile" experience (dead-end admin page, no real sign-out reachable by regular users) with a working sign-in/account flow; fixed two visible mobile layout bugs and root-caused (rather than just patched) a forced-zoom UX issue that had no actual content-overflow cause.
+- Two follow-ups remain open, both flagged rather than left silent: the registry audit's "not applicable" vs "unclassified" heuristic (item 1 above), and confirming the live site has actually been redeployed to pick up the /account change -- it was pushed to GitHub, but this session never ran `netlify deploy` itself (see item 2 for why that command mattered this same session).
