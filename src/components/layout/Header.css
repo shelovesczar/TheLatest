@@ -484,7 +484,11 @@
   border: none;
   outline: none;
   color: #1a1a2e;
-  font-size: 0.8rem;
+  /* iOS Safari force-zooms the page on focus of any input/select/textarea
+     whose computed font-size is under 16px, and never zooms back out on
+     blur -- this is the search box in the sticky header, so it fires on
+     nearly every page visit. Keep it at (or above) 16px everywhere. */
+  font-size: 16px;
   width: 100%;
   flex: 1 1 auto;
   min-width: 0;
@@ -499,7 +503,7 @@
 
 .header-search-input--landing {
   color: #ffffff;
-  font-size: 0.88rem;
+  font-size: 16px;
   font-weight: 500;
 }
 
@@ -778,7 +782,7 @@
   }
 
   .header-search-input--landing {
-    font-size: 0.94rem;
+    font-size: 16px;
   }
 
   .header-search-form.header-search-form--open:focus-within,

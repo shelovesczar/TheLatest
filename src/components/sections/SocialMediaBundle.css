@@ -153,7 +153,7 @@
   background: var(--bg-secondary);
   color: var(--text-primary);
   font-family: 'Courier New', monospace;
-  font-size: 0.85rem;
+  font-size: 16px;
   line-height: 1.4;
   word-break: break-all;
 }
