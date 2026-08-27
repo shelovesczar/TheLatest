@@ -1,0 +1,45 @@
+.compass-page {
+  width: 100%;
+}
+
+.compass-hero {
+  background: linear-gradient(180deg, #1a2f50 0%, #2d4b83 100%);
+  padding: 2.4rem var(--section-padding-x) 1.8rem;
+}
+
+.compass-hero-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.compass-eyebrow {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #9fc2f2;
+  margin-bottom: 0.6rem;
+}
+
+.compass-hero-title {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.6rem, 3vw, 2.15rem);
+  line-height: 1.2;
+  color: #ffffff;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+}
+
+.compass-hero-description {
+  font-size: 0.98rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.82);
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .compass-hero {
+    padding: 1.8rem 1rem 1.4rem;
+  }
+}

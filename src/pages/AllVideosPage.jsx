@@ -27,6 +27,7 @@ import { getGeneratedContentLabel } from "../utils/contentLabels";
 import {
   getSourceProfile,
   getTrustDescriptorForProfile,
+  TRUTH_SCORE_ENABLED,
 } from "../utils/sourceProfiles";
 import PageBackBar from "../components/common/PageBackBar";
 import "./AllNewsPage.css";
@@ -44,7 +45,7 @@ function toTextValue(value) {
 const PERSPECTIVE_METHOD_LABELS = {
   "ai-headline": "AI estimate from headline and summary framing",
   "source-map": "Source map estimate from outlet profile",
-  unclassified: "Perspective not classified with enough confidence",
+  unclassified: "Compass reading not classified with enough confidence",
 };
 
 function resolveStoryPerspective(article = {}, fallbackProfile = null) {
@@ -399,12 +400,14 @@ function AllVideosPage({ category = null }) {
                           {leadStory.perspective.label}
                         </span>
                       ) : null}
-                      <span
-                        className={`story-trust-pill story-trust-pill--${leadStory.trust.band}`}
-                        title={leadStory.trust.rationale}
-                      >
-                        {leadStory.trust.shortLabel}
-                      </span>
+                      {TRUTH_SCORE_ENABLED && (
+                        <span
+                          className={`story-trust-pill story-trust-pill--${leadStory.trust.band}`}
+                          title={leadStory.trust.rationale}
+                        >
+                          {leadStory.trust.shortLabel}
+                        </span>
+                      )}
                     </div>
                     <a
                       href={leadStoryHref}
@@ -494,12 +497,14 @@ function AllVideosPage({ category = null }) {
                             {item.perspective.label}
                           </span>
                         ) : null}
-                        <span
-                          className={`story-trust-pill story-trust-pill--${item.trust.band}`}
-                          title={item.trust.rationale}
-                        >
-                          {item.trust.shortLabel}
-                        </span>
+                        {TRUTH_SCORE_ENABLED && (
+                          <span
+                            className={`story-trust-pill story-trust-pill--${item.trust.band}`}
+                            title={item.trust.rationale}
+                          >
+                            {item.trust.shortLabel}
+                          </span>
+                        )}
                       </div>
                       <a
                         href={resolveContentHref(item)}
@@ -585,12 +590,14 @@ function AllVideosPage({ category = null }) {
                                 {item.perspective.label}
                               </span>
                             ) : null}
-                            <span
-                              className={`story-trust-pill story-trust-pill--${item.trust.band}`}
-                              title={item.trust.rationale}
-                            >
-                              {item.trust.shortLabel}
-                            </span>
+                            {TRUTH_SCORE_ENABLED && (
+                              <span
+                                className={`story-trust-pill story-trust-pill--${item.trust.band}`}
+                                title={item.trust.rationale}
+                              >
+                                {item.trust.shortLabel}
+                              </span>
+                            )}
                           </div>
                           <a
                             href={href}
@@ -667,12 +674,14 @@ function AllVideosPage({ category = null }) {
                             {item.perspective.label}
                           </span>
                         ) : null}
-                        <span
-                          className={`story-trust-pill story-trust-pill--${item.trust.band}`}
-                          title={item.trust.rationale}
-                        >
-                          {item.trust.shortLabel}
-                        </span>
+                        {TRUTH_SCORE_ENABLED && (
+                          <span
+                            className={`story-trust-pill story-trust-pill--${item.trust.band}`}
+                            title={item.trust.rationale}
+                          >
+                            {item.trust.shortLabel}
+                          </span>
+                        )}
                       </div>
                       <h3 className="quick-update-headline">
                         {truncateText(item.title, 88)}

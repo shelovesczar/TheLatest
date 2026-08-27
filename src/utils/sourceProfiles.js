@@ -86,6 +86,27 @@ export const SOURCE_REGISTRY = [
       "Often adds depth and explanatory framing rather than pure wire-style brevity.",
   },
   {
+    displayName: "PBS NewsHour",
+    names: ["pbs", "pbs newshour", "pbs news hour", "pbs news"],
+    slug: "pbs-newshour",
+    homepage: "https://www.pbs.org/newshour/",
+    country: "United States",
+    founded: "1975",
+    ownershipName: "NewsHour Productions LLC (a WETA subsidiary)",
+    ownershipType: "Nonprofit media organization",
+    ownershipSummary:
+      "Produced by NewsHour Productions LLC, a nonprofit subsidiary of WETA Washington DC, in collaboration with PBS member stations.",
+    fundingModel:
+      "Corporate underwriting, Corporation for Public Broadcasting and public funding, member-station support, and viewer/foundation donations.",
+    perspectiveKey: "left",
+    perspectiveLabel: "Left-Center",
+    factualityLabel: "High factuality",
+    description:
+      "Public-television nightly newscast and digital newsroom known for long-form interviews and policy-focused reporting.",
+    methodologyNote:
+      "Similar public-broadcaster profile to NPR; independent trackers are split between center and modestly left-of-center, with factual accuracy consistently rated high.",
+  },
+  {
     displayName: "New York Times",
     names: [
       "new york times",
@@ -144,6 +165,27 @@ export const SOURCE_REGISTRY = [
       "Particularly relevant on federal politics, policy, national security, and accountability reporting.",
   },
   {
+    displayName: "Time",
+    names: ["time", "time magazine", "time.com"],
+    slug: "time",
+    homepage: "https://time.com/",
+    country: "United States",
+    founded: "1923",
+    ownershipName: "Marc and Lynne Benioff",
+    ownershipType: "Privately held (individual owners)",
+    ownershipSummary:
+      "Owned by Salesforce co-founder Marc Benioff and Lynne Benioff since 2018, acquired from Meredith Corporation.",
+    fundingModel:
+      "Digital and print subscriptions, advertising, licensing, and events.",
+    perspectiveKey: "left",
+    perspectiveLabel: "Left-Center",
+    factualityLabel: "High factuality",
+    description:
+      "Weekly newsmagazine and digital newsroom covering politics, business, and global affairs.",
+    methodologyNote:
+      "AllSides, Media Bias/Fact Check, and Ad Fontes all converge on a modest left-of-center lean with reliable-to-high factual grounding, similar in profile to NYT and Washington Post.",
+  },
+  {
     displayName: "CNN",
     names: ["cnn", "cnn politics"],
     slug: "cnn",
@@ -184,6 +226,48 @@ export const SOURCE_REGISTRY = [
       "Large conservative-leaning television and digital network with strong audience reach across US political and cultural news.",
     methodologyNote:
       "Important for understanding how a major right-leaning audience is seeing a story, especially in US politics.",
+  },
+  {
+    displayName: "MS NOW",
+    names: ["msnbc", "ms now", "msnow", "ms-now"],
+    slug: "ms-now",
+    homepage: "https://www.ms.now/",
+    country: "United States",
+    founded: "1996",
+    ownershipName: "Versant Media Group",
+    ownershipType: "Public company division",
+    ownershipSummary:
+      "Cable and digital news network operating within Versant Media Group, a publicly traded company (Nasdaq: VSNT) spun off from Comcast/NBCUniversal in January 2026. Formerly MSNBC; rebranded to MS NOW in November 2025.",
+    fundingModel:
+      "Advertising, carriage fees, streaming products, and licensing.",
+    perspectiveKey: "left",
+    perspectiveLabel: "Left-Center",
+    factualityLabel: "Mixed to high factuality",
+    description:
+      "24-hour cable and digital news network known for opinion-driven primetime programming and a left-leaning framing of US political news.",
+    methodologyNote:
+      "Useful for understanding how a major left-leaning audience is seeing a story, especially in US politics.",
+  },
+  {
+    displayName: "Newsmax",
+    names: ["newsmax"],
+    slug: "newsmax",
+    homepage: "https://www.newsmax.com",
+    country: "United States",
+    founded: "1998",
+    ownershipName: "Newsmax Inc.",
+    ownershipType: "Public company",
+    ownershipSummary:
+      "Publicly traded (NYSE: NMAX) since its March 2025 IPO; founder Christopher Ruddy retains controlling voting stock.",
+    fundingModel:
+      "Advertising, cable/streaming distribution, and direct-response programming.",
+    perspectiveKey: "right",
+    perspectiveLabel: "Right-Center",
+    factualityLabel: "Low factuality",
+    description:
+      "Cable and digital news network with conservative-leaning talk and opinion programming alongside its news coverage.",
+    methodologyNote:
+      "Independent trackers rate it further right and less reliable than Fox News; Newsmax paid $67M (Dominion) and roughly $40M (Smartmatic) to settle 2020-election-related defamation claims.",
   },
   {
     displayName: "The Guardian",
@@ -265,6 +349,47 @@ export const SOURCE_REGISTRY = [
       "Politics and policy newsroom focused on institutions, campaigns, legislative strategy, and insider reporting.",
     methodologyNote:
       "Useful for procedural detail, elite signaling, and institutional reporting rather than broad-population framing.",
+  },
+  {
+    displayName: "Semafor",
+    names: ["semafor"],
+    slug: "semafor",
+    homepage: "https://www.semafor.com",
+    country: "United States",
+    founded: "2022",
+    ownershipName: "Semafor Media LLC",
+    ownershipType: "Privately held",
+    ownershipSummary:
+      "Independent, venture- and individual-backed digital newsroom founded by Ben Smith and Justin B. Smith; not part of a legacy media conglomerate.",
+    fundingModel: "Advertising, events, and sponsorship.",
+    perspectiveKey: "center",
+    perspectiveLabel: "Center",
+    factualityLabel: "High factuality",
+    description:
+      "Global-affairs-focused digital newsroom known for concise, multi-perspective story formats.",
+    methodologyNote:
+      "Media Bias/Fact Check rates it least-biased/center; AllSides and Ad Fontes note a mild left lean. Factual reliability is rated high across trackers.",
+  },
+  {
+    displayName: "Axios",
+    names: ["axios"],
+    slug: "axios",
+    homepage: "https://www.axios.com",
+    country: "United States",
+    founded: "2016",
+    ownershipName: "Cox Enterprises",
+    ownershipType: "Privately held media group division",
+    ownershipSummary:
+      "Majority-owned (70%) by Cox Enterprises since 2022; founders and employees hold the remaining stake.",
+    fundingModel:
+      "Advertising, sponsorship, and subscription products (Axios Pro).",
+    perspectiveKey: "center",
+    perspectiveLabel: "Center",
+    factualityLabel: "High factuality",
+    description:
+      "Digital newsroom known for concise, direct-format political, business, and technology reporting.",
+    methodologyNote:
+      "AllSides and Media Bias/Fact Check note a mild left lean; Ad Fontes rates it near-neutral. Factual reliability is consistently rated high across trackers.",
   },
   {
     displayName: "Bloomberg",
@@ -410,6 +535,46 @@ export const SOURCE_REGISTRY = [
       "National mass-market newsroom with broad general-interest news, sports, and consumer coverage.",
     methodologyNote:
       "Useful for mainstream national coverage and a wide-audience framing of US news.",
+  },
+  {
+    displayName: "Newsweek",
+    names: ["newsweek"],
+    slug: "newsweek",
+    homepage: "https://www.newsweek.com",
+    country: "United States",
+    founded: "1933",
+    ownershipName: "NW Media Holdings Corp. (Dev Pragad / Jonathan Davis)",
+    ownershipType: "Privately held",
+    ownershipSummary:
+      "Owned by NW Media Holdings Corp., split between co-owners Dev Pragad and Jonathan Davis since a 2018 restructuring that spun it off from prior parent IBT Media.",
+    fundingModel: "Advertising, subscriptions, and licensing.",
+    perspectiveKey: "center",
+    perspectiveLabel: "Center",
+    factualityLabel: "Mixed to high factuality",
+    description:
+      "General-interest newsmagazine and digital newsroom covering politics, business, and culture.",
+    methodologyNote:
+      "Trackers disagree on lean (AllSides Center, Ad Fontes near-middle, Media Bias/Fact Check Right-Center) and MBFC notes a history of post-publication corrections, along with documented criticism of its opinion section publishing fringe contributed content — treat with more scrutiny than a typical wire-style Center source.",
+  },
+  {
+    displayName: "Chicago Tribune",
+    names: ["chicago tribune"],
+    slug: "chicago-tribune",
+    homepage: "https://www.chicagotribune.com/",
+    country: "United States",
+    founded: "1847",
+    ownershipName: "Alden Global Capital / Tribune Publishing",
+    ownershipType: "Hedge fund-owned",
+    ownershipSummary:
+      "Owned by Alden Global Capital through Tribune Publishing, a hedge fund known for aggressive newsroom cost-cutting across its papers.",
+    fundingModel: "Subscriptions, advertising, and licensing.",
+    perspectiveKey: "center",
+    perspectiveLabel: "Center",
+    factualityLabel: "High factuality",
+    description:
+      "Major Midwest metro newspaper covering Chicago, Illinois, and national news.",
+    methodologyNote:
+      "AllSides rates it Center (low confidence); Ad Fontes rates it most-reliable/neutral; Media Bias/Fact Check rates it Right-Center with High factual reporting. No usable public RSS feed could be verified as of 2026-08-26 (blocked by the site's bot-protection on every path tried), so this entry has no live feed wired up yet.",
   },
   {
     displayName: "Al Jazeera",
@@ -652,6 +817,46 @@ export const SOURCE_REGISTRY = [
       "Useful for explanatory framing and issue context rather than straight-wire brevity.",
   },
   {
+    displayName: "HuffPost",
+    names: ["huffpost", "huffington post", "the huffington post"],
+    slug: "huffpost",
+    homepage: "https://www.huffpost.com/",
+    country: "United States",
+    founded: "2005",
+    ownershipName: "BuzzFeed, Inc.",
+    ownershipType: "Public company division",
+    ownershipSummary:
+      "Owned by BuzzFeed, Inc., which itself came under new majority control (Byron Allen's Allen Family Digital) in May 2026.",
+    fundingModel: "Advertising, sponsorship, and syndication.",
+    perspectiveKey: "left",
+    perspectiveLabel: "Left-Center",
+    factualityLabel: "Mixed to high factuality",
+    description:
+      "Digital news and opinion outlet covering politics, culture, and lifestyle with a left-leaning editorial voice.",
+    methodologyNote:
+      "Comparable in kind to other left-leaning explanatory/opinion digital outlets like Vox; factual reliability is generally solid but rated a step below top-tier wire services.",
+  },
+  {
+    displayName: "Mother Jones",
+    names: ["mother jones"],
+    slug: "mother-jones",
+    homepage: "https://www.motherjones.com/",
+    country: "United States",
+    founded: "1976",
+    ownershipName: "The Center for Investigative Reporting",
+    ownershipType: "Nonprofit media organization",
+    ownershipSummary:
+      "Originally published by the nonprofit Foundation for National Progress; merged with The Center for Investigative Reporting in February 2024, which now publishes the magazine.",
+    fundingModel: "Reader donations, subscriptions, and advertising.",
+    perspectiveKey: "left",
+    perspectiveLabel: "Left",
+    factualityLabel: "Mixed to high factuality",
+    description:
+      "Nonprofit progressive investigative and opinion magazine focused on politics, corporate accountability, and social issues.",
+    methodologyNote:
+      "AllSides and Ad Fontes rate it at their most intense left-leaning label (Media Bias/Fact Check alone rates it Left-Center), consistent with an advocacy/opinion-publisher tier mirroring National Review on the right.",
+  },
+  {
     displayName: "Slate",
     names: ["slate", "slate political gabfest"],
     slug: "slate",
@@ -715,6 +920,27 @@ export const SOURCE_REGISTRY = [
       "Technology news outlet with strong startup, venture, and product coverage.",
     methodologyNote:
       "Useful for startup ecosystem reporting and fast-moving product or platform developments.",
+  },
+  {
+    displayName: "Yahoo News",
+    names: ["yahoo news", "yahoo"],
+    slug: "yahoo-news",
+    homepage: "https://news.yahoo.com/",
+    country: "United States / Global",
+    founded: "1996",
+    ownershipName: "Yahoo Inc. / Apollo Global Management",
+    ownershipType: "Privately held",
+    ownershipSummary:
+      "Majority (~90%) owned by funds managed by Apollo Global Management since its 2021 acquisition of Verizon Media, with Verizon retaining a minority stake.",
+    fundingModel:
+      "Advertising, sponsorship, and digital traffic across Yahoo's media portfolio.",
+    perspectiveKey: "left",
+    perspectiveLabel: "Left-Center",
+    factualityLabel: "Mixed to high factuality",
+    description:
+      "Large general-news portal combining original reporting and opinion with heavily curated wire and partner-outlet content.",
+    methodologyNote:
+      "Much of its content is wire-sourced or curated from partner outlets rather than originally reported, so per-story trust should also weigh the underlying byline (AP, Reuters, etc.) when one is present.",
   },
   {
     displayName: "The Verge",
@@ -1311,6 +1537,26 @@ export const SOURCE_REGISTRY = [
       "Useful for mainstream conservative argumentation and editorial framing rather than neutral wire-style reporting.",
   },
   {
+    displayName: "The Daily Wire",
+    names: ["the daily wire", "daily wire", "dailywire"],
+    slug: "the-daily-wire",
+    homepage: "https://www.dailywire.com",
+    country: "United States",
+    founded: "2015",
+    ownershipName: "Daily Wire Ventures, LLC",
+    ownershipType: "Privately held (founder-controlled)",
+    ownershipSummary:
+      "Founded by Ben Shapiro, Jeremy Boreing, and Caleb Robinson; seeded by the Wilks brothers in 2015. Raised growth capital in 2023 at a valuation reportedly above $1 billion; founders retain control as of 2026.",
+    fundingModel: "Subscriptions (DailyWire+), advertising, and merchandise.",
+    perspectiveKey: "right",
+    perspectiveLabel: "Right",
+    factualityLabel: "Mixed factuality",
+    description:
+      "Conservative opinion, commentary, and entertainment outlet built around subscriber podcasts and shows.",
+    methodologyNote:
+      "AllSides, Media Bias/Fact Check, and Ad Fontes all rate it at their most intense right-leaning label with no moderating rating, consistent with an opinion-publisher tier rather than a general-assignment newsroom.",
+  },
+  {
     displayName: "Reason",
     names: ["reason"],
     slug: "reason",
@@ -1754,7 +2000,7 @@ export const PERSPECTIVE_METHODOLOGY = [
   {
     key: "unclassified",
     title: "Unclassified",
-    body: "We did not have enough confidence to assign a perspective bucket. That is preferable to overclaiming certainty where the signal is weak.",
+    body: "We did not have enough confidence to assign a compass reading. That is preferable to overclaiming certainty where the signal is weak.",
   },
 ];
 
@@ -1879,6 +2125,12 @@ export function getSourceProfile(sourceOrItem = "") {
       "When a source is unmapped, treat perspective and ownership fields as incomplete until they are reviewed.",
   };
 }
+
+// Feature flag: "truth score" display is disabled site-wide per Jeff Hall's
+// 2026-08-26 request (the word "truth" implies an objective adjudication we
+// don't want to claim). The scoring logic below is left intact so this can
+// be re-enabled later — flip this back to true to restore all UI surfaces.
+export const TRUTH_SCORE_ENABLED = false;
 
 export function getTrustDescriptor(sourceOrItem = "") {
   const profile = getSourceProfile(sourceOrItem);

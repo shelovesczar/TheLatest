@@ -16,6 +16,7 @@ export const INDEXABLE_STATIC_ROUTES = [
   '/contact',
   '/privacy',
   '/terms',
+  '/dmca',
   '/all-news',
   '/all-opinions',
   '/all-videos',

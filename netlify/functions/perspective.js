@@ -1,5 +1,45 @@
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
+
+const SOURCE_PROFILE_MODULE_CACHE_TTL = 5 * 60 * 1000;
+let sourceProfileModuleCache = { module: null, expiresAt: 0 };
+
+// Loads the frontend's curated source registry (src/utils/sourceProfiles.js)
+// from this CommonJS function via dynamic import — same pattern already used
+// in rss-aggregator-impl.cjs. This is the single source of truth for outlet
+// classification everywhere else on the site; Compass should defer to it
+// too instead of relying solely on the small local map + AI guesses below.
+async function getSourceProfileModule() {
+  if (
+    sourceProfileModuleCache.module !== null &&
+    Date.now() < sourceProfileModuleCache.expiresAt
+  ) {
+    return sourceProfileModuleCache.module;
+  }
+
+  try {
+    const moduleUrl = pathToFileURL(
+      path.resolve(__dirname, '../../src/utils/sourceProfiles.js'),
+    ).href;
+    const module = await import(moduleUrl);
+    sourceProfileModuleCache = {
+      module,
+      expiresAt: Date.now() + SOURCE_PROFILE_MODULE_CACHE_TTL,
+    };
+    return module;
+  } catch (error) {
+    sourceProfileModuleCache = {
+      module: false,
+      expiresAt: Date.now() + SOURCE_PROFILE_MODULE_CACHE_TTL,
+    };
+    console.warn(
+      '[PERSPECTIVE] Failed to load frontend source registry:',
+      error.message,
+    );
+    return null;
+  }
+}
 
 const VALID_KEYS = new Set(['left', 'center', 'right', 'unknown']);
 const VALID_CONFIDENCE = new Set(['low', 'medium', 'high']);
@@ -108,6 +148,28 @@ function jsonHeaders() {
   };
 }
 
+async function resolveRegistryPerspective(source = '') {
+  if (!String(source || '').trim()) return null;
+
+  const sourceProfileModule = await getSourceProfileModule();
+  if (!sourceProfileModule?.getSourceProfile) return null;
+
+  const profile = sourceProfileModule.getSourceProfile(source);
+  if (!profile || profile.perspectiveKey === 'unknown') return null;
+
+  const key = VALID_KEYS.has(profile.perspectiveKey) ? profile.perspectiveKey : 'unknown';
+  if (key === 'unknown') return null;
+
+  return {
+    key,
+    label: profile.perspectiveLabel || DISPLAY_MAP[key].label,
+    sourceStyle: DISPLAY_MAP[key].sourceStyle,
+    method: 'source-map',
+    confidence: 'high',
+    rationale: `Matched ${profile.displayName || source} in the curated source registry.`
+  };
+}
+
 function fallbackPerspective({ source = '' } = {}) {
   const sourceText = normalizeText(source);
   const directMatch = Object.entries(SOURCE_LEAN_MAP).find(([name]) => sourceText.includes(name));
@@ -172,6 +234,23 @@ async function classifyWithAnthropic({ headline = '', description = '', source =
 }
 
 async function labelStoryPerspective({ headline = '', description = '', source = '' } = {}) {
+  // Prefer the curated source registry (src/utils/sourceProfiles.js) over an
+  // AI guess whenever the outlet is already known — it's free, instant, and
+  // more reliable than a per-article AI estimate. AI classification and the
+  // small legacy map below only run for outlets the registry doesn't cover.
+  const registryPerspective = await resolveRegistryPerspective(source);
+  if (registryPerspective) {
+    return {
+      key: registryPerspective.key,
+      label: registryPerspective.label,
+      sourceStyle: registryPerspective.sourceStyle,
+      method: registryPerspective.method,
+      confidence: normalizeConfidence(registryPerspective.confidence),
+      rationale: registryPerspective.rationale,
+      isEstimated: true
+    };
+  }
+
   const aiPerspective = await classifyWithAnthropic({ headline, description, source });
   const resolved = aiPerspective || fallbackPerspective({ source });
   const display = DISPLAY_MAP[resolved.key] || DISPLAY_MAP.unknown;

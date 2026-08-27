@@ -331,6 +331,36 @@
   margin-top: 2.75rem;
 }
 
+.ar-take-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 2.75rem;
+  color: rgba(180, 170, 230, 0.56);
+  font-size: 0.95rem;
+}
+
+.ar-take-section {
+  margin-top: 2.75rem;
+  padding: 1.5rem 1.75rem;
+  border: 1px solid rgba(43, 107, 168, 0.25);
+  border-radius: 16px;
+  background: rgba(43, 107, 168, 0.06);
+}
+
+.ar-take-body {
+  margin: 0.6rem 0 0;
+  font-size: 1.02rem;
+  line-height: 1.6;
+  color: rgba(232, 228, 248, 0.92);
+}
+
+.ar-take-sources {
+  margin: 0.85rem 0 0;
+  font-size: 0.8rem;
+  color: rgba(180, 170, 230, 0.6);
+}
+
 .ar-cluster-grid,
 .ar-card-grid {
   display: grid;
@@ -583,26 +613,17 @@
   color: rgba(180, 170, 230, 0.74);
 }
 
-.ar-attribution {
-  margin-top: 3rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid rgba(43, 107, 168, 0.12);
+.ar-excerpt-notice {
+  margin: 0.75rem 0 0;
   font-size: 0.8rem;
-  color: rgba(180, 170, 230, 0.46);
-  display: flex;
-  gap: 0.4rem;
-  align-items: center;
-  flex-wrap: wrap;
+  font-style: italic;
+  color: rgba(180, 170, 230, 0.5);
 }
 
-.ar-attribution a {
-  color: var(--accent-color);
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.ar-attribution a:hover {
-  text-decoration: underline;
+.ar-source-cta {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(43, 107, 168, 0.12);
 }
 
 .ar-not-found {
@@ -643,7 +664,8 @@
 [data-theme="light"] .ar-dossier-card__title,
 [data-theme="light"] .ar-body p,
 [data-theme="light"] .ar-trust-list dd,
-[data-theme="light"] .ar-trust-card p {
+[data-theme="light"] .ar-trust-card p,
+[data-theme="light"] .ar-take-body {
   color: #1a1535;
 }
 

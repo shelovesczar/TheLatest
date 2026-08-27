@@ -53,6 +53,7 @@ const robotsTxt = [
   'Disallow: /following',
   'Disallow: /search',
   'Disallow: /article',
+  'Disallow: /privatedemo',
   '',
   `Sitemap: ${siteUrl}/sitemap.xml`,
   ''

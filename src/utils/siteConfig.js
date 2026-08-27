@@ -7,4 +7,5 @@ export const EDITORIAL_EMAIL = `editorial@${siteHost}`;
 export const CORRECTIONS_EMAIL = `corrections@${siteHost}`;
 export const PRIVACY_EMAIL = `privacy@${siteHost}`;
 export const LEGAL_EMAIL = `legal@${siteHost}`;
+export const DMCA_EMAIL = `dmca@${siteHost}`;
 export const ADVERTISING_EMAIL = SUPPORT_EMAIL;

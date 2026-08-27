@@ -1731,6 +1731,7 @@ const RSS_FEEDS = {
       url: "https://www.politico.com/rss/politicopicks.xml",
       source: "Politico",
     },
+    { url: "https://www.semafor.com/rss.xml", source: "Semafor" },
     {
       url: "https://feeds.washingtonpost.com/rss/national",
       source: "Washington Post",
@@ -1741,6 +1742,38 @@ const RSS_FEEDS = {
       source: "LA Times",
     },
     { url: "http://feeds.foxnews.com/foxnews/latest", source: "Fox News" },
+    // MSNBC rebranded to MS NOW in Nov 2025 after spinning off from
+    // NBCUniversal into Versant Media Group; feed URL and registry entry use
+    // the current name.
+    { url: "https://www.ms.now/feed", source: "MS NOW" },
+    // Timed out repeatedly in local verification; kept low-priority so the
+    // aggregator's rotation/backoff absorbs it if it's actually flaky.
+    {
+      url: "https://www.newsmax.com/rss/Newsfront/16/",
+      source: "Newsmax",
+      priority: "low",
+    },
+    {
+      url: "https://www.pbs.org/newshour/feeds/rss/headlines",
+      source: "PBS NewsHour",
+    },
+    { url: "https://www.axios.com/feeds/feed.rss", source: "Axios" },
+    {
+      url: "https://www.huffpost.com/section/front-page/feed",
+      source: "HuffPost",
+    },
+    {
+      url: "https://www.dailywire.com/feeds/rss.xml",
+      source: "The Daily Wire",
+    },
+    { url: "https://www.motherjones.com/feed/", source: "Mother Jones" },
+    { url: "https://time.com/feed/", source: "Time" },
+    { url: "https://www.newsweek.com/rss", source: "Newsweek" },
+    { url: "https://news.yahoo.com/rss/", source: "Yahoo News" },
+    // Chicago Tribune has no verified working public RSS feed as of
+    // 2026-08-26 — every feed path returns 403 (bot-protection WAF).
+    // Registry profile exists for classification; feed omitted until a
+    // working path is found.
     {
       url: "https://rss.nytimes.com/services/xml/rss/nyt/US.xml",
       source: "New York Times US",
@@ -1962,7 +1995,7 @@ const RSS_FEEDS = {
     },
     {
       url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCaLlzGqiREWo1HWcxZ0-9Vg",
-      source: "MSNBC",
+      source: "MS NOW",
     },
   ],
   podcasts: [

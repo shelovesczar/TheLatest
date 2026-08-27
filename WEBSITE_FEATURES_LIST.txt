@@ -62,11 +62,11 @@ Makes it easier to share stories externally or copy story links.
 20. Source profiles
 Provides dedicated profile pages for publishers with ownership, funding, and editorial context.
 
-21. Truth score display
-Shows source-level trust context so readers can quickly understand outlet reliability signals.
+21. Truth score display (currently disabled)
+Shows source-level trust context so readers can quickly understand outlet reliability signals. Hidden site-wide as of 2026-08-26 pending a naming/framing decision; toggle via TRUTH_SCORE_ENABLED in src/utils/sourceProfiles.js.
 
-22. Perspective labels (COMPASS)
-Displays editorial-position context such as left-center, center, right-center, or unclassified.
+22. Perspective labels ("The Compass")
+Displays editorial-position context such as left-center, center, right-center, or unclassified. User-facing copy was renamed to "Compass" as of 2026-08-26 (e.g. "See the Compass" toggle, "Compass methodology"); internal code, data fields (perspectiveKey/perspectiveLabel), and CSS classes still use "perspective" and were intentionally left unchanged.
 
 23. User authentication
 Supports account sign-in and persistent session-based access to personalized features.

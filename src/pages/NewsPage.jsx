@@ -1,7 +1,24 @@
 import { Link } from 'react-router-dom'
 import { NAV_ITEMS } from '../utils/navigationConfig'
 import { getCategoryConfig } from '../utils/categoryConfig'
+import { SUPPORT_EMAIL } from '../utils/siteConfig'
 import './NewsPage.css'
+
+// Mirrors the desktop Footer's links — the footer is hidden on mobile
+// (below 768px) in favor of the bottom dock nav, so this page (the
+// bottom dock's "Sections" destination) is where mobile users reach them.
+const MORE_LINKS = [
+  { to: '/social', label: 'Social' },
+  { to: '/opinions', label: 'Opinions' },
+  { to: '/about', label: 'About' },
+  { to: '/advertise', label: 'Advertise' },
+  { to: '/editorial-standards', label: 'Editorial Standards' },
+  { to: '/corrections', label: 'Corrections' },
+  { to: '/contact', label: 'Contact' },
+  { to: '/privacy', label: 'Privacy Policy' },
+  { to: '/terms', label: 'Terms of Use' },
+  { to: '/dmca', label: 'DMCA' },
+]
 
 /**
  * NewsPage - Section hub for categories and topic subpages
@@ -99,6 +116,26 @@ function NewsPage() {
             </article>
           ))}
         </div>
+      </div>
+
+      <div className="news-shell news-more-links-section">
+        <div className="news-section-heading">
+          <div>
+            <div className="news-heading-kicker">More</div>
+            <h2 className="news-heading-title">About &amp; site info</h2>
+          </div>
+        </div>
+        <div className="news-more-links">
+          {MORE_LINKS.map((link) => (
+            <Link key={link.to} to={link.to} className="news-more-link">
+              {link.label}
+            </Link>
+          ))}
+        </div>
+        <p className="news-more-support">
+          Editorial, corrections, and support requests:{' '}
+          <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+        </p>
       </div>
 
       <div className="news-footer">

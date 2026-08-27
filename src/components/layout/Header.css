@@ -115,6 +115,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  font-size: 17px;
   transition:
     color 0.15s ease,
     transform 0.15s ease;
@@ -385,6 +386,57 @@
   margin-left: auto;
 }
 
+.header-compass-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  flex-shrink: 0;
+  padding: 0.44rem 0.85rem;
+  border-radius: 999px;
+  border: 1.5px solid #dde3ee;
+  color: #2d4b83;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.header-compass-link svg {
+  font-size: 17px;
+}
+
+.header-compass-link:hover,
+.header-compass-link:focus-visible {
+  border-color: #2d4b83;
+  outline: none;
+}
+
+.header-compass-link.active {
+  background: #2d4b83;
+  border-color: #2d4b83;
+  color: #ffffff;
+}
+
+.header-compass-link--landing {
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+}
+
+.header-compass-link--landing:hover,
+.header-compass-link--landing:focus-visible {
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.header-compass-link--landing.active {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: #ffffff;
+}
+
 .header-search-form {
   display: flex;
   align-items: center;
@@ -465,6 +517,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-size: 17px;
   transition:
     background-color 0.16s ease,
     color 0.16s ease;
@@ -478,7 +531,6 @@
   width: 41px;
   height: 41px;
   background: #3f78b6;
-  font-size: 1.08rem;
 }
 
 .header-search-btn--landing:hover {
@@ -522,8 +574,7 @@
 }
 
 .header-profile-glyph {
-  width: 28px;
-  height: 28px;
+  font-size: 17px;
 }
 
 .header-profile-menu {
@@ -676,6 +727,19 @@
     min-width: 0;
   }
 
+  .header-compass-link {
+    padding: 0;
+    width: 40px;
+    height: 40px;
+    justify-content: center;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .header-compass-label {
+    display: none;
+  }
+
   .header-search-form {
     width: min(100%, 460px);
     flex-basis: min(100%, 460px);
@@ -783,6 +847,14 @@
   .header-search-form {
     width: clamp(220px, 20vw, 300px);
     flex-basis: clamp(220px, 20vw, 300px);
+  }
+
+  .header-compass-label {
+    display: none;
+  }
+
+  .header-compass-link {
+    padding: 0.5rem;
   }
 
   .nav {
@@ -893,5 +965,49 @@
 
   .header-utilities {
     gap: 0.55rem;
+  }
+}
+
+/* Collapsible search — icon-only by default on desktop/tablet, expands to
+   the full input on click. Scoped to 769px+ only; mobile keeps the
+   always-visible full-width search bar defined in the 768px block above,
+   since there's no nav-space pressure to solve there. */
+@media (min-width: 769px) {
+  .header-search-form.header-search-form--collapsed {
+    width: 40px;
+    min-width: 40px;
+    flex-basis: 40px;
+    height: 40px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    justify-content: center;
+    cursor: pointer;
+    transition: width 0.22s ease, flex-basis 0.22s ease;
+  }
+
+  .header-search-form.header-search-form--collapsed:hover {
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 50%;
+  }
+
+  .header-search-form--landing.header-search-form--collapsed:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 50%;
+  }
+
+  .header-search-form--collapsed .header-search-input {
+    width: 0;
+    flex: 0 0 0;
+    opacity: 0;
+    padding: 0;
+  }
+
+  .header-search-form--collapsed .header-search-btn {
+    flex-shrink: 0;
+  }
+
+  .header-search-form--open {
+    transition: width 0.22s ease, flex-basis 0.22s ease, border-color 0.18s ease;
   }
 }

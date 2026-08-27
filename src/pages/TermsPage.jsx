@@ -40,7 +40,7 @@ const sections = [
     id: "intellectual-property",
     title: "Intellectual Property",
     body: [
-      "The Latest brand, product design, code, and original editorial framing belong to The Latest or its licensors. Third-party headlines, embeds, and source content remain subject to their respective owners and terms.",
+      "The Latest brand, product design, code, and original editorial framing belong to The Latest or its licensors. Third-party headlines, embeds, and source content remain subject to their respective owners and terms. We aggregate short excerpts of third-party reporting alongside credit and a link back to the original source; we do not republish full articles. See our DMCA policy for how to report a copyright concern.",
     ],
   },
   {

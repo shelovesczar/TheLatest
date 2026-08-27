@@ -28,12 +28,14 @@ import {
   parseStoryArticleFromSearch,
 } from "../utils/storyRouting";
 import { fetchStoryDossier } from "../services/dossierService";
+import { fetchStoryTake } from "../services/storyTakeService";
 import { deriveMediaOutlet } from "../utils/sourceUtils";
 import {
   getSourceProfile,
   getSourceProfileHref,
   getTrustDescriptorForProfile,
   PERSPECTIVE_METHODOLOGY,
+  TRUTH_SCORE_ENABLED,
 } from "../utils/sourceProfiles";
 import {
   findRegistryRecord,
@@ -214,6 +216,12 @@ export default function ArticleReader() {
   const dossierSectionRefs = useRef({});
   const seenDossierSectionsRef = useRef(new Set());
   const [dossierState, setDossierState] = useState(EMPTY_DOSSIER_STATE);
+  const [takeState, setTakeState] = useState({
+    status: "idle",
+    take: null,
+    citedSources: [],
+    articleKey: "",
+  });
 
   const derivedArticle = useMemo(() => {
     const resolvedStoredStory = storySlug ? storedStory : null;
@@ -431,12 +439,64 @@ export default function ArticleReader() {
     };
   }, [article]);
 
+  useEffect(() => {
+    const articleIsGenerated = Boolean(
+      article?.generatedId ||
+      article?.isGenerated ||
+      isGeneratedFallbackUrl(article?.link || article?.url || ""),
+    );
+
+    if (!article?.title || articleIsGenerated) {
+      return undefined;
+    }
+
+    let ignore = false;
+    const requestKey = articleKey;
+
+    const loadTake = async () => {
+      setTakeState({ status: "loading", take: null, citedSources: [], articleKey: requestKey });
+
+      try {
+        const payload = await fetchStoryTake(article);
+        if (ignore) return;
+
+        setTakeState({
+          status: "ready",
+          take: payload?.take || null,
+          citedSources: Array.isArray(payload?.citedSources)
+            ? payload.citedSources
+            : [],
+          articleKey: requestKey,
+        });
+      } catch {
+        if (!ignore) {
+          setTakeState({
+            status: "error",
+            take: null,
+            citedSources: [],
+            articleKey: requestKey,
+          });
+        }
+      }
+    };
+
+    loadTake();
+
+    return () => {
+      ignore = true;
+    };
+  }, [article, articleKey]);
+
   const effectiveDossierState = article?.title
     ? dossierState
     : EMPTY_DOSSIER_STATE;
 
   const dossierSections = useMemo(() => {
     const sections = [
+      {
+        key: "take",
+        itemCount: takeState.take && takeState.articleKey === articleKey ? 1 : 0,
+      },
       {
         key: "coverage",
         itemCount:
@@ -452,7 +512,7 @@ export default function ArticleReader() {
     ];
 
     return sections.filter((section) => section.itemCount > 0);
-  }, [effectiveDossierState]);
+  }, [effectiveDossierState, takeState.take, takeState.articleKey, articleKey]);
 
   useEffect(() => {
     if (
@@ -566,9 +626,17 @@ export default function ArticleReader() {
     fetched?.siteName || fetched?.source || article?.source || "";
   const heroImage =
     fetched?.image || article?.image || article?.urlToImage || "";
-  const content =
-    fetched?.content || article?.content || article?.description || "";
-  const minutes = readingTime(content);
+  // Generated articles are our own original text — safe to show in full.
+  // Everything else only ever gets a short excerpt (see fetchArticle.js);
+  // reading-time is only meaningful for the former, since we don't have the
+  // real word count of a third-party article we're intentionally not copying.
+  const content = isGeneratedArticle
+    ? fetched?.content || article?.content || ""
+    : "";
+  const excerpt = isGeneratedArticle
+    ? ""
+    : fetched?.excerpt || article?.description || "";
+  const minutes = isGeneratedArticle ? readingTime(content) : null;
   const generatedNote = fetched?.fallbackLabel || article?.fallbackLabel || "";
   const pubDate =
     article?.publishedAt || article?.pubDate || article?.date || "";
@@ -773,7 +841,9 @@ export default function ArticleReader() {
           <div className="ar-meta">
             {byline ? <span className="ar-byline">{byline}</span> : null}
             {dateStr ? <span className="ar-date">{dateStr}</span> : null}
-            <span className="ar-reading-time">{minutes} min read</span>
+            {minutes ? (
+              <span className="ar-reading-time">{minutes} min read</span>
+            ) : null}
           </div>
         </div>
 
@@ -796,39 +866,90 @@ export default function ArticleReader() {
               {loading ? (
                 <div className="ar-loading">
                   <FontAwesomeIcon icon={faCircleNotch} spin />
-                  <span>Loading full article…</span>
+                  <span>Loading…</span>
                 </div>
               ) : null}
 
-              {!loading && content ? <ArticleBody text={content} /> : null}
-
-              {!loading && !content && !fetchError ? (
-                <div className="ar-no-content">
-                  <p>No article content available.</p>
-                </div>
+              {!loading && isGeneratedArticle && content ? (
+                <ArticleBody text={content} />
               ) : null}
 
-              {!loading &&
-              !isGeneratedArticle &&
-              (fetchError || (!content && sourceUrl)) ? (
-                <div className="ar-paywall-notice">
-                  <FontAwesomeIcon icon={faExclamationTriangle} />
-                  <p>
-                    {fetchError
-                      ? "This article could not be loaded on-site."
-                      : "Full article content requires visiting the original source."}
+              {!loading && !isGeneratedArticle && excerpt ? (
+                <>
+                  <ArticleBody text={excerpt} />
+                  <p className="ar-excerpt-notice">
+                    This is a short excerpt. The Latest links to original
+                    reporting rather than reproducing it in full.
                   </p>
+                </>
+              ) : null}
+
+              {!loading && !isGeneratedArticle && sourceUrl ? (
+                <div className="ar-source-cta">
                   <a
                     href={sourceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="ar-visit-source-btn"
                   >
-                    Read on {siteName || "original site"} →
+                    Read the full story at {siteName || "the original source"}{" "}
+                    →
                   </a>
                 </div>
               ) : null}
+
+              {!loading && isGeneratedArticle && !content ? (
+                <div className="ar-no-content">
+                  <p>No article content available.</p>
+                </div>
+              ) : null}
+
+              {!loading && !isGeneratedArticle && !excerpt && fetchError ? (
+                <div className="ar-paywall-notice">
+                  <FontAwesomeIcon icon={faExclamationTriangle} />
+                  <p>This article could not be loaded on-site.</p>
+                  {sourceUrl ? (
+                    <a
+                      href={sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ar-visit-source-btn"
+                    >
+                      Read on {siteName || "original site"} →
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
+
+            {!isGeneratedArticle &&
+            takeState.status === "loading" &&
+            takeState.articleKey === articleKey ? (
+              <div className="ar-take-loading">
+                <FontAwesomeIcon icon={faCircleNotch} spin />
+                <span>Comparing coverage across outlets…</span>
+              </div>
+            ) : null}
+
+            {!isGeneratedArticle &&
+            takeState.take &&
+            takeState.articleKey === articleKey ? (
+              <section
+                className="ar-take-section"
+                ref={registerDossierSection("take")}
+                data-dossier-section="take"
+                data-dossier-count={1}
+              >
+                <span className="ar-section-kicker">The Latest's Take</span>
+                <p className="ar-take-body">{takeState.take}</p>
+                {takeState.citedSources.length > 0 ? (
+                  <p className="ar-take-sources">
+                    Based on coverage from{" "}
+                    {takeState.citedSources.join(", ")}.
+                  </p>
+                ) : null}
+              </section>
+            ) : null}
 
             <section
               className="ar-dossier-section"
@@ -1037,14 +1158,6 @@ export default function ArticleReader() {
               </section>
             ) : null}
 
-            {sourceUrl && !isGeneratedArticle ? (
-              <div className="ar-attribution">
-                <span>Originally published by</span>
-                <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
-                  {siteName || sourceUrl}
-                </a>
-              </div>
-            ) : null}
           </div>
 
           <aside className="ar-trust-rail">
@@ -1064,12 +1177,14 @@ export default function ArticleReader() {
                 >
                   {sourceProfile.perspectiveLabel}
                 </span>
-                <span
-                  className={`ar-truth-score-pill ar-truth-score-pill--${sourceTrust.band}`}
-                  title={sourceTrust.rationale}
-                >
-                  {sourceTrust.shortLabel}
-                </span>
+                {TRUTH_SCORE_ENABLED && (
+                  <span
+                    className={`ar-truth-score-pill ar-truth-score-pill--${sourceTrust.band}`}
+                    title={sourceTrust.rationale}
+                  >
+                    {sourceTrust.shortLabel}
+                  </span>
+                )}
                 <span className="ar-trust-badge">
                   {sourceProfile.factualityLabel}
                 </span>
@@ -1118,7 +1233,7 @@ export default function ArticleReader() {
 
             <section className="ar-trust-card">
               <div className="ar-trust-card__kicker">
-                Perspective methodology
+                Compass methodology
               </div>
               <h2>{perspectiveDescriptor.label}</h2>
               <p>{methodologyCard.body}</p>

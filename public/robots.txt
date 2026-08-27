@@ -5,5 +5,6 @@ Disallow: /saved
 Disallow: /following
 Disallow: /search
 Disallow: /article
+Disallow: /privatedemo
 
 Sitemap: https://thelatest.news/sitemap.xml

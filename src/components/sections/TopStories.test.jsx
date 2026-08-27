@@ -67,9 +67,9 @@ describe("TopStories perspective guardrails", () => {
     });
 
     expect(screen.getByText("TOP POLITICS STORIES")).toBeTruthy();
-    expect(screen.queryByText("Perspective estimates")).toBeNull();
+    expect(screen.queryByText("Compass estimates")).toBeNull();
     expect(
-      screen.queryByRole("button", { name: /multiple perspectives/i }),
+      screen.queryByRole("button", { name: /see the compass/i }),
     ).toBeNull();
     expect(
       screen
@@ -111,7 +111,7 @@ describe("TopStories perspective guardrails", () => {
       ],
     });
 
-    expect(screen.getByText("Perspective estimates")).toBeTruthy();
+    expect(screen.getByText("Compass estimates")).toBeTruthy();
     expect(
       screen.getByRole("button", { name: /back to top stories/i }),
     ).toBeTruthy();

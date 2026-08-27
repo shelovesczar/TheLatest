@@ -276,6 +276,50 @@
   color: #ffffff;
 }
 
+/* More links — mirrors the desktop Footer's links for mobile, where the
+   Footer itself is hidden in favor of the bottom dock nav. Desktop already
+   shows the real Footer below the page, so this block is mobile-only. */
+.news-more-links-section {
+  display: none;
+}
+
+.news-more-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem 1.25rem;
+  margin: 0.75rem 0 1.1rem;
+}
+
+.news-more-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: color 0.3s;
+}
+
+.news-more-link:hover {
+  color: var(--accent-color);
+}
+
+.news-more-support {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.news-more-support a {
+  color: var(--accent-color);
+}
+
+@media (max-width: 768px) {
+  .news-more-links-section {
+    display: block;
+  }
+}
+
 /* Footer */
 .news-footer {
   padding: 1.35rem var(--spacing-md) 0;

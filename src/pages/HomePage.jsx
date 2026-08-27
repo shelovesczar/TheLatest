@@ -782,7 +782,7 @@ function HomePage({ onBreakingNewsChange }) {
             setActiveStory={setActiveStory}
             showPerspectiveToggle={true}
             sideBySideClusters={storyClusters}
-            sideBySideTitle={hasActiveTopic ? `Multiple Perspectives on ${topic}` : "Top Stories - Side by Side"}
+            sideBySideTitle={hasActiveTopic ? `The Compass on ${topic}` : "Top Stories - Side by Side"}
             seeMoreLabel={hasActiveTopic ? `See all ${topic} stories →` : undefined}
           />
         </div>

@@ -33,7 +33,7 @@ The app is built to unify several layers of news consumption in one place:
 ### Trust and context
 
 - Source profiles with ownership, funding, perspective, factuality shorthand, and methodology notes.
-- Source-level truth score context on key surfaces.
+- Source-level trust score context on key surfaces (currently disabled via `TRUTH_SCORE_ENABLED` in `src/utils/sourceProfiles.js` — scoring logic is retained, UI display is hidden).
 - Perspective labeling using server-side classification with source-map fallback.
 - Typed story dossier sections and engagement measurement in the article reader.
 

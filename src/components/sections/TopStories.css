@@ -4,6 +4,10 @@
   gap: 1rem;
 }
 
+.section-hdr.top-stories-hdr {
+  padding: 1rem 2rem;
+}
+
 .top-stories-actions {
   display: flex;
   align-items: center;
@@ -15,13 +19,16 @@
 }
 
 .top-stories-toggle {
-  font-size: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  font-size: 0.78rem;
   font-weight: 700;
   color: var(--accent-color);
   background: none;
   border: 1.5px solid var(--accent-color);
-  border-radius: 20px;
-  padding: 0.28rem 0.85rem;
+  border-radius: 999px;
+  padding: 0.44rem 0.85rem;
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
@@ -198,6 +205,7 @@
   gap: 0.8rem;
   flex-wrap: wrap;
   margin-bottom: 1.2rem;
+  padding: 1rem 2rem;
 }
 
 .sbs-counter {

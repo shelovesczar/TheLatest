@@ -2,14 +2,17 @@
  * fetchArticle — Netlify Function
  *
  * Proxies a news article URL through the server to avoid CORS restrictions,
- * then extracts the main readable text content so the client can display it
- * in the on-site article reader without redirecting the user.
+ * then extracts a short excerpt (not the full article) so the client can
+ * show a snippet in the on-site reader alongside a prominent link back to
+ * the original source. We never reproduce the full article body: aggregation
+ * is only defensible as "credit the source, show a small snippet, link out
+ * for the rest" — not as a full-text mirror.
  *
  * Query params:
  *   ?url=<encoded article URL>
  *
  * Returns JSON:
- *   { title, byline, content, image, siteName, url, error? }
+ *   { title, byline, excerpt, isExcerpt, image, siteName, url, error? }
  */
 
 const https = require("https");
@@ -70,6 +73,34 @@ function stripTags(html) {
     .trim();
 }
 
+// Caps how much of a source article we'll ever show. This is deliberately a
+// "snippet" length (a couple of sentences), not enough to substitute for
+// reading the original — see the file header comment for why.
+const EXCERPT_MAX_CHARS = 420;
+
+function buildExcerpt(fullText = "", maxChars = EXCERPT_MAX_CHARS) {
+  const text = String(fullText || "").trim();
+  if (!text) return "";
+  if (text.length <= maxChars) return text;
+
+  // Prefer cutting at a sentence boundary near the limit so the snippet
+  // reads naturally instead of stopping mid-sentence.
+  const searchZone = text.slice(0, maxChars + 80);
+  const lastSentenceEnd = Math.max(
+    searchZone.lastIndexOf(". "),
+    searchZone.lastIndexOf("! "),
+    searchZone.lastIndexOf("? "),
+  );
+
+  if (lastSentenceEnd > maxChars * 0.4) {
+    return text.slice(0, lastSentenceEnd + 1).trim();
+  }
+
+  const lastSpace = text.slice(0, maxChars).lastIndexOf(" ");
+  const cut = lastSpace > 0 ? lastSpace : maxChars;
+  return `${text.slice(0, cut).trim()}…`;
+}
+
 function extractMainContent(html) {
   // Priority content containers used by major news sites:
   const selectors = [
@@ -86,12 +117,12 @@ function extractMainContent(html) {
     const m = html.match(re);
     if (m && m[1].length > 200) {
       const text = stripTags(m[1]);
-      if (text.length > 100) return text;
+      if (text.length > 100) return buildExcerpt(text);
     }
   }
 
-  // Fallback: strip everything and return what's left
-  return stripTags(html).slice(0, 3000);
+  // Fallback: strip everything and excerpt what's left
+  return buildExcerpt(stripTags(html).slice(0, 3000));
 }
 
 // ── HTTP fetch helper (no axios — keep Lambda bundle tiny) ────────────────────
@@ -201,7 +232,7 @@ exports.handler = async (event) => {
     const byline =
       extractMeta(html, "author") || extractMeta(html, "article:author");
     const siteName = extractMeta(html, "og:site_name");
-    const content = extractMainContent(html);
+    const excerpt = extractMainContent(html);
 
     return {
       statusCode: 200,
@@ -209,7 +240,8 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         title,
         byline,
-        content,
+        excerpt,
+        isExcerpt: true,
         image,
         siteName,
         url: articleUrl,

@@ -84,10 +84,15 @@ const buildCompactSummaryText = (
     .trim();
   if (!normalized) return "";
 
+  // Split on sentence-ending punctuation only when it's followed by
+  // whitespace and the start of a new sentence — a bare match on [.!?] would
+  // also break on decimal points (e.g. "$17.1 billion"), silently truncating
+  // everything after the decimal and losing real content.
   const sentences = normalized
-    .match(/[^.!?]+[.!?]+|[^.!?]+$/g)
-    ?.map((sentence) => sentence.trim())
-    .filter(Boolean) || [normalized];
+    .split(/(?<=[.!?])\s+(?=[A-Z0-9"'])/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  if (sentences.length === 0) sentences.push(normalized);
   const shortened = sentences.slice(0, maxSentences).join(" ");
 
   if (shortened.length <= maxChars) return shortened;
@@ -339,6 +344,8 @@ function AISummary({
     () =>
       buildCompactSummaryText(
         summaryData?.summary || description || "Loading AI summary...",
+        3,
+        600,
       ),
     [description, summaryData?.summary],
   );

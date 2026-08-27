@@ -117,6 +117,14 @@ export function buildRouteMetadata(locationLike = {}, options = {}) {
     title = `Terms of Use | ${SITE_NAME}`;
     description =
       "The rules governing access, account use, content handling, and acceptable behavior across The Latest.";
+  } else if (pathname === "/dmca") {
+    title = `DMCA / Copyright Policy | ${SITE_NAME}`;
+    description =
+      "How to file a DMCA takedown notice or counter-notice, and how The Latest handles third-party content.";
+  } else if (pathname === "/privatedemo") {
+    title = `${SITE_NAME}`;
+    description = DEFAULT_DESCRIPTION;
+    robots = "noindex,nofollow";
   } else if (pathname === "/about") {
     title = `About | ${SITE_NAME}`;
     description =

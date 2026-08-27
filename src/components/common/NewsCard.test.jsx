@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import NewsCard from "./NewsCard";
 
 describe("NewsCard trust signals", () => {
-  it("renders perspective and truth score badges for mapped sources", () => {
+  it("renders the perspective badge but not the truth score badge (disabled)", () => {
     render(
       <NewsCard
         title="Reuters says markets are repricing inflation bets"
@@ -16,6 +16,6 @@ describe("NewsCard trust signals", () => {
     );
 
     expect(screen.getByText("Center")).toBeTruthy();
-    expect(screen.getByText(/Truth score/i)).toBeTruthy();
+    expect(screen.queryByText(/Truth score/i)).toBeNull();
   });
 });

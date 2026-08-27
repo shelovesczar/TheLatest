@@ -104,7 +104,7 @@
   color: var(--text-secondary);
   line-height: var(--summary-line-height, 1.58);
   margin: 0;
-  max-width: 58ch;
+  max-width: 81ch;
   transition: line-height 0.18s ease;
 }
 

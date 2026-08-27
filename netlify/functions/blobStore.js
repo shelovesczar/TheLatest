@@ -16,6 +16,7 @@ const STORE_NAMES = {
   sessions: "app-sessions",
   clientErrors: "client-errors",
   passwordResets: "password-resets",
+  storyTakes: "story-takes",
 };
 
 let localEnvCache = null;

@@ -167,6 +167,10 @@ describe("Header route traversal regression", () => {
     const user = userEvent.setup();
     renderHeader("/");
 
+    // The search icon is collapsed by default on desktop/tablet — the first
+    // click opens it, the second click (once a query is entered) submits.
+    await user.click(screen.getByRole("button", { name: "Open search" }));
+
     const searchInput = screen.getByRole("searchbox", { name: "Search news" });
     await user.type(searchInput, "mobile tap search");
     await user.click(screen.getByRole("button", { name: "Search" }));

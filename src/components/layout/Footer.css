@@ -113,7 +113,6 @@
 
 @media (max-width: 768px) {
   .footer {
-    display: block;
-    padding-bottom: calc(var(--spacing-xl) + 4rem);
+    display: none;
   }
 }

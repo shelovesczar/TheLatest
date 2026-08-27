@@ -12,7 +12,7 @@ const path = require("path");
 
 const SUMMARY_TTL_MS = 60 * 60 * 1000;
 const STALE_TTL_MS = 24 * 60 * 60 * 1000;
-const MAX_SUMMARY_CHARACTERS = 700;
+const MAX_SUMMARY_CHARACTERS = 850;
 const inFlightSummaryRefreshes = new Map();
 
 function jsonHeaders() {
@@ -147,13 +147,22 @@ function extractAnthropicTextBlocks(payload) {
     .trim();
 }
 
+// Truncating at a raw character count can slice a token in half (e.g.
+// "$17.1 billion" -> "$17."), which reads as a factual error rather than an
+// intentional trim. Back up to the last whitespace boundary before cutting,
+// as long as that doesn't throw away most of the allowed length.
+function truncateAtWordBoundary(text = "", sliceLength = 0) {
+  const clipped = text.slice(0, sliceLength).trim();
+  const lastSpace = clipped.lastIndexOf(" ");
+  const safeClip =
+    lastSpace > sliceLength * 0.6 ? clipped.slice(0, lastSpace) : clipped;
+  return safeClip.replace(/[,:;-]+$/, "");
+}
+
 function truncateText(value = "", max = 220) {
   const text = cleanText(value);
   if (text.length <= max) return text;
-  return `${text
-    .slice(0, max)
-    .trim()
-    .replace(/[,:;-]+$/, "")}...`;
+  return `${truncateAtWordBoundary(text, max)}...`;
 }
 
 function capSummaryText(value = "", max = MAX_SUMMARY_CHARACTERS) {
@@ -161,10 +170,7 @@ function capSummaryText(value = "", max = MAX_SUMMARY_CHARACTERS) {
   if (text.length <= max) return text;
 
   const sliceLength = Math.max(0, max - 3);
-  return `${text
-    .slice(0, sliceLength)
-    .trim()
-    .replace(/[,:;-]+$/, "")}...`;
+  return `${truncateAtWordBoundary(text, sliceLength)}...`;
 }
 
 function normalizeSummaryPayload(payload = {}) {
@@ -300,7 +306,9 @@ function buildSummaryPrompt(topic = "", category = "", items = []) {
     'Return JSON only in the form {"headline":"...","summary":"...","suggestedTopics":["...","..."]}.',
     "Constraints:",
     "- headline: under 90 characters",
-    "- summary: 2 to 4 sentences, maximum 700 characters total",
+    "- summary: 3 to 5 sentences, maximum 850 characters total",
+    "- when a story involves a settlement, lawsuit, resignation, firing, policy reversal, or other major decision, state the reason or allegation driving it, not just the outcome",
+    "- state figures exactly as given in the coverage notes (full dollar amounts, counts, dates) — never shorten or drop part of a number",
     "- suggestedTopics: 5 to 7 short topic labels, each 1 to 3 words, ideal for a homepage topic rail",
     "- neutral, factual tone",
     "- no markdown, no bullets, no preamble",

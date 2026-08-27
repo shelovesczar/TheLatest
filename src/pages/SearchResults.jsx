@@ -14,6 +14,7 @@ import { getGeneratedContentLabel } from "../utils/contentLabels";
 import {
   getSourceProfile,
   getTrustDescriptorForProfile,
+  TRUTH_SCORE_ENABLED,
 } from "../utils/sourceProfiles";
 import DateTicker from "../components/layout/DateTicker";
 import TopStories from "../components/sections/TopStories";
@@ -119,7 +120,7 @@ const SEARCH_STARTERS = [
 const PERSPECTIVE_METHOD_LABELS = {
   'ai-headline': 'AI estimate from headline and summary framing',
   'source-map': 'Source map estimate from outlet profile',
-  unclassified: 'Perspective not classified with enough confidence'
+  unclassified: 'Compass reading not classified with enough confidence'
 }
 
 const resolveSearchCardPerspective = (article = {}, fallbackProfile = null) => {
@@ -1441,12 +1442,14 @@ function SearchResults() {
                                     {perspective.label}
                                   </span>
                                 ) : null}
-                                <span
-                                  className={`result-trust-pill result-trust-pill--${trust.band}`}
-                                  title={trust.rationale}
-                                >
-                                  {trust.shortLabel}
-                                </span>
+                                {TRUTH_SCORE_ENABLED && (
+                                  <span
+                                    className={`result-trust-pill result-trust-pill--${trust.band}`}
+                                    title={trust.rationale}
+                                  >
+                                    {trust.shortLabel}
+                                  </span>
+                                )}
                               </div>
                               <h3 className="result-title">{article.title}</h3>
                               <p className="result-description">
@@ -1712,12 +1715,14 @@ function SearchResults() {
                                             {perspective.label}
                                           </span>
                                         ) : null}
-                                        <span
-                                          className={`result-trust-pill result-trust-pill--${trust.band}`}
-                                          title={trust.rationale}
-                                        >
-                                          {trust.shortLabel}
-                                        </span>
+                                        {TRUTH_SCORE_ENABLED && (
+                                          <span
+                                            className={`result-trust-pill result-trust-pill--${trust.band}`}
+                                            title={trust.rationale}
+                                          >
+                                            {trust.shortLabel}
+                                          </span>
+                                        )}
                                       </div>
                                       <h3 className="result-title">
                                         {article.title}
@@ -1809,12 +1814,14 @@ function SearchResults() {
                                     {perspective.label}
                                   </span>
                                 ) : null}
-                                <span
-                                  className={`result-trust-pill result-trust-pill--${trust.band}`}
-                                  title={trust.rationale}
-                                >
-                                  {trust.shortLabel}
-                                </span>
+                                {TRUTH_SCORE_ENABLED && (
+                                  <span
+                                    className={`result-trust-pill result-trust-pill--${trust.band}`}
+                                    title={trust.rationale}
+                                  >
+                                    {trust.shortLabel}
+                                  </span>
+                                )}
                               </div>
                               <h3 className="result-title">{article.title}</h3>
                               <p className="result-description">

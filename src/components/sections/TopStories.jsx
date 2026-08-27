@@ -2,7 +2,9 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChevronLeft,
   faChevronRight,
+  faXmark,
 } from "@fortawesome/free-solid-svg-icons";
+import { faCompass } from "@fortawesome/free-regular-svg-icons";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getImageProps } from "../../utils/imageUtils";
@@ -13,6 +15,7 @@ import {
   getSourceProfile,
   getSourceProfileHref,
   getTrustDescriptorForProfile,
+  TRUTH_SCORE_ENABLED,
 } from "../../utils/sourceProfiles";
 import { deriveMediaOutlet } from "../../utils/sourceUtils";
 import { formatPublishedDate } from "../../utils/dateUtils";
@@ -533,9 +536,17 @@ function TopStories({
               className="top-stories-toggle"
               onClick={() => setShowPerspectivesRequested((value) => !value)}
             >
-              {showPerspectives
-                ? "✕ Back to Top Stories"
-                : "⇄ See Multiple Perspectives"}
+              {showPerspectives ? (
+                <>
+                  <FontAwesomeIcon icon={faXmark} />
+                  <span>Back to Top Stories</span>
+                </>
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faCompass} />
+                  <span>See the Compass</span>
+                </>
+              )}
             </button>
           </div>
         )}
@@ -595,12 +606,14 @@ function TopStories({
                                     {storyPerspective.label}
                                   </span>
                                 ) : null}
-                                <span
-                                  className={`card-trust-pill card-trust-pill--${trust.band}`}
-                                  title={trust.rationale}
-                                >
-                                  {trust.shortLabel}
-                                </span>
+                                {TRUTH_SCORE_ENABLED && (
+                                  <span
+                                    className={`card-trust-pill card-trust-pill--${trust.band}`}
+                                    title={trust.rationale}
+                                  >
+                                    {trust.shortLabel}
+                                  </span>
+                                )}
                                 <Link
                                   className="card-source-profile-link"
                                   to={getSourceProfileHref(story)}
@@ -724,7 +737,7 @@ function TopStories({
                     </span>
                     <span className="sbs-cluster-badge sbs-cluster-badge-mode">
                       {perspectiveFilter === "all"
-                        ? "Perspective estimates"
+                        ? "Compass estimates"
                         : activePerspectiveItem?.perspective.label ||
                           "Focused view"}
                     </span>
@@ -850,12 +863,14 @@ function TopStories({
                                     >
                                       {item.perspective.label}
                                     </span>
-                                    <span
-                                      className={`card-trust-pill card-trust-pill--${trust.band}`}
-                                      title={trust.rationale}
-                                    >
-                                      {trust.shortLabel}
-                                    </span>
+                                    {TRUTH_SCORE_ENABLED && (
+                                      <span
+                                        className={`card-trust-pill card-trust-pill--${trust.band}`}
+                                        title={trust.rationale}
+                                      >
+                                        {trust.shortLabel}
+                                      </span>
+                                    )}
                                     <span className="sbs-persp-meta">
                                       {getPerspectiveMethodLabel(
                                         item.perspective,

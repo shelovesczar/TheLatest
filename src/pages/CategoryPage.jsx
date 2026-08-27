@@ -245,7 +245,7 @@ function CategoryPage({ category }) {
           fetchVideos(rssCategory),
           fetchTrendingContent(rssCategory),
           isPoliticalCategory
-            ? fetchStoryClusters({ type: 'news', category: 'news', search: config.title, limit: 8 })
+            ? fetchStoryClusters({ type: 'news', category: 'politics', limit: 8 })
             : Promise.resolve([])
         ])
 

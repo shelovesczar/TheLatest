@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSun, faMoon, faSearch } from '@fortawesome/free-solid-svg-icons'
+import { faSun, faMoon, faSearch, faUser } from '@fortawesome/free-solid-svg-icons'
+import { faCompass } from '@fortawesome/free-regular-svg-icons'
 import { useState, useRef, useEffect, memo } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useSearch } from '../../context/SearchContext'
@@ -8,16 +9,6 @@ import { NAV_ITEMS } from '../../utils/navigationConfig'
 import DateTicker from './DateTicker'
 import LoginModal from './LoginModal'
 import './Header.css'
-
-function ProfileGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="header-profile-glyph">
-      <circle cx="12" cy="8" r="3.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M5 19c1.5-3.4 4.1-5.1 7-5.1S17.5 15.6 19 19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.8" />
-    </svg>
-  )
-}
 
 function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
   const navigate = useNavigate()
@@ -29,11 +20,14 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
   const profileMenuRef = useRef(null)
   const navItemRefs = useRef({})
   const navRef = useRef(null)
+  const searchFormRef = useRef(null)
+  const searchInputRef = useRef(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [openDropdown, setOpenDropdown] = useState(null)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [flyoutPosition, setFlyoutPosition] = useState({ left: 0 })
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
   const useUnifiedHeader = true
 
   const emitSearchSubmit = (query) => {
@@ -52,6 +46,10 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
 
   useEffect(() => {
     const handlePointerDown = (event) => {
+      if (searchFormRef.current && !searchFormRef.current.contains(event.target)) {
+        setIsSearchOpen(false)
+      }
+
       if (!navRef.current) return
 
       const clickedInsideNav = navRef.current.contains(event.target)
@@ -78,6 +76,7 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
       if (event.key === 'Escape') {
         setOpenDropdown(null)
         setProfileMenuOpen(false)
+        setIsSearchOpen(false)
       }
     }
 
@@ -89,6 +88,12 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
       document.removeEventListener('keydown', handleEscape)
     }
   }, [])
+
+  useEffect(() => {
+    if (isSearchOpen) {
+      searchInputRef.current?.focus()
+    }
+  }, [isSearchOpen])
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -159,6 +164,7 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
     setOpenDropdown(null)
     setProfileMenuOpen(false)
     setMenuOpen(false)
+    setIsSearchOpen(false)
   }
 
   const handleSearchKeyDown = (event) => {
@@ -167,6 +173,19 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
     }
 
     event.currentTarget.form?.requestSubmit()
+  }
+
+  const handleSearchIconClick = (event) => {
+    if (!isSearchOpen) {
+      event.preventDefault()
+      setIsSearchOpen(true)
+      return
+    }
+
+    if (!searchQuery.trim()) {
+      event.preventDefault()
+      setIsSearchOpen(false)
+    }
   }
 
   const handleNavClick = (path) => {
@@ -297,8 +316,23 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
               </div>
 
               <div className="header-utilities">
-                <form className={`header-search-form ${useUnifiedHeader ? 'header-search-form--landing' : ''}`} onSubmit={handleSearch}>
+                <Link
+                  to="/compass"
+                  className={`header-compass-link ${useUnifiedHeader ? 'header-compass-link--landing' : ''} ${location.pathname === '/compass' ? 'active' : ''}`}
+                  onClick={() => handleNavClick('/compass')}
+                  aria-label="The Compass — compare coverage across the political spectrum"
+                >
+                  <FontAwesomeIcon icon={faCompass} />
+                  <span className="header-compass-label">Compass</span>
+                </Link>
+
+                <form
+                  ref={searchFormRef}
+                  className={`header-search-form ${useUnifiedHeader ? 'header-search-form--landing' : ''} ${isSearchOpen ? 'header-search-form--open' : 'header-search-form--collapsed'}`}
+                  onSubmit={handleSearch}
+                >
                   <input
+                    ref={searchInputRef}
                     type="search"
                     className={`header-search-input ${useUnifiedHeader ? 'header-search-input--landing' : ''}`}
                     placeholder="Search"
@@ -307,8 +341,15 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
                     onKeyDown={handleSearchKeyDown}
                     aria-label="Search news"
                     enterKeyHint="search"
+                    tabIndex={isSearchOpen ? 0 : -1}
                   />
-                  <button type="submit" className={`header-search-btn ${useUnifiedHeader ? 'header-search-btn--landing' : ''}`} aria-label="Search">
+                  <button
+                    type="submit"
+                    className={`header-search-btn ${useUnifiedHeader ? 'header-search-btn--landing' : ''}`}
+                    aria-label={isSearchOpen ? 'Search' : 'Open search'}
+                    aria-expanded={isSearchOpen}
+                    onClick={handleSearchIconClick}
+                  >
                     <FontAwesomeIcon icon={faSearch} />
                   </button>
                 </form>
@@ -349,7 +390,7 @@ function Header({ darkMode, toggleTheme, setMenuOpen, breakingNews = [] }) {
                     aria-haspopup={isAuthenticated ? 'menu' : undefined}
                     aria-expanded={isAuthenticated ? profileMenuOpen : undefined}
                   >
-                    <ProfileGlyph />
+                    <FontAwesomeIcon icon={faUser} className="header-profile-glyph" />
                   </button>
 
                   {isAuthenticated && (

@@ -1,5 +1,5 @@
 THE LATEST PROJECT WORK SUMMARY
-Updated: 2026-08-19
+Updated: 2026-08-26
 
 PROJECT OVERVIEW
 The Latest has been built into a multi-surface news aggregation product focused on live news, opinions, podcasts, videos, social signals, source trust context, and side-by-side perspective comparison. The project has evolved from a basic RSS-driven frontend into a broader editorial product with source governance, server-side enrichment, search UX improvements, analytics, and deployment-readiness tooling.
@@ -373,3 +373,137 @@ LATEST HSTS/RECOVERY OUTCOME
 - Users who forget their password now have a real, rate-limited, enumeration-safe way back into their account instead of being locked out permanently.
 - The reset flow works end-to-end today in every environment (logs the link instead of emailing it until RESEND_API_KEY is set), so there's no hard blocker to shipping it now and wiring up real email delivery whenever a Resend account is set up.
 - Confirmed there is no separate database in this project: Netlify Blobs (a key-value blob store) is already the entire user/session/reset-token "database" -- see authStore.js and blobStore.js. This is adequate at the project's current scale (simple get-by-key lookups, no relational queries needed) and required no new infrastructure decision for this feature.
+
+CONTENT-LICENSING / ATTRIBUTION HARDENING (08/19/2026)
+Jeff Hall (boss) reviewed the aggregation/attribution posture and gave explicit direction: always credit the original source, show only a small snippet (not the full story), link to the original immediately after the snippet, stand up an unlisted /privatedemo page for backer pitches before going fully public, and add DMCA/takedown language. This pass implements all four asks directly.
+
+1. STOPPED FULL-TEXT ARTICLE SCRAPING -- THE MOST URGENT FIX
+- netlify/functions/fetchArticle.js previously scraped and returned the FULL body text of third-party articles (via regex-matched <article>/<main>/articleBody containers), which ArticleReader.jsx then rendered natively on our own /story/... pages with our own ads next to it -- full-text mirroring of other outlets' reporting, not aggregation. This was the single biggest legal exposure identified in this project.
+- Added a buildExcerpt() helper (sentence-boundary-aware, ~420 char cap) and changed the response shape from `content` (full text) to `excerpt` + `isExcerpt: true`. We never return more than a couple of sentences of third-party material now, regardless of source article length.
+- Restructured ArticleReader.jsx: for real (non-generated) articles, the flow is now short excerpt -> an explicit "this is a short excerpt" disclaimer -> a prominent "Read the full story at [Source] ->" button, immediately after the excerpt. Removed the old "Originally published by" line that was buried at the very bottom of the page below five other sections -- credit now happens where a reader actually sees it. Reading-time estimates ("X min read") are now only shown for our own AI-generated content, since we no longer have a real word count for third-party articles we're intentionally not copying.
+- Generated articles (our own original AI briefings) are unaffected -- they still render in full, since that's our own content, not someone else's.
+- Verified live: opened a real NPR article through the actual reader in a headless browser; excerpt rendered at 218 characters cut cleanly at a sentence boundary, "Read the full story at NPR ->" button rendered immediately after, zero console errors.
+
+2. DMCA / TAKEDOWN POLICY PAGE
+- Added src/pages/DMCAPage.jsx (new /dmca route) with standard notice-and-counter-notice elements consistent with 17 U.S.C. Section 512(c)(3): identification of the work, the infringing URL, contact info, good-faith and perjury statements, signature -- plus a counter-notification section and a repeat-infringer policy statement.
+- Linked from the footer alongside the other legal pages, and cross-referenced from the Terms page's Intellectual Property section.
+- Added to src/utils/siteRoutes.js (INDEXABLE_STATIC_ROUTES) so it's properly included in the sitemap and gets its own prerendered shell like the other legal pages, and added DMCA_EMAIL to siteConfig.js.
+- Flagged directly on the page itself: the actual DMCA designated-agent registration with the U.S. Copyright Office is a real filing that still needs to happen -- the policy page is built, but registering an agent is a business/legal action item, not something that can be done in code.
+
+3. UNLISTED /privatedemo ROUTE FOR BACKER PITCHES
+- Added a /privatedemo route in App.jsx that aliases the real HomePage -- the actual live product, not a mockup -- so Jeff has a stable link to share with potential backers before a public launch.
+- Deliberately NOT added to INDEXABLE_STATIC_ROUTES, so it has no sitemap entry and no prerendered shell.
+- Added a /privatedemo case to buildRouteMetadata() in seoMetadata.js with robots: "noindex,nofollow", and added "Disallow: /privatedemo" to robots.txt.
+- Found and fixed a trap along the way: scripts/generate-sitemap.mjs regenerates public/robots.txt (and sitemap.xml) from a hardcoded array on every `npm run build`, silently overwriting any direct edit to the static robots.txt file. Fixed the actual source array in generate-sitemap.mjs instead, then rebuilt and confirmed /privatedemo appears in robots.txt's disallow list and nowhere in sitemap.xml.
+- Verified live: the noindex,nofollow robots meta tag is actually present on the rendered /privatedemo page.
+
+LATEST CONTENT-LICENSING VALIDATION COMPLETED
+- npm run lint
+- npm test (61 tests passing)
+- npm run build (244 route shells prerendered, up one for the new /dmca page; confirmed /privatedemo has no sitemap entry)
+- netlify dev + headless Playwright: opened a real article end-to-end and confirmed excerpt length/cutoff and the "Read the full story at [Source]" CTA; confirmed /privatedemo's noindex meta tag; screenshotted the rendered /dmca page
+
+LATEST CONTENT-LICENSING OUTCOME
+- The reader no longer reproduces full third-party articles anywhere in the product -- aggregation now matches the Google-News-style model Jeff described (credit, snippet, link out) rather than full mirroring.
+- A real DMCA policy now exists and is discoverable from the footer; the one remaining step is registering an actual designated agent with the Copyright Office, which is Jeff's/legal's action item.
+- Jeff has a private, non-indexed, non-sitemapped link to demo the real product to backers ahead of a public launch.
+- Next planned work: extend the existing Story Dossier (cross-outlet coverage retrieval) into an original per-story synthesis feature ("The Latest's Take") that cites multiple outlets' framing of the same story -- a stronger transformative-use position than rewriting any single article, and a natural home for the value-add layer the trust/perspective differentiation is already built around.
+
+"THE LATEST'S TAKE" -- ORIGINAL CROSS-OUTLET SYNTHESIS FEATURE (08/19/2026)
+Followed through on the user's spitballed idea from the content-licensing discussion: instead of an AI rewrite of a single article (still legally risky if it tracks the original too closely), extend the existing Story Dossier's cross-outlet coverage retrieval into a genuine multi-source synthesis -- comparing how different outlets frame the same story, which is a materially stronger transformative-use position than paraphrasing any one source.
+
+1. BACKEND: netlify/functions/storyTake.js (new)
+- Reuses storyDossier.js's existing cross-outlet retrieval directly (calls storyDossier.handler(...) internally, the same way storyDossier itself calls rss-aggregator/clusters/fetchSocialFeeds) rather than re-implementing feed/cluster fetching -- no duplicated retrieval logic.
+- Hard legal-safety guardrail: requires at least 2 distinct outlet names in the combined coverage/cluster data before it will even attempt generation. Below that threshold it returns `{ take: null, reason: "insufficient-cross-outlet-coverage" }` and the client simply shows nothing -- there is no path where this feature synthesizes from a single source.
+- The prompt sent to Claude explicitly frames the task as multi-source comparison, not rewriting: "This must be your own original analysis. Do not closely paraphrase any single source's sentences, structure, or distinctive phrasing -- synthesize and compare across the outlets below instead," and requires the model to name 2-3 of the specific outlets whose coverage informed the take.
+- Follows the exact conventions already established in generatedContent.js/sharedSummary.js: same getConfigValue/.env-fallback pattern for ANTHROPIC_API_KEY, same extractAnthropicTextBlocks parsing, same Netlify Blobs caching approach (STORE_NAMES.storyTakes, 45-minute freshness TTL) keyed by the dossier's own normalized query+category so repeat views of the same underlying story reuse one cached synthesis instead of re-billing Claude per click, and the same enforceRateLimit gating (20 requests/min/IP).
+- If ANTHROPIC_API_KEY isn't configured, or Claude's response doesn't parse, it degrades to `{ take: null }` rather than erroring -- the rest of the page is completely unaffected either way.
+
+2. FRONTEND: src/pages/ArticleReader.jsx / src/services/storyTakeService.js (new)
+- New "The Latest's Take" card renders directly after the excerpt + "Read the full story" CTA and before the Story Dossier's related-coverage grid -- positioned as the value-add layer between "here's a snippet of the story" and "here's where else to read about it."
+- Visually distinct (bordered, tinted card) from the plain dossier grid below it, with an explicit "Based on coverage from [outlets]" attribution line under the synthesis text.
+- Fetches in parallel with the dossier (not sequentially after it) via its own effect keyed on the article; gated so it never runs for our own AI-generated articles (they don't need a synthesis of themselves).
+- Fixed a real bug found by the new eslint-plugin-react-hooks `set-state-in-effect` rule during this work: an early-return branch was calling setState synchronously as a direct statement in the effect body. Restructured to wrap the fetch in a nested async function (matching the exact shape the existing, lint-clean Dossier-loading effect already uses) and to gate stale-state rendering by comparing the request's article identity (articleKey) against the current one, instead of resetting state synchronously on every unrelated re-render.
+
+3. VERIFICATION
+- Directly verified the full Claude generation path end-to-end (bypassing the live feeds' search-matching quality, which proved conservative in this dev environment) by feeding storyTake.js realistic 3-outlet coverage data via the same monkey-patch-before-require technique proven in the earlier rate-limit/auth test work. Result: a genuinely comparative synthesis that correctly identified each outlet's distinct framing (NYT's "symbolic threshold," NPR's "concrete economic consequences," The Guardian's "political gridlock" angle) and cited all three by name -- not a reworded copy of any one of them.
+- Verified the real guardrail path live against an actual clicked article: the live dossier only found one confident outlet match for that story, and the feature correctly declined to generate anything rather than force a thin, single-source "synthesis."
+- Verified the actual React rendering path (not just the API) via Playwright network-interception with realistic mocked data: confirmed the card renders correctly, found and fixed a real dark-mode contrast bug (`.ar-take-body` was using an undefined `--text-color` custom property instead of the same hardcoded light-on-dark value the rest of the article body already uses), re-verified with a clean, legible screenshot after the fix.
+- Cleaned up a fabricated test cache entry from the live story-takes Blobs store afterward (kept the one real entry produced by an actual live click-through, since that one accurately reflects real system behavior).
+- npm run lint / npm test (61 passing) / npm run build all clean after every change in this pass.
+
+LATEST "THE LATEST'S TAKE" OUTCOME
+- The trust/perspective differentiation now has a genuine value-add content layer to back it up: original, clearly-labeled, multi-source comparison -- not just links to other people's coverage.
+- The legal posture here is deliberately more conservative than a single-article rewrite would be: no synthesis is ever generated from fewer than two distinct outlets, and the prompt itself forbids paraphrasing any one source.
+- Runs on the same ANTHROPIC_API_KEY already configured and verified live in Netlify -- no new secret or third-party account needed to turn this on.
+
+TRUTH-SCORE RETIREMENT, "THE COMPASS" REBUILD, AND SOURCE-REGISTRY EXPANSION (08/26/2026)
+A full-day session driven by a mix of Jeff Hall feedback and direct user direction, covering: retiring the "truth score" framing, fixing a real AI-summary truncation bug, rebranding "Perspective" to "The Compass" in user-facing copy, expanding the curated source registry from 84 to 95 outlets, reworking mobile/header navigation, and fixing two real Compass data-accuracy bugs. Times below are approximate (drawn from actual tool/test-run timestamps during the session), all on 2026-08-26.
+
+1. TRUTH SCORE FEATURE RETIRED (~1:15-1:40 PM)
+- Jeff Hall flagged that "truth score" framing is legally/reputationally risky and too subjective to defend ("things that seem true today can turn out to be false later").
+- Added a `TRUTH_SCORE_ENABLED = false` flag in src/utils/sourceProfiles.js. Scoring logic (factuality label, ownership, perspective inputs) was deliberately left intact -- only display was gated -- so it can be re-enabled with a one-line change later.
+- Gated all ~14 render sites behind the flag: ArticleReader.jsx, SourceProfilePage.jsx (found and fixed a *second*, previously unguarded "Truth score: X/100" line in the Trust Snapshot section that the first pass had missed), NewsCard.jsx, the four All*Page.jsx list pages, and TopStories.jsx.
+- Updated the one test asserting the badge rendered (NewsCard.test.jsx) to assert it's absent instead; updated README.md and WEBSITE_FEATURES_LIST.txt to document the flag and how to reverse it.
+
+2. AI DAILY BRIEFING TRUNCATION BUG FIX (~1:40-2:00 PM)
+- Jeff reported the homepage AI briefing rendering broken text: "Meta agreed to pay up to $17. 1 billion" (stray space) cutting off mid-sentence with no ellipsis.
+- Root cause: the sentence-splitting regex in AISummary.jsx's buildCompactSummaryText treated any bare `.`/`!`/`?` as a sentence end, so it split "$17.1 billion" into "$17." + "1 billion" and, separately, split off part of "U.S." as its own fragment -- then silently dropped whatever fell past the 2-sentence cap. Reproduced the exact reported artifact with the old regex to confirm the diagnosis before fixing it.
+- Fixed the regex to require whitespace + a capital letter/digit after the punctuation before treating it as a real sentence boundary; raised the display cap from 2 sentences/460 characters to 3/600 so there's room for the extra context.
+- The backend (netlify/functions/sharedSummary.js) had the same class of bug independently, in its own character-count truncation with no word-boundary safety -- fixed truncateText/capSummaryText to back up to the last space instead of cutting mid-word, and updated the Claude prompt to explicitly require stating the reason behind settlements/lawsuits/resignations (not just the outcome) and to never shorten a figure. Raised the backend budget from 700 to 850 characters / 2-4 to 3-5 sentences to match.
+
+3. "PERSPECTIVE" RENAMED TO "THE COMPASS" IN USER-FACING COPY (~2:00-2:45 PM)
+- Verified (rather than assumed) that both "side by side" and "the compass" features actually exist and function, using a live headless-browser pass -- then, per direction, renamed the public-facing "Perspective" label to "Compass" everywhere a reader sees it, while deliberately leaving internal code untouched (perspectiveKey/perspectiveLabel data fields, CSS class names, the perspective.js function name) since renaming those was pure risk with no user-facing benefit.
+- Updated ~8 literal strings: the "See Multiple Perspectives" toggle and "Perspective estimates" badge in TopStories.jsx, the side-by-side title in HomePage.jsx, "Perspective methodology" in ArticleReader.jsx, "Perspective label" in SourceProfilePage.jsx, the methodology copy in sourceProfiles.js, and the "Perspective not classified..." string duplicated across NewsCard.jsx and the four All*Page.jsx files.
+- Deliberately left "Search For Perspective" in SearchResults.jsx untouched -- confirmed it's an unrelated search-tip title about opinion pieces, not the compass feature, so renaming it would have mislabeled a different feature.
+- Verified live via headless browser before and after (toggle text, badge text, zero console errors).
+
+4. SOURCE REGISTRY EXPANSION -- 84 TO 95 CURATED SOURCES (~2:45-4:00 PM)
+- Added MS NOW after discovering mid-task that MSNBC officially rebranded in November 2025 and spun off from NBCUniversal into a new public company, Versant Media Group, in January 2026 -- the registry now reflects the current name/ownership, with "msnbc" kept as a matching alias.
+- Researched and added, each with a verified live RSS feed (independently re-curl'd, not just trusted from research-agent output), real ownership facts, and multi-tracker (AllSides / Ad Fontes Media / Media Bias/Fact Check) bias-and-reliability calibration against existing registry precedent:
+  - Newsmax -- Right-Center, but "Low factuality" (worse than Fox), reflecting a $67M Dominion + ~$40M Smartmatic defamation-settlement record and its own feed's flaky reachability (kept, but marked low-priority).
+  - PBS NewsHour -- Left-Center, after catching and correcting an earlier mistaken claim (made mid-research) that NPR was rated "Center" -- NPR is actually Left-Center, so PBS was matched to that real precedent instead.
+  - Axios, HuffPost, Semafor -- Center / Left-Center per tracker consensus, following the same "plain established label over inventing a new nuanced one" rule applied consistently across this batch.
+  - The Daily Wire -- pure "Right" (all three trackers agree, no moderating "-Center" rating), matching National Review's tier rather than Fox's.
+  - Mother Jones -- the registry's first pure "Left" entry, deliberately mirroring National Review on the right after confirming 2 of 3 trackers support it.
+  - Time, Newsweek (flagged explicitly as a genuinely disputed/mixed case -- trackers disagree and it has a documented correction history, not a clean "mainstream = safe" pick), Yahoo News, and Chicago Tribune (added for classification purposes only -- every RSS feed path tested returns HTTP 403, so no live feed is wired up for it yet).
+- Registry grew from 84 to 95 sources; all new RSS feed URLs were independently verified live via direct curl before being added to netlify/functions/rss-aggregator-impl.cjs, separate from whatever a research pass had already claimed.
+
+5. MOBILE FOOTER HIDDEN; LINKS MOVED TO THE SECTIONS PAGE (~4:00-4:20 PM)
+- Hid the desktop Footer below 768px (Footer.css) -- the same breakpoint the bottom-dock mobile nav already uses -- and added an equivalent "About & site info" links block to NewsPage.jsx (the page the bottom dock's existing "Sections" tab already points to), visible only on mobile so desktop is unaffected.
+
+6. DEDICATED /compass PAGE AND PERMANENT HEADER NAV ENTRY (~4:20-5:00 PM)
+- Investigated real-world Compass discoverability rather than assuming: found the toggle only ever appears on the homepage and (once fixed in item 9 below) the Politics category page, contingent on live cluster data existing that day, with zero mentions anywhere in the header nav, About page, or Editorial Standards page.
+- Built a new standalone src/pages/CompassPage.jsx at /compass that always opens directly into the comparison view, fed by the same general-news cluster query the homepage already uses -- chosen over opening the toggle on every category page specifically to avoid adding new RSS load to pages that don't currently fetch cluster data.
+- Added a persistent "Compass" icon+label pill to the header's utilities row (next to search/theme/profile) instead of as an 8th item in the category nav strip, after measuring live that the nav strip already overflows into horizontal scroll below ~1180px width and confirming the search bar's own width is completely unaffected either way (it has protected, non-shared width).
+- Restyled the on-page "See the Compass" / "Back to Top Stories" toggle button in TopStories.jsx to match the new header pill's shape, padding, and icon treatment.
+
+7. HEADER ICON AND SEARCH-BAR OVERHAUL (~5:00-5:45 PM)
+- Swapped the header's hand-drawn profile SVG for FontAwesome's solid "user" icon at the exact same 28px-in-34px footprint; swapped the Compass icon to the regular/outline style (adding the previously-uninstalled @fortawesome/free-regular-svg-icons package); confirmed the moon and magnifying-glass icons already matched the requested reference styles with no change needed.
+- Made all four header utility icons (Compass, search, theme toggle, profile) render at an explicit, identical 17px font-size, replacing a mix of hardcoded pixel boxes and inherited browser defaults that had made them visibly different sizes.
+- Rebuilt the header search bar to collapse to a 40x40 icon button by default on desktop/tablet, expanding on click (auto-focused) and collapsing again on outside-click, Escape, or after a search submits. This is what actually solved the nav-overflow problem in practice: verified live that all 7 category nav items now fit with zero clipping at 1300px width, where "Lifestyle" used to get cut off before. Left mobile's always-expanded search bar completely untouched, since there's no nav-space pressure to solve there.
+
+8. LAYOUT/SPACING FIXES ON THE COMPASS AND CATEGORY-PAGE UI (~5:45-6:05 PM)
+- Added padding to the Compass page's title row and Filter row (TopStories.css).
+- Found and fixed the real cause of PageBackBar's grey background leaving white gaps on both edges on every category/topic/search page: the shared `.main-content` wrapper's own horizontal padding was being applied to the bar itself. Fixed with a matching negative margin so the background bleeds full-width while the bar's inner content (Back button, breadcrumb, count) stays inset exactly where it was.
+
+9. COMPASS DATA-ACCURACY FIXES (~6:05-6:20 PM)
+- Verified with live API calls (not assumptions) whether Compass actually works on the News and Politics category pages, and whether there's enough real source coverage to produce genuine comparisons.
+- Found and fixed a real bug: the Politics category page's cluster fetch (CategoryPage.jsx) was searching the literal text "Politics" against article titles/descriptions -- confirmed via direct API call this returns 0 stories, since political articles rarely contain the word "politics" itself. Fixed to filter by the actual `politics` RSS category instead, confirmed live this now returns 129 stories and clusters with up to 7 sources. The News/Top Stories category still intentionally has no Compass toggle at all (an earlier, deliberate scope decision to avoid extra RSS load) -- confirmed its underlying general-news query works just as well if that decision is ever revisited.
+- Found a second, more significant bug: netlify/functions/perspective.js (which labels each Compass source Left/Center/Right) ran its own tiny ~24-outlet hardcoded map plus an AI classifier, completely disconnected from the 95-source sourceProfiles.js registry built earlier this session -- and trusted an uncertain AI guess over a confident hardcoded match whenever both were available, so well-known, already-correctly-classified outlets (New York Times, The Hill) were showing "Unclassified" in the live Compass view.
+- Fixed by having perspective.js dynamically import sourceProfiles.js (the same proven pattern already used in rss-aggregator-impl.cjs) and check the full registry first; AI classification and the small legacy map now only run for outlets genuinely absent from the registry. Verified directly: New York Times, Newsmax, The Hill, Mother Jones, and MS NOW (matched via its old "MSNBC" alias) all now resolve instantly and correctly at zero AI cost; a made-up source name still correctly falls through to AI. Re-verified against the live Politics page's real cluster data afterward.
+- Flagged, but did not fix in this pass, a smaller separate issue found while verifying: a handful of politics-category feed items carry auto-derived, unspaced source names ("Thehill", "Motherjones") that don't match the registry's spaced aliases -- noted as a follow-up, not blocking.
+
+LATEST COMPASS/SOURCE-REGISTRY SESSION VALIDATION COMPLETED
+- npm run lint (clean after every change in this session)
+- npm test / npx vitest run -- 61 tests passing throughout, including one test updated for the new two-step collapsible-search interaction and two updated for the "Compass" copy rename
+- Live netlify dev + headless Playwright verification after nearly every change: truth-score badges absent, AI summary text no longer garbled, Compass toggle/labels/icons rendering correctly at desktop/tablet/mobile widths, header nav fitting without clipping at 1300px, PageBackBar spanning full width, Politics-page clusters populated with correct Left/Center/Right labels
+- Independent direct-curl verification of every new RSS feed URL, separate from research-agent claims
+- Direct Node-level testing of netlify/functions/perspective.js's fixed classification logic against known and unknown source names
+
+LATEST COMPASS/SOURCE-REGISTRY SESSION OUTCOME
+- "Truth score" is fully retired from the UI (logic preserved for a future decision) without losing any of the underlying trust-scoring work.
+- The AI daily briefing no longer garbles numbers or cuts off mid-sentence, and its prompt now explicitly asks for the "why" behind major stories.
+- "The Compass" is now a real, permanently-discoverable feature (persistent header nav entry, dedicated /compass page) instead of something that only sometimes appeared on the homepage -- and its Left/Center/Right labels are now backed by the same 95-source curated registry used everywhere else on the site, instead of a disconnected, stale, AI-second-guessed 24-outlet list.
+- The Politics category page's comparison view went from completely broken (0 clusters) to fully working with correctly-labeled sources, found and fixed via direct verification rather than assumption.
+- One known, smaller follow-up remains open: a handful of auto-derived source names in the politics-category feed pipeline don't match registry aliases due to missing spaces (e.g. "Thehill").

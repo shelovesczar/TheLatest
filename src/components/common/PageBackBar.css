@@ -6,6 +6,10 @@
   border-bottom: 1px solid rgba(40, 63, 97, 0.08);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  /* Bleed past the parent's (.main-content) horizontal padding so the
+     background reaches its edges instead of leaving white gaps on each
+     side — the inner shell re-applies that same inset for its content. */
+  margin-inline: calc(var(--section-padding-x) * -1);
 }
 
 .page-back-bar__shell {

@@ -3,6 +3,7 @@ import LazyImage from "../common/LazyImage";
 import {
   getSourceProfile,
   getTrustDescriptor,
+  TRUTH_SCORE_ENABLED,
 } from "../../utils/sourceProfiles";
 import "./NewsCard.css";
 
@@ -47,7 +48,7 @@ const getSourceIconUrl = (url) => {
 const METHOD_LABELS = {
   "ai-headline": "AI estimate from headline and summary framing",
   "source-map": "Source map estimate from outlet profile",
-  unclassified: "Perspective not classified with enough confidence",
+  unclassified: "Compass reading not classified with enough confidence",
 };
 
 const resolvePerspective = ({
@@ -159,12 +160,14 @@ const NewsCard = ({
               {perspective.label}
             </span>
           ) : null}
-          <span
-            className={`news-card-trust news-card-trust--${trust.band}`}
-            title={trust.rationale}
-          >
-            {trust.shortLabel}
-          </span>
+          {TRUTH_SCORE_ENABLED && (
+            <span
+              className={`news-card-trust news-card-trust--${trust.band}`}
+              title={trust.rationale}
+            >
+              {trust.shortLabel}
+            </span>
+          )}
           {safeTimeAgo && <span className="news-card-time">{safeTimeAgo}</span>}
         </div>
 

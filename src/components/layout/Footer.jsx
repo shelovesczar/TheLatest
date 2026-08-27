@@ -23,6 +23,7 @@ function Footer() {
         <Link to="/contact">Contact</Link>
         <Link to="/privacy">Privacy Policy</Link>
         <Link to="/terms">Terms of Use</Link>
+        <Link to="/dmca">DMCA</Link>
       </div>
       <p className="footer-support">
         Editorial, corrections, and support requests:{" "}

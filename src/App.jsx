@@ -54,8 +54,10 @@ const EditorialStandardsPage = lazy(
   () => import("./pages/EditorialStandardsPage"),
 );
 const CorrectionsPage = lazy(() => import("./pages/CorrectionsPage"));
+const DMCAPage = lazy(() => import("./pages/DMCAPage"));
 const ContactPage = lazy(() => import("./pages/ContactPage"));
 const SourceProfilePage = lazy(() => import("./pages/SourceProfilePage"));
+const CompassPage = lazy(() => import("./pages/CompassPage"));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 
@@ -239,6 +241,18 @@ function App() {
                       }
                     />
 
+                    {/* Unlisted investor-preview alias: not linked from nav,
+                        excluded from the sitemap/prerender list, and marked
+                        noindex — for sharing directly before a public launch. */}
+                    <Route
+                      path="/privatedemo"
+                      element={
+                        <HomePage
+                          onBreakingNewsChange={handleBreakingNewsChange}
+                        />
+                      }
+                    />
+
                     {/* New dedicated content pages */}
                     <Route path="/news" element={<NewsPage />} />
                     <Route path="/social" element={<SocialPage />} />
@@ -260,6 +274,7 @@ function App() {
                       element={<EditorialStandardsPage />}
                     />
                     <Route path="/corrections" element={<CorrectionsPage />} />
+                    <Route path="/dmca" element={<DMCAPage />} />
                     <Route path="/contact" element={<ContactPage />} />
                     <Route path="/reset-password" element={<ResetPasswordPage />} />
                     <Route
@@ -282,6 +297,7 @@ function App() {
 
                     {/* Search page */}
                     <Route path="/search" element={<SearchResults />} />
+                    <Route path="/compass" element={<CompassPage />} />
                     <Route path="/topic/:topicSlug" element={<TopicPage />} />
                     <Route
                       path="/topic/:topicSlug/all-news"

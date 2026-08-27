@@ -5,6 +5,7 @@ import {
   getSourceProfileBySlug,
   getTrustDescriptorForProfile,
   PERSPECTIVE_METHODOLOGY,
+  TRUTH_SCORE_ENABLED,
 } from "../utils/sourceProfiles";
 import {
   findRegistryRecord,
@@ -97,7 +98,9 @@ function SourceProfilePage() {
         <p className="legal-page__lede">{profile.description}</p>
         <div className="legal-page__meta">
           <span>{profile.perspectiveLabel}</span>
-          <span>{trust.shortLabel}</span>
+          {TRUTH_SCORE_ENABLED && (
+            <span>{trust.shortLabel}</span>
+          )}
           <span>{profile.factualityLabel}</span>
           <span>{profile.ownershipType}</span>
           <span>{profile.country}</span>
@@ -151,11 +154,13 @@ function SourceProfilePage() {
             <p className="legal-page__paragraph">
               <strong>Country:</strong> {profile.country}
             </p>
+            {TRUTH_SCORE_ENABLED && (
+              <p className="legal-page__paragraph">
+                <strong>Truth score:</strong> {trust.score}/100
+              </p>
+            )}
             <p className="legal-page__paragraph">
-              <strong>Truth score:</strong> {trust.score}/100
-            </p>
-            <p className="legal-page__paragraph">
-              <strong>Perspective label:</strong> {profile.perspectiveLabel}
+              <strong>Compass label:</strong> {profile.perspectiveLabel}
             </p>
             <p className="legal-page__paragraph">
               <strong>Factuality shorthand:</strong> {profile.factualityLabel}
