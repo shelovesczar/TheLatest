@@ -1,4 +1,4 @@
-const { setJson } = require("./blobStore");
+const { getJson, setJson } = require("./blobStore");
 const { jsonHeaders, requireAdminAccess } = require("./adminAccess");
 const rssAggregator = require("./rss-aggregator.cjs");
 
@@ -68,6 +68,25 @@ function buildSummaryKey(topic = "", category = "") {
   return `summary/${normalizedCategory}/${normalizedTopic}`;
 }
 
+// sharedSummary.js writes real Claude-backed summaries to this exact same
+// Blobs key/store — this hourly job's plain-template fallback must never
+// clobber a still-fresh real summary, or the AI Daily Briefing can get stuck
+// showing this fallback text indefinitely (each overwrite resets the
+// freshness window sharedSummary.js checks before deciding to call Claude).
+const SUMMARY_FRESHNESS_MS = 55 * 60 * 1000; // just under sharedSummary's 60-min TTL
+
+function isRealSummaryStillFresh(existing) {
+  if (!existing || !existing.timestamp) return false;
+  if (existing.isFallback === true) return false;
+  if (String(existing.provider || "").toLowerCase().includes("editorial")) {
+    return false;
+  }
+
+  const parsed = Date.parse(existing.timestamp);
+  if (Number.isNaN(parsed)) return false;
+  return Date.now() - parsed < SUMMARY_FRESHNESS_MS;
+}
+
 function extractTopItems(items = [], limit = 4) {
   return Array.isArray(items) ? items.filter(Boolean).slice(0, limit) : [];
 }
@@ -109,6 +128,12 @@ async function warmSummaries() {
   await mapWithConcurrency(
     SUMMARY_TARGETS,
     async (target) => {
+      const key = buildSummaryKey("", target.category);
+      const existing = await getJson("shared-ai-summaries", key);
+      if (isRealSummaryStillFresh(existing)) {
+        return; // don't stomp a still-fresh, real (non-fallback) summary
+      }
+
       const items = await invokeAggregator("news", target.sourceCategory);
       const timestamp = new Date().toISOString();
       const summaryData = {
@@ -123,7 +148,7 @@ async function warmSummaries() {
 
       await setJson(
         "shared-ai-summaries",
-        buildSummaryKey("", target.category),
+        key,
         summaryData,
         {
           metadata: {
