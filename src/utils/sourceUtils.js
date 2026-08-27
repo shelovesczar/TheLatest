@@ -86,12 +86,14 @@ const looksLikeByline = (value) => {
   const source = cleanText(value);
   if (!source) return false;
 
+  // A real byline joins multiple author names with "and"/"&"/a list
+  // separator. A bare word-count check false-positives on legitimate
+  // multi-word outlet/show names (e.g. "BBC Global News Podcast", "The
+  // Ezra Klein Show" are both 4 words but are outlet names, not bylines).
   const lower = source.toLowerCase();
-  if (lower.includes(" and ") || lower.includes("&") || /[,;|]/.test(source))
-    return true;
-
-  const words = source.split(/\s+/).filter(Boolean);
-  return words.length >= 4;
+  return (
+    lower.includes(" and ") || lower.includes("&") || /[,;|]/.test(source)
+  );
 };
 
 export const deriveMediaOutlet = (itemOrSource, maybeUrl) => {

@@ -37,3 +37,6 @@ jeffhall.zip
 
 # Temporary local RSS packaging bundle
 .tmp-rss-bundle/
+
+# Generated reports (e.g. scripts/batch-classify-sources.mjs) -- for local review, not for commit
+.tmp/

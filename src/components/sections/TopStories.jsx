@@ -329,9 +329,13 @@ function TopStories({
         ? activeCluster.sources
         : [];
 
+      // resolveStoryPerspective (not the bare resolvePerspective) so a source
+      // already in the curated registry never shows "Unclassified" here just
+      // because the backend clustering step didn't stamp a perspectiveKey on
+      // it — this is the same registry fallback the rest of the page uses.
       return items.map((story) => ({
         story,
-        perspective: resolvePerspective(story),
+        perspective: resolveStoryPerspective(story),
       }));
     }
 
@@ -339,7 +343,7 @@ function TopStories({
   }, [
     clusterItems,
     perspectiveGroupIndex,
-    resolvePerspective,
+    resolveStoryPerspective,
     useClusteredSideBySide,
   ]);
 
@@ -372,15 +376,27 @@ function TopStories({
 
   const activePerspectiveItem =
     visiblePerspectiveStories[resolvedPerspectiveSourceIndex] || null;
-  const secondaryPerspectiveItem = useMemo(() => {
-    if (visiblePerspectiveStories.length < 2) return null;
 
-    return (
-      visiblePerspectiveStories.find((_, index) => {
-        return index !== resolvedPerspectiveSourceIndex;
-      }) || null
+  // Up to 4 cards (was a fixed primary + 1 partner) so the main comparison
+  // column's height tracks the Coverage snapshot rail's instead of leaving a
+  // visible gap whenever a cluster has more than 2 sources.
+  const MAX_FEATURED_PERSPECTIVE_ITEMS = 4;
+  const featuredPerspectiveItems = useMemo(() => {
+    if (!activePerspectiveItem) return [];
+
+    const others = visiblePerspectiveStories.filter(
+      (_, index) => index !== resolvedPerspectiveSourceIndex,
     );
-  }, [resolvedPerspectiveSourceIndex, visiblePerspectiveStories]);
+
+    return [activePerspectiveItem, ...others].slice(
+      0,
+      MAX_FEATURED_PERSPECTIVE_ITEMS,
+    );
+  }, [
+    activePerspectiveItem,
+    resolvedPerspectiveSourceIndex,
+    visiblePerspectiveStories,
+  ]);
 
   useEffect(() => {
     if (!isPerspectiveMode || !activePerspectiveItem?.story) {
@@ -803,9 +819,7 @@ function TopStories({
 
                   <div className="sbs-feature-shell">
                     <div className="sbs-feature-stack">
-                      {[activePerspectiveItem, secondaryPerspectiveItem]
-                        .filter(Boolean)
-                        .map((item, index) =>
+                      {featuredPerspectiveItems.map((item, index) =>
                           (() => {
                             const sourceProfile = resolveManagedSourceProfile(
                               item.story,
