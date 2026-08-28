@@ -734,10 +734,11 @@ exports.handler = async (event) => {
       }
 
       return {
-        statusCode: 404,
+        statusCode: 200,
         headers,
         body: JSON.stringify({
-          found: false,
+          found: true,
+          cached: true,
           stale: true,
           key,
           data: cachedData,
