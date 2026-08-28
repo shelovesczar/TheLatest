@@ -1,6 +1,6 @@
 /* global require, exports */
 const rssAggregator = require("./rss-aggregator.cjs");
-const { labelStoryPerspective } = require("./perspective");
+const { labelStoryPerspective } = require("./perspective.cjs");
 
 const STOP_WORDS = new Set([
   "the",

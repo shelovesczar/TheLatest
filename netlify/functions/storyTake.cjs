@@ -18,7 +18,7 @@ const {
   isBlobConfigurationError,
 } = require("./blobStore");
 const { enforceRateLimit } = require("./rateLimit");
-const storyDossier = require("./storyDossier");
+const storyDossier = require("./storyDossier.cjs");
 const fs = require("fs");
 const path = require("path");
 

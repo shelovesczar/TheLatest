@@ -1,5 +1,5 @@
 const rssAggregator = require("./rss-aggregator.cjs");
-const clusters = require("./clusters");
+const clusters = require("./clusters.cjs");
 const socialFeeds = require("./fetchSocialFeeds");
 
 function jsonHeaders() {

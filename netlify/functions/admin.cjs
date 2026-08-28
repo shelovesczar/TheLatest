@@ -1,5 +1,5 @@
 const { jsonHeaders, requireAdminAccess } = require('./adminAccess');
-const { runWarmContent, runWarmSummaries } = require('./warmContent');
+const { runWarmContent, runWarmSummaries } = require('./warmContent.cjs');
 
 function parseBody(body = '') {
   try {
