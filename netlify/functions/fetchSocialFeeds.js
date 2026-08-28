@@ -91,7 +91,7 @@ const TOPIC_EXPANSIONS = {
   culture: ["culture", "lifestyle", "fashion", "health", "travel"],
 };
 
-const MAX_TOPIC_MATCH_FEEDS = 4;
+const MAX_TOPIC_MATCH_FEEDS = 6;
 
 const tokenize = (value = "") =>
   String(value)
@@ -291,41 +291,63 @@ const getConfiguredFeeds = () => {
 };
 
 /**
- * Get active feeds based on rotation cycle
- * High-priority feeds are always included
- * Standard feeds rotate based on cycle index
+ * Get active feeds based on rotation cycle, the page's category, and any
+ * search/topic query.
+ * - High-priority feeds are always included (broad bundles).
+ * - Feeds whose own `category` matches the requested category are always
+ *   included too — e.g. every Sports-tagged feed shows up on a Sports page,
+ *   not just whichever ones happen to score highest in tag search.
+ * - Remaining feeds are ranked by tag relevance against the topic (falling
+ *   back to the category name itself when no topic is given), so categories
+ *   with no dedicated feeds (politics, tech, business) still surface the
+ *   broad bundles' matching content.
+ * - Any slots still unused fall back to the rotation-index filler so a
+ *   generic, no-topic/no-category request still gets some variety.
  */
-const getActiveFeeds = (allFeeds, cycleIndex = 0, topic = "") => {
+const getActiveFeeds = (allFeeds, cycleIndex = 0, topic = "", category = "") => {
   const feedConfig = require("./social-feed-config.cjs");
   const priorityFeeds = allFeeds.filter((f) => f.priority === "high");
 
-  const rotationCycleLength = feedConfig.fetchConfig.rotationCycleLength;
-  const activeRotationIndex = cycleIndex % rotationCycleLength;
+  const normalizedCategory = String(category || "").trim().toLowerCase();
+  const categoryFeeds = normalizedCategory
+    ? allFeeds.filter(
+        (f) =>
+          f.priority === "standard" &&
+          String(f.category || "").toLowerCase() === normalizedCategory,
+      )
+    : [];
 
-  const rotationalFeeds = allFeeds.filter(
-    (f) => f.priority === "standard" && f.rotationIndex === activeRotationIndex,
-  );
-
+  const relevanceQuery = String(topic || category || "").trim();
   const topicalFeeds = allFeeds
-    .filter((feed) => feed.priority === "standard")
-    .map((feed) => ({ feed, score: scoreFeedRelevance(feed, topic) }))
+    .filter(
+      (feed) => feed.priority === "standard" && !categoryFeeds.includes(feed),
+    )
+    .map((feed) => ({ feed, score: scoreFeedRelevance(feed, relevanceQuery) }))
     .filter((entry) => entry.score > 0)
     .sort((left, right) => right.score - left.score)
     .slice(0, MAX_TOPIC_MATCH_FEEDS)
     .map((entry) => entry.feed);
 
+  const rotationCycleLength = feedConfig.fetchConfig.rotationCycleLength;
+  const activeRotationIndex = cycleIndex % rotationCycleLength;
+  const rotationalFeeds = allFeeds.filter(
+    (f) => f.priority === "standard" && f.rotationIndex === activeRotationIndex,
+  );
+
+  const alreadyIncluded = new Set([...categoryFeeds, ...topicalFeeds]);
   const fillerRotationalFeeds = rotationalFeeds.filter(
-    (feed) => !topicalFeeds.includes(feed),
+    (feed) => !alreadyIncluded.has(feed),
   );
 
   const activeFeeds = uniqueFeeds([
     ...priorityFeeds,
+    ...categoryFeeds,
     ...topicalFeeds,
     ...fillerRotationalFeeds,
   ]);
 
   console.log(
-    `[SocialFeeds] Cycle ${cycleIndex}: Active feeds =`,
+    `[SocialFeeds] Cycle ${cycleIndex}, category "${normalizedCategory || "none"}": Active feeds =`,
     activeFeeds.map((f) => f.source).join(", "),
   );
 
@@ -494,20 +516,26 @@ const uniqueByUrl = (items) => {
   });
 };
 
-const cacheKeyFor = (topic, limit, feedCount) =>
+const cacheKeyFor = (topic, limit, feedCount, category = "") =>
   `${String(topic || "")
     .trim()
-    .toLowerCase()}::${limit}::${feedCount}`;
+    .toLowerCase()}::${limit}::${feedCount}::${String(category || "")
+    .trim()
+    .toLowerCase()}`;
 
 exports.handler = async (event) => {
-  const { topic = "", limit = "12" } = event.queryStringParameters || {};
+  const {
+    topic = "",
+    limit = "12",
+    category = "",
+  } = event.queryStringParameters || {};
   const maxItems = Math.max(1, Math.min(parseInt(limit, 10) || 12, 30));
   const allFeeds = getConfiguredFeeds();
 
   // Get active feeds for current cycle
-  const activeFeeds = getActiveFeeds(allFeeds, currentCycleIndex, topic);
+  const activeFeeds = getActiveFeeds(allFeeds, currentCycleIndex, topic, category);
 
-  const cacheKey = cacheKeyFor(topic, maxItems, activeFeeds.length);
+  const cacheKey = cacheKeyFor(topic, maxItems, activeFeeds.length, category);
   const cached = socialCache.get(cacheKey);
 
   if (

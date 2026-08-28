@@ -29,10 +29,11 @@ const shouldDisableSocialFeeds = (error) => {
 
 const shuffle = (items) => [...items].sort(() => Math.random() - 0.5)
 
-const getCacheKey = (topic = '', limit = 12) => `${CACHE_PREFIX}${(topic || 'all').toLowerCase()}_${limit}`
+const getCacheKey = (topic = '', limit = 12, category = '') =>
+  `${CACHE_PREFIX}${(topic || 'all').toLowerCase()}_${(category || 'all').toLowerCase()}_${limit}`
 
-export const getCachedSocialPosts = (topic = '', limit = 12, allowStale = false) => {
-  const cacheKey = getCacheKey(topic, limit)
+export const getCachedSocialPosts = (topic = '', limit = 12, allowStale = false, category = '') => {
+  const cacheKey = getCacheKey(topic, limit, category)
   const cached = localStorage.getItem(cacheKey)
 
   if (!cached) return null
@@ -46,7 +47,7 @@ export const getCachedSocialPosts = (topic = '', limit = 12, allowStale = false)
       const normalizedPosts = normalizeSocialPosts(data.posts)
 
       if (JSON.stringify(normalizedPosts) !== JSON.stringify(data.posts || [])) {
-        cacheSocialPosts(topic, limit, normalizedPosts)
+        cacheSocialPosts(topic, limit, normalizedPosts, category)
       }
 
       return normalizedPosts
@@ -58,8 +59,8 @@ export const getCachedSocialPosts = (topic = '', limit = 12, allowStale = false)
   return null
 }
 
-export const cacheSocialPosts = (topic = '', limit = 12, posts = []) => {
-  const cacheKey = getCacheKey(topic, limit)
+export const cacheSocialPosts = (topic = '', limit = 12, posts = [], category = '') => {
+  const cacheKey = getCacheKey(topic, limit, category)
   const normalizedPosts = normalizeSocialPosts(posts)
 
   try {
@@ -72,7 +73,7 @@ export const cacheSocialPosts = (topic = '', limit = 12, posts = []) => {
   }
 }
 
-export const fetchSocialFeedPosts = async (topic = '', limit = 12) => {
+export const fetchSocialFeedPosts = async (topic = '', limit = 12, category = '') => {
   if (!socialFeedsAvailable) {
     return []
   }
@@ -81,7 +82,8 @@ export const fetchSocialFeedPosts = async (topic = '', limit = 12) => {
     const response = await axios.get(SOCIAL_FEEDS_API, {
       params: {
         topic: topic || undefined,
-        limit
+        limit,
+        category: category || undefined
       },
       timeout: 25000
     })
@@ -98,36 +100,36 @@ export const fetchSocialFeedPosts = async (topic = '', limit = 12) => {
   }
 }
 
-export const getRandomTrendingPosts = async (count = 6, topic = '') => {
-  const freshCached = getCachedSocialPosts(topic, count)
+export const getRandomTrendingPosts = async (count = 6, topic = '', category = '') => {
+  const freshCached = getCachedSocialPosts(topic, count, false, category)
   if (freshCached && freshCached.length > 0) {
     return shuffle(freshCached).slice(0, count)
   }
 
   try {
-    let posts = await fetchSocialFeedPosts(topic, Math.max(count, 12))
+    let posts = await fetchSocialFeedPosts(topic, Math.max(count, 12), category)
 
     // If a topic-specific social query is sparse, broaden to all configured feeds.
     if (topic && posts.length < Math.min(count, 3)) {
-      const broaderPosts = await fetchSocialFeedPosts('', Math.max(count, 12))
+      const broaderPosts = await fetchSocialFeedPosts('', Math.max(count, 12), category)
       posts = broaderPosts.length > 0 ? broaderPosts : posts
     }
 
     if (posts.length > 0) {
-      cacheSocialPosts(topic, Math.max(count, 12), posts)
+      cacheSocialPosts(topic, Math.max(count, 12), posts, category)
       return shuffle(posts).slice(0, count)
     }
   } catch (error) {
     console.warn(`[Social] Error getting social RSS posts: ${error?.message || 'Unknown error'}`)
   }
 
-  const staleCached = getCachedSocialPosts(topic, Math.max(count, 12), true)
+  const staleCached = getCachedSocialPosts(topic, Math.max(count, 12), true, category)
   if (staleCached && staleCached.length > 0) {
     return shuffle(staleCached).slice(0, count)
   }
 
   if (topic) {
-    const staleBroad = getCachedSocialPosts('', Math.max(count, 12), true)
+    const staleBroad = getCachedSocialPosts('', Math.max(count, 12), true, category)
     if (staleBroad && staleBroad.length > 0) {
       return shuffle(staleBroad).slice(0, count)
     }

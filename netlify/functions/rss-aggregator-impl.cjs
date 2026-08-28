@@ -63,9 +63,13 @@ const SEARCH_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes — search should refr
 const MAX_ITEMS_PER_FEED = 15; // only grab top 15 per feed for speed
 const MAX_FEEDS_PER_REQUEST = 6; // default cap parallel feeds to avoid slow stragglers
 const MAX_FEEDS_BY_KEY = {
-  news: 6,
-  politics: 8,
-  opinions: 6,
+  // news/opinions/politics: raised above their current high-priority feed
+  // counts (7/6/7) so selectFeedsForRequest always has rotating slots left
+  // over instead of hitting the highPriorityFeeds.length >= maxFeeds bailout,
+  // which was returning the same fixed source list on every request.
+  news: 9,
+  politics: 9,
+  opinions: 8,
   videos: 10,
   podcasts: 8,
   sports: 8,

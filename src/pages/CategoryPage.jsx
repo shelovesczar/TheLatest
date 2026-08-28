@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom'
 import AISummary from '../components/sections/AISummary'
 import TopStories from '../components/sections/TopStories'
 import Opinions from '../components/sections/Opinions'
+import SocialMedia from '../components/sections/SocialMedia'
 import Videos from '../components/sections/Videos'
 import Podcasts from '../components/sections/Podcasts'
 import AdBreak from '../components/common/AdBreak'
 import PageBackBar from '../components/common/PageBackBar'
 
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
+import { getRandomTrendingPosts } from '../socialMediaService'
 import { fetchStoryClusters } from '../services/clusterService'
 import { filterContentByCategory } from '../utils/categoryFiltering'
 import { dedupeContentItems } from '../utils/contentDeduplication'
@@ -33,10 +35,12 @@ function CategoryPage({ category }) {
   const [opinions, setOpinions] = useState([])
   const [videos, setVideos] = useState([])
   const [podcasts, setPodcasts] = useState([])
+  const [socialPosts, setSocialPosts] = useState([])
   const [storyClusters, setStoryClusters] = useState([])
   const [loadingOpinions, setLoadingOpinions] = useState(true)
   const [loadingVideos, setLoadingVideos] = useState(true)
   const [loadingPodcasts, setLoadingPodcasts] = useState(true)
+  const [loadingSocial, setLoadingSocial] = useState(true)
   const isPoliticalCategory = category === 'politics'
 
   const categoryConfig = {
@@ -231,19 +235,21 @@ function CategoryPage({ category }) {
       setLoadingOpinions(true)
       setLoadingVideos(true)
       setLoadingPodcasts(true)
+      setLoadingSocial(true)
       setStoryClusters([])
       setActiveStory(0)
 
       try {
         const rssCategory = resolveCategoryFeed(category)
-        
+
         console.log(`[CategoryPage] Loading ${category} → RSS category: ${rssCategory}`)
 
-        const [newsResult, opinionResult, videoResult, podcastResult, clusterResult] = await Promise.allSettled([
+        const [newsResult, opinionResult, videoResult, podcastResult, socialResult, clusterResult] = await Promise.allSettled([
           fetchRSSNews(rssCategory),
           fetchOpinions(rssCategory),
           fetchVideos(rssCategory),
           fetchTrendingContent(rssCategory),
+          getRandomTrendingPosts(6, '', category),
           isPoliticalCategory
             ? fetchStoryClusters({ type: 'news', category: 'politics', limit: 8 })
             : Promise.resolve([])
@@ -330,6 +336,13 @@ function CategoryPage({ category }) {
           console.error('[CategoryPage] Podcast fetch failed:', podcastResult.reason?.message || podcastResult.reason)
         }
 
+        setSocialPosts(socialResult.status === 'fulfilled' && Array.isArray(socialResult.value) ? socialResult.value : [])
+        setLoadingSocial(false)
+
+        if (socialResult.status === 'rejected') {
+          console.error('[CategoryPage] Social fetch failed:', socialResult.reason?.message || socialResult.reason)
+        }
+
       } catch (error) {
         if (ignore) return
         console.error('Failed to load category content:', error)
@@ -337,11 +350,13 @@ function CategoryPage({ category }) {
         setOpinions([])
         setVideos([])
         setPodcasts([])
+        setSocialPosts([])
         setStoryClusters([])
         setLoading(false)
         setLoadingOpinions(false)
         setLoadingVideos(false)
         setLoadingPodcasts(false)
+        setLoadingSocial(false)
       }
     }
 
@@ -410,7 +425,7 @@ function CategoryPage({ category }) {
 
         <AdBreak slot="home-feed-inline" />
 
-        <Opinions 
+        <Opinions
           opinions={opinions}
           loadingOpinions={loadingOpinions}
           categoryPath={`/category/${category}/all-opinions`}
@@ -418,7 +433,14 @@ function CategoryPage({ category }) {
 
         <AdBreak slot="section-break" />
 
-        <Videos 
+        <SocialMedia
+          socialPosts={socialPosts}
+          loadingSocial={loadingSocial}
+        />
+
+        <AdBreak slot="section-break" />
+
+        <Videos
           videos={videos}
           loadingVideos={loadingVideos}
           categoryPath={`/category/${category}/all-videos`}

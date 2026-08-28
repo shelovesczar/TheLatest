@@ -10,7 +10,7 @@ import AdBreak from '../components/common/AdBreak'
 import PageBackBar from '../components/common/PageBackBar'
 import { searchRSSContent } from '../rssService'
 import { fetchRSSNews, fetchOpinions, fetchVideos, fetchTrendingContent } from '../newsService'
-import { cacheSocialPosts, fetchAllSocialPosts, getCachedSocialPosts } from '../services/socialMediaApiService'
+import { getCachedSocialPosts, getRandomTrendingPosts } from '../socialMediaService'
 import { fetchStoryClusters } from '../services/clusterService'
 import { dedupeContentItems } from '../utils/contentDeduplication'
 import { filterItemsByTopic } from '../utils/topicFiltering'
@@ -63,7 +63,7 @@ function TopicPage() {
       const topicQuery = config.query || config.title
       const narrow = (items = [], limit = 6) => dedupeContentItems(filterItemsByTopic(items, topicQuery)).slice(0, limit)
 
-      const cachedSocial = getCachedSocialPosts(topicQuery)
+      const cachedSocial = getCachedSocialPosts(topicQuery, 6, false, feedCategory)
       if (cachedSocial && !ignore) {
         setSocialPosts(Array.isArray(cachedSocial) ? cachedSocial.slice(0, 6) : [])
         setLoadingSocial(false)
@@ -80,7 +80,7 @@ function TopicPage() {
           fetchOpinions(feedCategory, topicQuery),
           fetchVideos(feedCategory, topicQuery),
           fetchTrendingContent(feedCategory, topicQuery),
-          fetchAllSocialPosts(topicQuery, 6),
+          getRandomTrendingPosts(6, topicQuery, feedCategory),
           fetchStoryClusters({ type: 'news', category: feedCategory, search: topicQuery, limit: 8 }).catch(() => [])
         ])
 
@@ -96,10 +96,6 @@ function TopicPage() {
         setPodcasts(narrow(podcastItems, 6))
         setSocialPosts(Array.isArray(socialItems) ? socialItems.slice(0, 6) : [])
         setStoryClusters(Array.isArray(clusters) ? clusters : [])
-
-        if (Array.isArray(socialItems) && socialItems.length > 0) {
-          cacheSocialPosts(topicQuery, socialItems)
-        }
       } catch (error) {
         if (!ignore) {
           console.error('Failed to load topic page content:', error)
