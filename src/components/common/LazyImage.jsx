@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { processImageUrl } from '../../utils/imageUtils';
+import { processImageUrl, getFallbackImage, getPhotoFallback } from '../../utils/imageUtils';
 import './LazyImage.css';
 
 /**
@@ -7,19 +7,24 @@ import './LazyImage.css';
  * Loads images only when they're about to enter the viewport
  * Includes loading placeholder and error handling
  */
-const LazyImage = ({ 
-  src, 
-  alt, 
-  className = '', 
+const LazyImage = ({
+  src,
+  alt,
+  className = '',
   width = 900,
   quality = 88,
+  category = 'news',
   placeholder = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"%3E%3Crect fill="%23f0f0f0"/%3E%3C/svg%3E',
-  errorFallback = 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&q=80'
+  errorFallback,
 }) => {
   // Route through weserv.nl for WebP conversion + sharpening.
   // Keep the original src so we can fall back to it if the proxy is blocked.
   const processedSrc = processImageUrl(src, { width, quality, sharpen: true });
   const isProxied = processedSrc !== src;
+  // errorFallback stays an explicit-override escape hatch; the category pool
+  // is what actually varies the fallback instead of repeating one photo.
+  const categoryFallback = errorFallback || getFallbackImage(category);
+  const seededFallback = getPhotoFallback(category, alt);
   const [imageSrc, setImageSrc] = useState(() => (
     typeof IntersectionObserver === 'undefined' ? processedSrc : placeholder
   ));
@@ -75,11 +80,17 @@ const LazyImage = ({
       setImageSrc(src);
       return;
     }
-    // Step 2: original also failed → generic fallback
-    setHasError(true);
-    setIsLoading(false);
-    if (errorFallback && imageSrc !== errorFallback) {
-      setImageSrc(errorFallback);
+    // Step 2: original also failed → category-specific fallback
+    if (imageSrc !== categoryFallback) {
+      setHasError(true);
+      setIsLoading(false);
+      setImageSrc(categoryFallback);
+      return;
+    }
+    // Step 3: category fallback failed too → seeded photo that varies per
+    // article instead of repeating the same image site-wide
+    if (imageSrc !== seededFallback) {
+      setImageSrc(seededFallback);
     }
   };
 

@@ -1,5 +1,6 @@
 import { memo } from "react";
 import LazyImage from "../common/LazyImage";
+import { getFallbackImage } from "../../utils/imageUtils";
 import {
   getSourceProfile,
   getTrustDescriptor,
@@ -125,11 +126,9 @@ const NewsCard = ({
     >
       <div className="news-card-image-container">
         <LazyImage
-          src={
-            safeImage ||
-            "https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&q=80"
-          }
+          src={safeImage || getFallbackImage(safeCategory)}
           alt={safeTitle}
+          category={safeCategory}
           className="news-card-image"
         />
 

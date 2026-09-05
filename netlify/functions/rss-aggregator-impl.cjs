@@ -81,7 +81,11 @@ const MAX_FEEDS_BY_KEY = {
 };
 const PRIORITY_FEED_MIN_ITEMS = 24; // high-priority feeds pull more items
 const ARTICLE_IMAGE_CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
-const MAX_IMAGE_ENRICH_ITEMS = 0; // disabled — images come from feed metadata
+// Only the background warm path (runCategoryWarmFetch) calls
+// enrichItemsWithArticleImages — the live request path (exports.handler via
+// fetchFeeds) never does, so this bound only affects the hourly cron's
+// wall-clock time, never a real visitor's page load.
+const MAX_IMAGE_ENRICH_ITEMS = 10;
 const IMAGE_ENRICH_CONCURRENCY = 5;
 const PERMANENT_FEED_FAILURE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 const TRANSIENT_FEED_FAILURE_TTL = 30 * 60 * 1000; // 30 minutes
@@ -912,13 +916,27 @@ async function runCategoryWarmFetch(feedKey) {
     disableRotation: true, // this function drives its own rotation; don't also advance the live-request offset
   });
 
+  // Real per-article image scraping only ever runs here, off the hourly warm
+  // cron — never a live visitor's request. If it fails for any reason, fall
+  // back to the un-enriched items rather than losing this category's warm
+  // cycle entirely.
+  let enrichedFreshItems = freshItems;
+  try {
+    enrichedFreshItems = await enrichItemsWithArticleImages(freshItems);
+  } catch (error) {
+    console.warn(
+      `Article image enrichment failed for ${feedKey}:`,
+      error?.message || error,
+    );
+  }
+
   const existingSnapshot = await getPersistedSnapshot(
     feedKey,
     WARM_SNAPSHOT_MAX_AGE_MS,
   );
   const mergedItems = mergeAndPruneSnapshotItems(
     existingSnapshot?.items || [],
-    freshItems,
+    enrichedFreshItems,
   );
 
   await persistSnapshot(feedKey, mergedItems, {
@@ -1234,6 +1252,13 @@ function normalizeUrl(value) {
 
 function isFallbackImage(imageUrl) {
   return FALLBACK_IMAGE_URLS.has(toPlainText(imageUrl));
+}
+
+// A thum.io URL is a live-rendered screenshot placeholder, not a real
+// per-article photo — treat it the same as "needs enrichment" so the warm
+// path has a chance to replace it with a scraped og:image.
+function isThumbnailPreviewImage(imageUrl) {
+  return toPlainText(imageUrl).includes("image.thum.io");
 }
 
 function getArticlePreviewImage(articleUrl) {
@@ -1643,10 +1668,14 @@ function shouldEnrichImage(item = {}) {
   if (!image) return true;
   if (!isValidImageUrl(image)) return true;
   if (isFallbackImage(image)) return true;
+  if (isThumbnailPreviewImage(image)) return true;
   return false;
 }
 
-async function _enrichItemsWithArticleImages(items = []) {
+// Scrapes each candidate article's page for a real og:image — real network
+// fetches per item, so this must only ever run from the background warm
+// path (runCategoryWarmFetch), never from the live request path.
+async function enrichItemsWithArticleImages(items = []) {
   if (!Array.isArray(items) || items.length === 0) return [];
 
   pruneArticleImageCache();
