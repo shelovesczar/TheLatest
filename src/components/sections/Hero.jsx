@@ -39,9 +39,7 @@ function Hero({ layout = "default" }) {
             ))}
           </span>
         </h1>
-        <p className="hero-tagline">
-          All topics. All major platforms. All in one place.
-        </p>
+        <p className="hero-tagline">Every topics. Every format. One place.</p>
         <form className="hero-mobile-search" onSubmit={handleSubmit}>
           <label
             className="hero-mobile-search__label"
