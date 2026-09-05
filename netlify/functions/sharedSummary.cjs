@@ -13,6 +13,7 @@ const path = require("path");
 const SUMMARY_TTL_MS = 60 * 60 * 1000;
 const STALE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_SUMMARY_CHARACTERS = 850;
+const ANTHROPIC_REQUEST_TIMEOUT_MS = 8000;
 const inFlightSummaryRefreshes = new Map();
 
 function jsonHeaders() {
@@ -446,6 +447,12 @@ async function generateAnthropicSummary({ topic = "", category = "" } = {}) {
   const prompt = buildSummaryPrompt(topic, category, items);
   const leadItem = items[0] || {};
 
+  const abortController = new AbortController();
+  const abortTimeout = setTimeout(
+    () => abortController.abort(),
+    ANTHROPIC_REQUEST_TIMEOUT_MS,
+  );
+
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -459,6 +466,7 @@ async function generateAnthropicSummary({ topic = "", category = "" } = {}) {
         max_tokens: 1200,
         messages: [{ role: "user", content: prompt }],
       }),
+      signal: abortController.signal,
     });
 
     if (!response.ok) {
@@ -518,11 +526,19 @@ async function generateAnthropicSummary({ topic = "", category = "" } = {}) {
       source: cleanText(leadItem?.source || ""),
     };
   } catch (error) {
-    logSummaryIssue(
-      "Anthropic summary generation threw an exception",
-      error?.message || "Unknown error",
-    );
+    if (error?.name === "AbortError") {
+      logSummaryIssue(
+        `Anthropic request timed out after ${ANTHROPIC_REQUEST_TIMEOUT_MS}ms`,
+      );
+    } else {
+      logSummaryIssue(
+        "Anthropic summary generation threw an exception",
+        error?.message || "Unknown error",
+      );
+    }
     return null;
+  } finally {
+    clearTimeout(abortTimeout);
   }
 }
 

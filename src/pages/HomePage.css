@@ -36,16 +36,21 @@
   flex: 1;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.7rem;
   flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
   min-width: 0;
-  padding-right: 0.1rem;
 }
 
-.topic-filter-chips::-webkit-scrollbar {
-  display: none;
+.topic-scroll-arrow {
+  width: 1.9rem;
+  height: 1.9rem;
+  font-size: 0.85rem;
+}
+
+.topic-scroll-arrow:disabled {
+  opacity: 0.32;
+  cursor: default;
 }
 
 .topic-chip-entry {
@@ -193,6 +198,12 @@
 
   .topic-filter-label {
     font-size: 0.88rem;
+  }
+
+  .topic-scroll-arrow {
+    width: 1.7rem;
+    height: 1.7rem;
+    font-size: 0.75rem;
   }
 }
 

@@ -205,7 +205,7 @@ function AISummary({
         const shared = await getSharedSummary(summaryRequest, {
           refresh: force,
         });
-        if (shared && !shared.isFallback) {
+        if (shared && (!shared.isFallback || shared.refreshing)) {
           setSummaryData(shared);
           return;
         }
@@ -214,7 +214,10 @@ function AISummary({
           const refreshedShared = await getSharedSummary(summaryRequest, {
             refresh: true,
           });
-          if (refreshedShared && !refreshedShared.isFallback) {
+          if (
+            refreshedShared &&
+            (!refreshedShared.isFallback || refreshedShared.refreshing)
+          ) {
             setSummaryData(refreshedShared);
             return;
           }
@@ -270,13 +273,15 @@ function AISummary({
     }
 
     const shared = await getSharedSummary(summaryRequest);
-    if (shared && !shared.isFallback) {
+    if (shared && (!shared.isFallback || shared.refreshing)) {
       setSummaryData(shared);
 
-      cacheSummary(cacheKey, {
-        ...shared,
-        scopeCategory: contextCategory || null,
-      });
+      if (!shared.isFallback) {
+        cacheSummary(cacheKey, {
+          ...shared,
+          scopeCategory: contextCategory || null,
+        });
+      }
       return;
     }
 

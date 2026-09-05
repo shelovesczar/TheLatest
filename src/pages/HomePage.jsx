@@ -1,4 +1,9 @@
 import { useState, useEffect, lazy, Suspense, useRef, useCallback } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faChevronLeft,
+  faChevronRight,
+} from "@fortawesome/free-solid-svg-icons";
 import { useSearch } from "../context/SearchContext";
 import {
   fetchRSSNews,
@@ -310,6 +315,7 @@ function HomePage({ onBreakingNewsChange }) {
   const [suggestedTopic, setSuggestedTopic] = useState(null);
   const [summaryTopics, setSummaryTopics] = useState([]);
   const [visibleTopics, setVisibleTopics] = useState(HOME_TOPIC_RAIL);
+  const [topicPageRaw, setTopicPageRaw] = useState(0);
 
   // Content state - filters based on current topic
   const [topStories, setTopStories] = useState([]);
@@ -336,7 +342,6 @@ function HomePage({ onBreakingNewsChange }) {
   const { ref: socialRef, isInView: socialInView } = useInView({
     rootMargin: "220px",
   });
-  const topicTickerRef = useRef(null);
   const lastSocialQueryRef = useRef(null);
 
   const handleSummaryDataChange = useCallback((nextSummary) => {
@@ -380,6 +385,34 @@ function HomePage({ onBreakingNewsChange }) {
   const shouldShowVideosSection = loadingVideos || videos.length > 0;
   const shouldShowPodcastsSection = loadingPodcasts || podcasts.length > 0;
   const shouldShowSocialSection = loadingSocial || socialPosts.length > 0;
+
+  const TOPICS_PER_PAGE = 3;
+  const topicPageCount = Math.max(
+    1,
+    Math.ceil(topicFilters.length / TOPICS_PER_PAGE),
+  );
+  const topicPage = Math.min(topicPageRaw, topicPageCount - 1);
+  const visibleTopicFilters = topicFilters.slice(
+    topicPage * TOPICS_PER_PAGE,
+    topicPage * TOPICS_PER_PAGE + TOPICS_PER_PAGE,
+  );
+  const canScrollTopicsLeft = topicPage > 0;
+  const canScrollTopicsRight = topicPage < topicPageCount - 1;
+
+  // Reset to the first page whenever the underlying topic list actually
+  // changes content (not just re-renders with a new array reference).
+  const topicFiltersKey = topicFilters.join("|");
+  useEffect(() => {
+    setTopicPageRaw(0);
+  }, [topicFiltersKey]);
+
+  const goToPrevTopicPage = () => {
+    setTopicPageRaw((page) => Math.max(0, page - 1));
+  };
+
+  const goToNextTopicPage = () => {
+    setTopicPageRaw((page) => Math.min(topicPageCount - 1, page + 1));
+  };
 
   useEffect(() => {
     if (!onBreakingNewsChange) return;
@@ -745,16 +778,25 @@ function HomePage({ onBreakingNewsChange }) {
         {/* ── 2. Topic filter strip + Top Stories ── */}
         {topicFilters.length > 0 && (
           <div className="topic-filter-strip">
-            <span className="topic-filter-label">Topics:</span>
-            <div className="topic-filter-chips" ref={topicTickerRef}>
-              <button
-                data-topic-value="__all__"
-                className={`topic-chip ${!hasActiveTopic ? "active" : ""}`}
-                onClick={handleAllTopicsClick}
-              >
-                <span className="topic-chip-text">All</span>
-              </button>
-              {topicFilters.map((topicLabel, index) => (
+            <span className="topic-filter-label">Hot Topics:</span>
+            <button
+              data-topic-value="__all__"
+              className={`topic-chip ${!hasActiveTopic ? "active" : ""}`}
+              onClick={handleAllTopicsClick}
+            >
+              <span className="topic-chip-text">All</span>
+            </button>
+            <button
+              type="button"
+              className="slider-btn topic-scroll-arrow"
+              onClick={goToPrevTopicPage}
+              disabled={!canScrollTopicsLeft}
+              aria-label="Show previous hot topics"
+            >
+              <FontAwesomeIcon icon={faChevronLeft} />
+            </button>
+            <div className="topic-filter-chips">
+              {visibleTopicFilters.map((topicLabel, index) => (
                 <div key={topicLabel} className="topic-chip-entry">
                   <button
                     data-topic-value={topicLabel}
@@ -763,7 +805,7 @@ function HomePage({ onBreakingNewsChange }) {
                   >
                     <span className="topic-chip-text">{topicLabel}</span>
                   </button>
-                  {index < topicFilters.length - 1 && (
+                  {index < visibleTopicFilters.length - 1 && (
                     <span className="topic-chip-divider" aria-hidden="true">
                       |
                     </span>
@@ -771,6 +813,15 @@ function HomePage({ onBreakingNewsChange }) {
                 </div>
               ))}
             </div>
+            <button
+              type="button"
+              className="slider-btn topic-scroll-arrow"
+              onClick={goToNextTopicPage}
+              disabled={!canScrollTopicsRight}
+              aria-label="Show next hot topics"
+            >
+              <FontAwesomeIcon icon={faChevronRight} />
+            </button>
           </div>
         )}
 

@@ -99,22 +99,7 @@
 .carousel-arrow {
   width: 34px;
   height: 34px;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s;
-  flex-shrink: 0;
-}
-
-.carousel-arrow:hover {
-  background: var(--accent-color);
-  color: #fff;
-  transform: scale(1.06);
+  font-size: 0.95rem;
 }
 
 .persp-dot {
@@ -344,23 +329,6 @@
 .sbs-source-arrow {
   width: 38px;
   height: 38px;
-  border: none;
-  border-radius: 999px;
-  background: var(--accent-color);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition:
-    transform 0.15s ease,
-    background-color 0.15s ease;
-}
-
-.sbs-source-arrow:hover {
-  background: var(--text-primary);
-  transform: scale(1.05);
 }
 
 .sbs-source-tabs {
@@ -426,23 +394,6 @@
 .sbs-nav-btn {
   width: 40px;
   height: 40px;
-  border: none;
-  border-radius: 8px;
-  background: var(--text-primary);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition:
-    background-color 0.15s ease,
-    transform 0.15s ease;
-}
-
-.sbs-nav-btn:hover {
-  background: var(--accent-color);
-  transform: scale(1.05);
 }
 
 .sbs-feature-shell {

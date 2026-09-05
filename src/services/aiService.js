@@ -733,7 +733,8 @@ export async function getSharedSummary(requestOrTopic = "", options = {}) {
     if (!response.ok) return null;
 
     const payload = await response.json();
-    return payload?.data || null;
+    if (!payload?.data) return null;
+    return { ...payload.data, refreshing: Boolean(payload.refreshing) };
   } catch (error) {
     console.warn("Shared summary unavailable:", error);
     return null;

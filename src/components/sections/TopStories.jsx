@@ -578,7 +578,7 @@ function TopStories({
             <div id="storiesCarousel">
               <div className="carousel-wrap">
                 <button
-                  className="carousel-arrow prev"
+                  className="slider-btn carousel-arrow prev"
                   onClick={prevStory}
                   aria-label="Previous stories"
                 >
@@ -691,7 +691,7 @@ function TopStories({
                 </div>
 
                 <button
-                  className="carousel-arrow next"
+                  className="slider-btn carousel-arrow next"
                   onClick={nextStory}
                   aria-label="Next stories"
                 >
@@ -766,7 +766,7 @@ function TopStories({
 
                 <div className="sbs-source-nav">
                   <button
-                    className="sbs-source-arrow"
+                    className="slider-btn sbs-source-arrow"
                     type="button"
                     onClick={() => cyclePerspectiveSource(-1)}
                     aria-label="Previous source comparison"
@@ -793,7 +793,7 @@ function TopStories({
                   </div>
 
                   <button
-                    className="sbs-source-arrow"
+                    className="slider-btn sbs-source-arrow"
                     type="button"
                     onClick={() => cyclePerspectiveSource(1)}
                     aria-label="Next source comparison"
@@ -809,7 +809,7 @@ function TopStories({
 
                 <div className="sbs-stage sbs-stage-editorial">
                   <button
-                    className="sbs-nav-btn"
+                    className="slider-btn sbs-nav-btn"
                     type="button"
                     onClick={prevPerspectiveGroup}
                     aria-label="Previous side-by-side story"
@@ -991,7 +991,7 @@ function TopStories({
                   </div>
 
                   <button
-                    className="sbs-nav-btn"
+                    className="slider-btn sbs-nav-btn"
                     type="button"
                     onClick={nextPerspectiveGroup}
                     aria-label="Next side-by-side story"
