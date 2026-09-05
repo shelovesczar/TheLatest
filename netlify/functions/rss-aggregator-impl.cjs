@@ -95,11 +95,24 @@ const SOURCE_PROFILE_MODULE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const EXTERNAL_FEED_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_FEED_TIMEOUT_MS = 7000;
 const HIGH_PRIORITY_FEED_TIMEOUT_MS = 9000;
+// Every category needs this same stale-snapshot escape hatch, not just the
+// four that originally had it — without it, a slow/hanging feed anywhere in
+// a category's catalog runs out the full per-request wait instead of falling
+// back to a snapshot that's already sitting in Blobs from the hourly warm
+// cron, and the request eventually dies to the platform's hard function
+// timeout instead of degrading gracefully.
 const SOFT_TIMEOUT_BY_FEED_KEY = {
   news: 7000,
   politics: 7000,
   opinions: 5500,
   podcasts: 6500,
+  videos: 7000,
+  sports: 7000,
+  tech: 7000,
+  entertainment: 7000,
+  business: 7000,
+  lifestyle: 7000,
+  culture: 7000,
 };
 
 const LOW_PRIORITY_FEED = "low";
@@ -2344,6 +2357,55 @@ const RSS_FEEDS = {
       source: "New York Post",
     },
   ],
+  // Dedicated opinions/commentary and video sources for sports — same
+  // "<category>Opinions" / "<category>Videos" convention as entertainment
+  // above; the handler picks these up automatically, no code change needed.
+  sportsOpinions: [
+    { url: "https://awfulannouncing.com/feed", source: "Awful Announcing" },
+    { url: "https://www.sbnation.com/rss/index.xml", source: "SB Nation" },
+    {
+      url: "https://www.theplayerstribune.com/feed",
+      source: "The Players' Tribune",
+    },
+    { url: "https://fansided.com/feed/", source: "FanSided" },
+    { url: "https://thecomeback.com/feed", source: "The Comeback" },
+    { url: "https://thebiglead.com/feed", source: "The Big Lead" },
+    { url: "https://www.on3.com/feed/", source: "On3" },
+  ],
+  sportsVideos: [
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCiWLfSweyRNmLpgEHekhoAg",
+      source: "ESPN",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC9-OpMMVoNP5o10_Iyq7Ndw",
+      source: "Bleacher Report",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCTU_wC79Dgi9rh4e9-baTqA",
+      source: "Sky Sports",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCDVYQ4Zhbm3S2dlz7P1GBDg",
+      source: "NFL",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCwNqHDsnBCKT-olwJwIFyfg",
+      source: "Fox Sports",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCja8sZ2T4ylIqjggA1Zuukg",
+      source: "CBS Sports",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCWJ2lWNubArHWmf3FIHbfcQ",
+      source: "NBA",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCifWD4FBa4eaKK7HLF0PlTA",
+      source: "Barstool Sports",
+    },
+  ],
   tech: [
     // Major Tech Publications
     { url: "https://techcrunch.com/feed/", source: "TechCrunch" },
@@ -2375,6 +2437,65 @@ const RSS_FEEDS = {
     {
       url: "https://rss.app/feeds/wGtHhwQaOwup8JQs.xml",
       source: "New York Post",
+    },
+  ],
+  // Dedicated opinions/commentary and video sources for tech — same
+  // "<category>Opinions" / "<category>Videos" convention as entertainment
+  // above; the handler picks these up automatically, no code change needed.
+  techOpinions: [
+    { url: "https://stratechery.com/feed/", source: "Stratechery" },
+    {
+      url: "https://daringfireball.net/feeds/main",
+      source: "Daring Fireball",
+    },
+    { url: "https://www.platformer.news/rss/", source: "Platformer" },
+    {
+      url: "https://www.ben-evans.com/benedictevans?format=rss",
+      source: "Benedict Evans",
+    },
+    { url: "https://pluralistic.net/feed/", source: "Pluralistic" },
+    { url: "https://www.techdirt.com/feed/", source: "Techdirt" },
+    {
+      url: "https://9to5mac.com/guides/opinion/feed/",
+      source: "9to5Mac Opinion",
+    },
+    {
+      url: "https://thezvi.substack.com/feed",
+      source: "Don't Worry About the Vase",
+    },
+  ],
+  techVideos: [
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBJycsmduvYEL83R_U4JriQ",
+      source: "MKBHD",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCXuqSBlHAE6Xw-yeJA0Tunw",
+      source: "Linus Tech Tips",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCddiUEpeqJcYeBxX1IVBKvQ",
+      source: "The Verge",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCVYamHliCI9rw1tHR1xbkfw",
+      source: "Dave2D",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCMiJRAwDNSNzuYeN2uWa0pA",
+      source: "Mrwhosetheboss",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCeeFfhMcJa1kjtfZAGskOCA",
+      source: "TechLinked",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCCjyq_K1Xwfg8Lndy7lKMpA",
+      source: "TechCrunch",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCbfYPyITQ-7l4upoX8nvctg",
+      source: "Two Minute Papers",
     },
   ],
   entertainment: [
@@ -2432,6 +2553,85 @@ const RSS_FEEDS = {
     // RSS APP feeds
     { url: "https://rss.app/feeds/NqNqG0vL6EpyGww2.xml", source: "PJ Media" },
   ],
+  // Dedicated opinions/commentary sources for entertainment & music, so an
+  // opinions request for this category doesn't just re-fetch the general
+  // news catalog above. Naming convention is "<category>Opinions" /
+  // "<category>Videos" — the handler (see the dedicated-catalog check near
+  // the category branching below) picks up any category that has one of
+  // these keys automatically, so another category (sports, tech, business,
+  // lifestyle, culture) gets the same treatment the moment a real,
+  // verified feed list is added here under its own "<category>Opinions" or
+  // "<category>Videos" key — no code changes required.
+  entertainmentOpinions: [
+    { url: "https://www.stereogum.com/feed/", source: "Stereogum" },
+    { url: "https://uproxx.com/feed/", source: "Uproxx" },
+    { url: "https://spinmagazine.com/feed/", source: "SPIN" },
+    { url: "https://www.slantmagazine.com/feed/", source: "Slant Magazine" },
+    { url: "https://lwlies.com/feed/", source: "Little White Lies" },
+    {
+      url: "https://www.pastemagazine.com/music/feed",
+      source: "Paste Music",
+    },
+    { url: "https://www.goldderby.com/feed/", source: "Gold Derby" },
+    { url: "https://theplaylist.net/feed/", source: "The Playlist" },
+    {
+      url: "https://americansongwriter.com/feed/",
+      source: "American Songwriter",
+    },
+    {
+      url: "https://www.undertheradarmag.com/rss",
+      source: "Under the Radar",
+    },
+    {
+      url: "https://www.thedailybeast.com/arc/outboundfeeds/rss/category/entertainment/?outputType=xml",
+      source: "The Daily Beast Entertainment",
+    },
+    { url: "http://feeds.feedburner.com/nymag/vulture", source: "Vulture" },
+    {
+      url: "https://www.theatlantic.com/feed/channel/culture/",
+      source: "The Atlantic Culture",
+    },
+    {
+      url: "https://www.newyorker.com/feed/culture",
+      source: "The New Yorker Culture",
+    },
+  ],
+  // Dedicated video sources for entertainment & music — see the note above
+  // entertainmentOpinions for how the handler picks this catalog up.
+  // Channel IDs resolved from each channel's real @handle page and fetched
+  // directly to confirm a working feed with current entries; Entertainment
+  // Weekly's channel resolved but returned zero video entries and was
+  // dropped rather than shipped as a dead source.
+  entertainmentVideos: [
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCgRQHK8Ttr1j9xCEpCAlgbQ",
+      source: "Variety",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC-JblcinswY50lrUdSaRNEg",
+      source: "Rolling Stone",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCsVcseUYbYjldc-XgcsiEbg",
+      source: "Billboard",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC7kI8WjpCfFoMSNDuRh_4lA",
+      source: "Pitchfork",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCiTFwf4VFGMyfg3cQlXP9JQ",
+      source: "NME",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCGJouxzoMeY1XyekAwzn8sg",
+      source: "Complex Music",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC0fTbhgouDMneMzSluKaXAA",
+      source: "Deadline",
+    },
+  ],
   business: [
     // Business & Finance
     {
@@ -2462,6 +2662,64 @@ const RSS_FEEDS = {
     {
       url: "https://www.latimes.com/business/rss2.0.xml",
       source: "LA Times Business",
+    },
+  ],
+  // Dedicated opinions/commentary and video sources for business — same
+  // "<category>Opinions" / "<category>Videos" convention as entertainment
+  // above; the handler picks these up automatically, no code change needed.
+  businessOpinions: [
+    {
+      url: "https://www.project-syndicate.org/rss",
+      source: "Project Syndicate",
+    },
+    {
+      url: "https://marginalrevolution.com/feed",
+      source: "Marginal Revolution",
+    },
+    {
+      url: "https://theconversation.com/us/business/articles.atom",
+      source: "The Conversation Business",
+    },
+    {
+      url: "https://knowledge.wharton.upenn.edu/feed/",
+      source: "Knowledge@Wharton",
+    },
+    { url: "https://www.entrepreneur.com/latest.rss", source: "Entrepreneur" },
+    { url: "https://www.fool.com/feeds/index.aspx", source: "The Motley Fool" },
+    { url: "https://stratechery.com/feed/", source: "Stratechery" },
+  ],
+  businessVideos: [
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCIALMKvObZNtJ6AmdCLP7Lg",
+      source: "Bloomberg Television",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCrp_UI8XtuYfpiqluWLD7Lw",
+      source: "CNBC Television",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCEAZeUIeJs0IjQiqTCdVSIg",
+      source: "Yahoo Finance",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCK7tptUDHh-RYDsdxO1-5QQ",
+      source: "WSJ",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCmh7afBz-uWwOSSNTqUBAhg",
+      source: "Forbes",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCWo4IA01TXzBeGJJKWHOG9g",
+      source: "Harvard Business Review",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCcyq283he07B7_KUX07mmtA",
+      source: "Business Insider",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCyaN6mg5u8Cjy2ZI4ikWaug",
+      source: "My First Million",
     },
   ],
   lifestyle: [
@@ -2543,6 +2801,59 @@ const RSS_FEEDS = {
       source: "LA Times Lifestyle",
     },
   ],
+  // Dedicated opinions/commentary and video sources for lifestyle — same
+  // "<category>Opinions" / "<category>Videos" convention as entertainment
+  // above; the handler picks these up automatically, no code change needed.
+  lifestyleOpinions: [
+    { url: "https://cupofjo.com/feed/", source: "Cup of Jo" },
+    { url: "https://www.nomadicmatt.com/feed/", source: "Nomadic Matt" },
+    { url: "https://skift.com/feed/", source: "Skift" },
+    { url: "https://www.domino.com/feed/", source: "Domino" },
+    {
+      url: "https://www.gottman.com/blog/feed/",
+      source: "The Gottman Institute",
+    },
+    {
+      url: "https://fashionista.com/.rss/feed/28e21eb8-20ac-4617-a448-e845081591ca.xml",
+      source: "Fashionista",
+    },
+    { url: "https://robbreport.com/feed/", source: "Robb Report" },
+    { url: "https://www.tastingtable.com/feed/", source: "Tasting Table" },
+  ],
+  lifestyleVideos: [
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCFKE7WVJfvaHW5q283SxchA",
+      source: "Yoga With Adriene",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCxAB39SRMVabVZEOKTo6iVA",
+      source: "mindbodygreen",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCchgIh8Tc4sTmBfnMQ5pDdg",
+      source: "Rick Steves' Europe",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCneNuMawbfqgXCew2EdZMcQ",
+      source: "Kara and Nate",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCJFp8uSYCjXOMnkUyb3CQ3Q",
+      source: "Tasty",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC0k238zFx-Z8xFH0sxCrPJg",
+      source: "Architectural Digest",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCRXiA3h1no_PFkb1JCP0yMA",
+      source: "Vogue",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC7IcJI8PUf5Z3zKxnZvTBog",
+      source: "The School of Life",
+    },
+  ],
   culture: [
     // Arts & Culture
     { url: "https://www.newyorker.com/feed/culture", source: "The New Yorker" },
@@ -2574,6 +2885,62 @@ const RSS_FEEDS = {
     {
       url: "https://www.latimes.com/entertainment-arts/books/rss2.0.xml",
       source: "LA Times Books",
+    },
+  ],
+  // Dedicated opinions/commentary and video sources for culture — same
+  // "<category>Opinions" / "<category>Videos" convention as entertainment
+  // above; the handler picks these up automatically, no code change needed.
+  cultureOpinions: [
+    { url: "https://aeon.co/feed.rss", source: "Aeon" },
+    { url: "https://psyche.co/feed.rss", source: "Psyche" },
+    {
+      url: "https://www.theparisreview.org/blog/feed/",
+      source: "The Paris Review",
+    },
+    {
+      url: "https://www.lrb.co.uk/feeds/rss",
+      source: "London Review of Books",
+    },
+    { url: "https://www.publicbooks.org/feed/", source: "Public Books" },
+    { url: "https://www.artforum.com/feed/", source: "Artforum" },
+    { url: "https://www.tcj.com/feed/", source: "The Comics Journal" },
+    {
+      url: "https://www.honest-broker.com/feed",
+      source: "The Honest Broker",
+    },
+  ],
+  cultureVideos: [
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC2isDei-lrNSrgGYE4Np3PA",
+      source: "Tate",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCpYHEAhSUx1hBn2SkvXvTrg",
+      source: "NOWNESS",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCH-nCEzazXpn6q4iCapzl9Q",
+      source: "Getty Museum",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC6Z_Gbfo7xwSMs6Ahkv-m3Q",
+      source: "Art21",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC9CswYtb5rL31CHwyVoyJvQ",
+      source: "MoMA",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC7IcJI8PUf5Z3zKxnZvTBog",
+      source: "The School of Life",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC2PA-AKmVpU6NKCGtZq_rKQ",
+      source: "Philosophy Tube",
+    },
+    {
+      url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCUwZOEPg3MrcM5gE4Lbkr-A",
+      source: "Poetry Foundation",
     },
   ],
 };
@@ -3221,12 +3588,26 @@ function selectFeedsForRequest(feedList = [], options = {}) {
   return [...highPriorityFeeds, ...selectedStandardFeeds];
 }
 
+// A dedicated "<category>Opinions" / "<category>Videos" feed key (see the
+// RSS_FEEDS entries and the handler's dedicated-catalog check) has no
+// per-key config of its own — fall back to whatever its base category
+// ("entertainmentOpinions" -> "entertainment") already has configured, so
+// adding a new dedicated catalog automatically inherits the same feed-count
+// cap and soft-timeout protection instead of silently losing both.
+function getBaseFeedKey(feedKey = "") {
+  return String(feedKey || "").replace(/(Opinions|Videos)$/, "") || feedKey;
+}
+
 function getMaxFeedsForKey(feedKey = "news") {
-  return MAX_FEEDS_BY_KEY[feedKey] || MAX_FEEDS_PER_REQUEST;
+  if (MAX_FEEDS_BY_KEY[feedKey] !== undefined) return MAX_FEEDS_BY_KEY[feedKey];
+  return MAX_FEEDS_BY_KEY[getBaseFeedKey(feedKey)] || MAX_FEEDS_PER_REQUEST;
 }
 
 function getSoftTimeoutForFeedKey(feedKey = "news") {
-  return SOFT_TIMEOUT_BY_FEED_KEY[feedKey] || 0;
+  if (SOFT_TIMEOUT_BY_FEED_KEY[feedKey] !== undefined) {
+    return SOFT_TIMEOUT_BY_FEED_KEY[feedKey];
+  }
+  return SOFT_TIMEOUT_BY_FEED_KEY[getBaseFeedKey(feedKey)] || 0;
 }
 
 // Fetch multiple feeds in parallel, capped at MAX_FEEDS_PER_REQUEST to keep response fast
@@ -3881,6 +4262,29 @@ exports.handler = async (event, _context) => {
         // For unknown categories, keep the default feeds for the type
         console.log(
           `Fetching ${type.toUpperCase()} feeds (default):`,
+          feedsToFetch.length,
+          "sources",
+        );
+      }
+    }
+
+    // If a dedicated "<category>Opinions" / "<category>Videos" catalog
+    // exists in RSS_FEEDS, use it instead of reusing the category's general
+    // news catalog above. This is generic by construction: any category
+    // picks up dedicated coverage automatically the moment a matching
+    // "<category>Opinions" or "<category>Videos" key is added to RSS_FEEDS —
+    // no branching logic needs to change to extend this to another category.
+    if (type === "opinions" || type === "videos") {
+      const dedicatedKey = `${activeFeedKey}${type === "opinions" ? "Opinions" : "Videos"}`;
+      const dedicatedCatalog = getConfiguredFeedCatalog(dedicatedKey);
+      if (dedicatedCatalog.length > 0) {
+        activeFeedKey = dedicatedKey;
+        feedsToFetch = await getEffectiveFeedList(
+          dedicatedKey,
+          prependBundleFeed(dedicatedCatalog, dedicatedKey),
+        );
+        console.log(
+          `Using dedicated ${dedicatedKey} catalog:`,
           feedsToFetch.length,
           "sources",
         );
